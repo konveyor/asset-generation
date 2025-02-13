@@ -8,13 +8,13 @@ type Application struct {
 	// Env captures the `env` field values in the CF application manifest.
 	Env map[string]string `yaml:"env,omitempty"`
 	// Routes represent the routes that are made available by the application.
-	Routes RouteSpec `yaml:"routes,inline,omitempty"`
+	Routes RouteSpec `yaml:"routes,inline,omitempty" validate:"omitempty"`
 	// Services captures the `services` field values in the CF application manifest.
-	Services Services `yaml:"services,omitempty"`
+	Services Services `yaml:"services,omitempty" validate:"omitempty"`
 	// Processes captures the `processes` field values in the CF application manifest.
-	Processes Processes `yaml:"processes,omitempty"`
+	Processes Processes `yaml:"processes,omitempty" validate:"omitempty"`
 	// Sidecars captures the `sidecars` field values in the CF application manifest.
-	Sidecars Sidecars `yaml:"sidecars,omitempty"`
+	Sidecars Sidecars `yaml:"sidecars,omitempty" validate:"omitempty"`
 	// Stack represents the `stack` field in the application manifest.
 	// The value is captured for information purposes because it has no relevance
 	// in Kubernetes.
@@ -29,7 +29,7 @@ type Application struct {
 	// BuildPacks capture the buildpacks defined in the CF application manifest.
 	BuildPacks []string `yaml:"buildPacks,omitempty"`
 	// Docker captures the Docker specification in the CF application manifest.
-	Docker Docker `yaml:"docker,omitempty"`
+	Docker Docker `yaml:"docker,omitempty" validate:"omitempty"`
 	// Instances captures the number of instances to run concurrently for this application. Default is 1.
 	Instances int `yaml:"instances" validate:"required,min=1"`
 }
