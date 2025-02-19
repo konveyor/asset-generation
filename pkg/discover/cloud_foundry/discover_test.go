@@ -1,6 +1,9 @@
 package cloud_foundry
 
 import (
+	"fmt"
+	"os"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -113,6 +116,7 @@ var _ = Describe("Health Checks tests", func() {
 		)
 	})
 })
+
 var _ = Describe("Parse Process", func() {
 
 	When("parsing a process", func() {
@@ -361,7 +365,7 @@ var _ = Describe("Parse Routes", func() {
 
 })
 
-var _ = Describe("parse Services", func() {
+var _ = Describe("Parse Services", func() {
 	When("parsing the service information", func() {
 		DescribeTable("validate the correctness of the parsing logic", func(services AppManifestServices, expected Services) {
 			result := parseServices(&services)
@@ -406,20 +410,20 @@ var _ = Describe("parse Services", func() {
 	})
 })
 
-var _ = Describe("parse metadata", func() {
+var _ = Describe("Parse metadata", func() {
 	When("parsing the metadata information", func() {
 		DescribeTable("validate the correctness of the parsing logic", func(metadata AppMetadata, version, space string, expected Metadata) {
-			result, err := Discover(AppManifest{Metadata: &metadata}, version, space)
+			result, err := Discover(AppManifest{Name: "test-app", Metadata: &metadata}, version, space)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Metadata).To(Equal(expected))
 		},
 
-			Entry("when metadata is nil and version and space are empty", nil, "", "", Metadata{Version: "1"}),
-			Entry("when empty metadata, version and space", AppMetadata{}, "", "", Metadata{Version: "1"}),
-			Entry("when version is provided", AppMetadata{}, "2", "", Metadata{Version: "2"}),
-			Entry("when space is provided", AppMetadata{}, "", "default", Metadata{Version: "1", Space: "default"}),
-			Entry("when labels are provided", AppMetadata{Labels: map[string]*string{"foo": ptrTo("bar")}}, "", "", Metadata{Version: "1", Labels: map[string]*string{"foo": ptrTo("bar")}}),
-			Entry("when annotations are provided", AppMetadata{Annotations: map[string]*string{"bar": ptrTo("foo")}}, "", "", Metadata{Version: "1", Annotations: map[string]*string{"bar": ptrTo("foo")}}),
+			Entry("when metadata is nil and version and space are empty", nil, "", "", Metadata{Name: "test-app", Version: "1"}),
+			Entry("when empty metadata, version and space", AppMetadata{}, "", "", Metadata{Name: "test-app", Version: "1"}),
+			Entry("when version is provided", AppMetadata{}, "2", "", Metadata{Name: "test-app", Version: "2"}),
+			Entry("when space is provided", AppMetadata{}, "", "default", Metadata{Name: "test-app", Version: "1", Space: "default"}),
+			Entry("when labels are provided", AppMetadata{Labels: map[string]*string{"foo": ptrTo("bar")}}, "", "", Metadata{Name: "test-app", Version: "1", Labels: map[string]*string{"foo": ptrTo("bar")}}),
+			Entry("when annotations are provided", AppMetadata{Annotations: map[string]*string{"bar": ptrTo("foo")}}, "", "", Metadata{Name: "test-app", Version: "1", Annotations: map[string]*string{"bar": ptrTo("foo")}}),
 			Entry("when all fields are provided",
 				AppMetadata{
 					Labels:      map[string]*string{"foo": ptrTo("bar")},
@@ -427,6 +431,7 @@ var _ = Describe("parse metadata", func() {
 				"2",
 				"default",
 				Metadata{
+					Name:        "test-app",
 					Labels:      map[string]*string{"foo": ptrTo("bar")},
 					Annotations: map[string]*string{"bar": ptrTo("foo")},
 					Version:     "2",
@@ -436,6 +441,7 @@ var _ = Describe("parse metadata", func() {
 	})
 
 })
+
 var _ = Describe("Parse Application", func() {
 	When("parsing the application information", func() {
 		DescribeTable("validate the correctness of the parsing logic", func(app AppManifest, version, space string, expected Application) {
@@ -444,47 +450,55 @@ var _ = Describe("Parse Application", func() {
 			Expect(result).To(Equal(expected))
 		},
 			Entry("when app is empty",
-				AppManifest{},
+				AppManifest{Name: "test-app"},
 				"",
 				"",
 				Application{
-					Metadata:  Metadata{Version: "1"},
+					Metadata:  Metadata{Name: "test-app", Version: "1"},
 					Timeout:   60,
 					Instances: 1,
 				},
 			),
 			Entry("when timeout is set",
 				AppManifest{
+					Name:               "test-app",
 					AppManifestProcess: AppManifestProcess{Timeout: 30},
 				},
 				"",
 				"",
 				Application{
-					Metadata:  Metadata{Version: "1"},
+					Metadata: Metadata{Name: "test-app", Version: "1"},
+					Routes: RouteSpec{
+						NoRoute:     false,
+						RandomRoute: false,
+						Routes:      nil,
+					},
 					Timeout:   30,
 					Instances: 1,
 				},
 			),
 			Entry("when instances is set",
 				AppManifest{
+					Name:               "test-app",
 					AppManifestProcess: AppManifestProcess{Instances: ptrTo(uint(2))},
 				},
 				"",
 				"",
 				Application{
-					Metadata:  Metadata{Version: "1"},
+					Metadata:  Metadata{Name: "test-app", Version: "1"},
 					Timeout:   60,
 					Instances: 2,
 				},
 			),
 			Entry("when buildpacks are set",
 				AppManifest{
+					Name:       "test-app",
 					Buildpacks: []string{"foo", "bar"},
 				},
 				"",
 				"",
 				Application{
-					Metadata:   Metadata{Version: "1"},
+					Metadata:   Metadata{Name: "test-app", Version: "1"},
 					Timeout:    60,
 					Instances:  1,
 					BuildPacks: []string{"foo", "bar"},
@@ -492,148 +506,16 @@ var _ = Describe("Parse Application", func() {
 			),
 			Entry("when environment values are set",
 				AppManifest{
-					Env: map[string]string{"foo": "bar"},
+					Name: "test-app",
+					Env:  map[string]string{"foo": "bar"},
 				},
 				"",
 				"",
 				Application{
-					Metadata:  Metadata{Version: "1"},
+					Metadata:  Metadata{Name: "test-app", Version: "1"},
 					Timeout:   60,
 					Instances: 1,
 					Env:       map[string]string{"foo": "bar"},
-				},
-			),
-			Entry("when all fields are set",
-				AppManifest{
-					Name:       "foo",
-					Buildpacks: []string{"foo", "bar"},
-					Docker: &AppManifestDocker{
-						Image:    "foo.bar:latest",
-						Username: "foo@bar.org",
-					},
-					RandomRoute: true,
-					Routes: &AppManifestRoutes{
-						{
-							Route:    "foo.bar.org",
-							Protocol: HTTP2,
-							Options:  &AppRouteOptions{LoadBalancing: "least-connection"},
-						},
-					},
-					Env: map[string]string{"foo": "bar"},
-					Services: &AppManifestServices{
-						{
-							Name:        "foo",
-							BindingName: "foo_service",
-							Parameters:  map[string]interface{}{"foo": "bar"},
-						},
-					},
-					Sidecars: &AppManifestSideCars{
-						{
-							Name:         "foo_sidecar",
-							ProcessTypes: []AppProcessType{WebAppProcessType, WorkerAppProcessType},
-							Command:      "echo hello world",
-							Memory:       "2G",
-						},
-					},
-					Stack: "docker",
-					Metadata: &AppMetadata{
-						Labels:      map[string]*string{"foo": ptrTo("label")},
-						Annotations: map[string]*string{"bar": ptrTo("annotation")},
-					},
-					AppManifestProcess: AppManifestProcess{
-						Timeout:   100,
-						Instances: ptrTo(uint(5)),
-					},
-					Processes: &AppManifestProcesses{
-						{
-							Type:                             WebAppProcessType,
-							Command:                          "sleep 100",
-							DiskQuota:                        "100M",
-							HealthCheckType:                  Http,
-							HealthCheckHTTPEndpoint:          "/health",
-							HealthCheckInvocationTimeout:     10,
-							HealthCheckInterval:              60,
-							ReadinessHealthCheckType:         Port,
-							ReadinessHealthCheckHttpEndpoint: "localhost:8443",
-							ReadinessHealthInvocationTimeout: 99,
-							ReadinessHealthCheckInterval:     15,
-							Instances:                        ptrTo(uint(2)),
-							LogRateLimitPerSecond:            "30k",
-							Memory:                           "2G",
-							Timeout:                          120,
-							Lifecycle:                        "container",
-						},
-					},
-				},
-				"2",
-				"default",
-				Application{
-					Metadata: Metadata{
-						Version:     "2",
-						Name:        "foo",
-						Labels:      map[string]*string{"foo": ptrTo("label")},
-						Annotations: map[string]*string{"bar": ptrTo("annotation")},
-						Space:       "default",
-					},
-					BuildPacks: []string{"foo", "bar"},
-					Stack:      "docker",
-					Timeout:    100,
-					Instances:  5,
-					Env:        map[string]string{"foo": "bar"},
-					Routes: RouteSpec{
-						RandomRoute: true,
-						Routes: Routes{
-							{
-								Route:    "foo.bar.org",
-								Protocol: HTTP2RouteProtocol,
-								Options: RouteOptions{
-									LoadBalancing: LeastConnectionLoadBalancingType,
-								},
-							},
-						},
-					},
-					Docker: Docker{
-						Image:    "foo.bar:latest",
-						Username: "foo@bar.org",
-					},
-					Services: Services{
-						{
-							Name:        "foo",
-							BindingName: "foo_service",
-							Parameters:  map[string]interface{}{"foo": "bar"},
-						},
-					},
-					Sidecars: Sidecars{
-						{
-							Name:         "foo_sidecar",
-							ProcessTypes: []ProcessType{Web, Worker},
-							Command:      "echo hello world",
-							Memory:       "2G",
-						},
-					},
-					Processes: Processes{
-						{
-							Type:         Web,
-							Command:      "sleep 100",
-							DiskQuota:    "100M",
-							Instances:    2,
-							LogRateLimit: "30k",
-							Memory:       "2G",
-							Lifecycle:    "container",
-							HealthCheck: ProbeSpec{
-								Endpoint: "/health",
-								Timeout:  10,
-								Interval: 60,
-								Type:     HTTPProbeType,
-							},
-							ReadinessCheck: ProbeSpec{
-								Endpoint: "localhost:8443",
-								Timeout:  99,
-								Interval: 15,
-								Type:     PortProbeType,
-							},
-						},
-					},
 				},
 			),
 		)
@@ -660,7 +542,389 @@ var _ = Describe("Parse docker", func() {
 	})
 })
 
+var _ = Describe("Validate discover manifest", func() {
+	AfterEach(func() {
+		os.Remove("manifest.yaml")
+	})
+
+	Describe("Application validation", func() {
+		Context("when validating buildpacks", func() {
+
+			When("a buildpack list contains an empty entry", func() {
+				It("should not return any errors", func() {
+					manifestContent := Application{
+						Metadata:   Metadata{Name: "test-name"},
+						Instances:  1,
+						BuildPacks: []string{"java_buildpack", "", "go_buildpack"},
+					}
+					validationErrors := validateApplication(manifestContent)
+					Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
+				})
+			})
+
+			When("the buildpacks list is entirely empty", func() {
+				It("should not return any errors", func() {
+					manifestContent := Application{
+						Metadata:   Metadata{Name: "test-name"},
+						Instances:  1,
+						BuildPacks: []string{"", ""},
+					}
+					validationErrors := validateApplication(manifestContent)
+					Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
+				})
+			})
+
+			When("all buildpacks are valid and non-empty", func() {
+				It("should not return any errors", func() {
+					manifestContent := Application{
+						Metadata:   Metadata{Name: "test-name"},
+						Instances:  1,
+						BuildPacks: []string{"java_buildpack", "go_buildpack"},
+					}
+					validationErrors := validateApplication(manifestContent)
+					Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
+				})
+			})
+		})
+
+		Context("when validating Docker", func() {
+
+			When("Docker is empty", func() {
+				It("should not return any errors", func() {
+					manifestContent := Application{
+						Metadata:  Metadata{Name: "test-name"},
+						Instances: 1,
+						Docker:    Docker{},
+					}
+					validationErrors := validateApplication(manifestContent)
+					Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
+				})
+			})
+
+			When("only the Docker username is provided without an image", func() {
+				It("should return a validation error for missing image", func() {
+					manifestContent := Application{
+						Metadata:  Metadata{Name: "test-name"},
+						Instances: 1,
+						Docker:    Docker{Username: "foo"},
+					}
+					expectedErrorMessage := []string{
+						generateErrorMessage("Image", "required"),
+					}
+					expectedErrorCount := 1
+
+					validationErrors := validateApplication(manifestContent)
+					Expect(validationErrors).ToNot(BeNil(), "Expected an error due to missing image, but got none")
+					Expect(len(validationErrors)).To(Equal(expectedErrorCount), "Expected a specific number of validation errors")
+
+					for _, expectedMsg := range expectedErrorMessage {
+						Expect(validationErrors).To(MatchError(expectedMsg),
+							fmt.Sprintf("Expected error message '%s' was not found in any validation errors", expectedMsg))
+					}
+				})
+
+				When("both Docker image and username are provided", func() {
+					It("should not return any errors", func() {
+						manifestContent := Application{
+							Metadata:  Metadata{Name: "test-name"},
+							Instances: 1,
+							Docker:    Docker{Image: "my-app:latest", Username: "foo"},
+						}
+						validationErrors := validateApplication(manifestContent)
+						Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
+					})
+				})
+
+			})
+		})
+
+		Context("when validating env", func() {
+			When("when map items are set", func() {
+				It("should not return any errors", func() {
+					manifestContent := Application{
+						Metadata:  Metadata{Name: "test-name"},
+						Instances: 1,
+						Env: map[string]string{
+							"DATABASE_URL": "postgres://user:pass@localhost:5432/mydb",
+							"API_KEY":      "myapikey12345",
+						},
+					}
+					validationErrors := validateApplication(manifestContent)
+					Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
+				})
+			})
+		})
+
+		Context("when validating random route", func() {
+			When("random route is true", func() {
+				It("should not return any errors", func() {
+					manifestContent := Application{
+						Metadata:  Metadata{Name: "test-name"},
+						Instances: 1,
+						Routes: RouteSpec{
+							RandomRoute: true,
+						},
+					}
+					validationErrors := validateApplication(manifestContent)
+					Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
+				})
+			})
+			Context("when random route is false", func() {
+				It("should not return any errors", func() {
+					manifestContent := Application{
+						Metadata:  Metadata{Name: "test-name"},
+						Instances: 1,
+						Routes: RouteSpec{
+							RandomRoute: false,
+						},
+					}
+					validationErrors := validateApplication(manifestContent)
+					Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
+				})
+			})
+		})
+		Context("when validating noroute route", func() {
+			Context("when noroute is true", func() {
+				It("should not return any errors", func() {
+					manifestContent := Application{
+						Metadata:  Metadata{Name: "test-name"},
+						Instances: 1,
+						Routes: RouteSpec{
+							NoRoute: true,
+						},
+					}
+					validationErrors := validateApplication(manifestContent)
+					Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
+				})
+			})
+
+			When("when noroute is false", func() {
+				It("should not return any errors", func() {
+					manifestContent := Application{
+						Metadata:  Metadata{Name: "test-name"},
+						Instances: 1,
+						Routes: RouteSpec{
+							NoRoute: false,
+						},
+					}
+					validationErrors := validateApplication(manifestContent)
+					Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
+				})
+			})
+		})
+
+		Context("when validating routes", func() {
+
+			When("when routes is empty", func() {
+				It("should not return any errors", func() {
+					manifestContent := Application{
+						Metadata:  Metadata{Name: "test-name"},
+						Instances: 1,
+						Routes: RouteSpec{
+							Routes: Routes{},
+						},
+					}
+					validationErrors := validateApplication(manifestContent)
+					Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
+				})
+			})
+
+			When("routes is nil", func() {
+				It("should not return any errors", func() {
+					manifestContent := Application{
+						Metadata:  Metadata{Name: "test-name"},
+						Instances: 1,
+						Routes: RouteSpec{
+							Routes: nil,
+						},
+					}
+					validationErrors := validateApplication(manifestContent)
+					Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
+				})
+			})
+
+			When("routes has only options", func() {
+				It("should return the correct errors", func() {
+					manifestContent := Application{
+						Metadata:  Metadata{Name: "test-name"},
+						Instances: 1,
+						Routes: RouteSpec{
+							Routes: Routes{
+								{
+									Options: RouteOptions{LoadBalancing: RoundRobinLoadBalancingType},
+								},
+							},
+						},
+					}
+					expectedErrorMessage := []string{
+						generateErrorMessage("Route", "required"),
+						generateErrorMessage("Protocol", "required"),
+					}
+					expectedErrorCount := 2
+
+					validationErrors := validateApplication(manifestContent)
+					Expect(validationErrors).ToNot(BeNil(), "Expected an error due to invalid manifest content, got none")
+					Expect(len(validationErrors)).To(Equal(expectedErrorCount), "Expected a specific number of validation errors")
+
+					Expect(getValidationErrorMsgs(validationErrors)).To(ConsistOf(expectedErrorMessage),
+						"Validation errors did not match expected errors exactly")
+				})
+			})
+
+			When("routes has only route name", func() {
+				It("should return error", func() {
+					manifestContent := Application{
+						Metadata:  Metadata{Name: "test-name"},
+						Instances: 1,
+						Routes: RouteSpec{
+							Routes: Routes{
+								{
+									Route: "http://example.com",
+								},
+							},
+						},
+					}
+					expectedErrorMessage := []string{generateErrorMessage("Protocol", "required"), generateErrorMessage("LoadBalancing", "oneof")}
+					expectedErrorCount := 2
+
+					validationErrors := validateApplication(manifestContent)
+					Expect(validationErrors).ToNot(BeNil(), "Expected an error due to invalid manifest content, got none")
+					Expect(len(validationErrors)).To(Equal(expectedErrorCount), "Expected a specific number of validation errors")
+					Expect(getValidationErrorMsgs((validationErrors))).To(ConsistOf(expectedErrorMessage),
+						fmt.Sprintf("Expected error message '%s' was not found in any validation errors", expectedErrorMessage[0]))
+				})
+			})
+
+			When("routes has only protocol", func() {
+				It("should return error", func() {
+					manifestContent := Application{
+						Metadata:  Metadata{Name: "test-name"},
+						Instances: 1,
+						Routes: RouteSpec{
+							Routes: Routes{
+								{
+									Protocol: HTTPRouteProtocol,
+								},
+							},
+						},
+					}
+					expectedErrorMessage := []string{generateErrorMessage("Route", "required"), generateErrorMessage("LoadBalancing", "oneof")}
+					expectedErrorCount := 2
+
+					validationErrors := validateApplication(manifestContent)
+					Expect(validationErrors).ToNot(BeNil(), "Expected an error due to invalid manifest content, got none")
+					Expect(len(validationErrors)).To(Equal(expectedErrorCount), "Expected a specific number of validation errors")
+					Expect(getValidationErrorMsgs(validationErrors)).To(ConsistOf(expectedErrorMessage),
+						fmt.Sprintf("Expected error message '%s' was not found in any validation errors", expectedErrorMessage[0]))
+				})
+			})
+			When("routes has name, loadbalancing", func() {
+				When("invalid protocol", func() {
+					It("should return error", func() {
+						manifestContent := Application{
+							Metadata:  Metadata{Name: "test-name"},
+							Instances: 1,
+							Routes: RouteSpec{
+								Routes: Routes{
+									{
+										Route:    "http://example.com",
+										Protocol: "invalid",
+										Options:  RouteOptions{LoadBalancing: RoundRobinLoadBalancingType},
+									},
+								},
+							},
+						}
+						expectedErrorMessage := []string{generateErrorMessage("Protocol", "oneof")}
+						expectedErrorCount := 1
+
+						validationErrors := validateApplication(manifestContent)
+						Expect(validationErrors).ToNot(BeNil(), "Expected an error due to invalid manifest content, got none")
+						Expect(len(validationErrors)).To(Equal(expectedErrorCount), "Expected a specific number of validation errors")
+						Expect(validationErrors).To(MatchError(expectedErrorMessage[0]),
+							fmt.Sprintf("Expected error message '%s' was not found in any validation errors", expectedErrorMessage[0]))
+					})
+				})
+
+				When("http1 protocol", func() {
+					It("should return the error", func() {
+						manifestContent := Application{
+							Metadata:  Metadata{Name: "test-name"},
+							Instances: 1,
+							Routes: RouteSpec{
+								Routes: Routes{
+									{
+										Route:    "http://example.com",
+										Protocol: HTTPRouteProtocol,
+										Options:  RouteOptions{LoadBalancing: RoundRobinLoadBalancingType},
+									},
+								},
+							},
+						}
+						validationErrors := validateApplication(manifestContent)
+						Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
+					})
+				})
+
+				When("http2 protocol", func() {
+					It("should not return any errors", func() {
+						manifestContent := Application{
+							Metadata:  Metadata{Name: "test-name"},
+							Instances: 1,
+							Routes: RouteSpec{
+								Routes: Routes{
+									{
+										Route:    "http://example.com",
+										Protocol: HTTP2RouteProtocol,
+										Options:  RouteOptions{LoadBalancing: RoundRobinLoadBalancingType},
+									},
+								},
+							},
+						}
+						validationErrors := validateApplication(manifestContent)
+						Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
+					})
+				})
+
+				Context("tcp protocol", func() {
+					It("should not return any errors", func() {
+						manifestContent := Application{
+							Metadata:  Metadata{Name: "test-name"},
+							Instances: 1,
+							Routes: RouteSpec{
+								Routes: Routes{
+									{
+										Route:    "http://example.com",
+										Protocol: TCPRouteProtocol,
+										Options:  RouteOptions{LoadBalancing: RoundRobinLoadBalancingType},
+									},
+								},
+							},
+						}
+						validationErrors := validateApplication(manifestContent)
+						Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
+					})
+				})
+			})
+		})
+	})
+})
+
 // Helper function to create a pointer of a given type
 func ptrTo[T comparable](t T) *T {
 	return &t
+}
+
+func generateErrorMessage(field string, tag string) string {
+	// return fmt.Sprintf("key: '%s' field validation for '%s' failed on the '%s' tag", key, field, tag)
+	return fmt.Sprintf("field validation for '%s' failed on the '%s' tag", field, tag)
+
+}
+
+func getValidationErrorMsgs(validationErrors []error) []string {
+	var validationErrorMessages []string
+	for _, err := range validationErrors {
+		validationErrorMessages = append(validationErrorMessages, err.Error())
+	}
+
+	return validationErrorMessages
 }

@@ -155,7 +155,7 @@ type RouteSpec struct {
 	//RandomRoute captures the field random-route in the CF Application manifest.
 	RandomRoute bool `yaml:"randomRoute,omitempty"`
 	//Routes captures the field routes in the CF Application manifest.
-	Routes Routes `yaml:"routes,omitempty"`
+	Routes Routes `yaml:"routes,omitempty" validate:"omitempty,dive"`
 }
 
 type Route struct {

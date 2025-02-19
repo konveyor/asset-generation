@@ -2,7 +2,13 @@ package cloud_foundry
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+
+	"github.com/go-playground/validator/v10"
 )
+
+type ValidationErrorList []error
 
 func Discover(cfApp AppManifest, version, space string) (Application, error) {
 	appVersion := "1"
@@ -33,7 +39,7 @@ func Discover(cfApp AppManifest, version, space string) (Application, error) {
 		annotations = cfApp.Metadata.Annotations
 	}
 
-	return Application{
+	app := Application{
 		Metadata: Metadata{
 			Version:     appVersion,
 			Name:        cfApp.Name,
@@ -51,7 +57,14 @@ func Discover(cfApp AppManifest, version, space string) (Application, error) {
 		Docker:     docker,
 		Sidecars:   sidecars,
 		Processes:  processes,
-	}, nil
+	}
+
+	validationErrors := validateApplication(app)
+	if validationErrors != nil {
+		return Application{}, errors.Join(validationErrors...)
+	}
+
+	return app, nil
 }
 
 func parseHealthCheck(cfType AppHealthCheckType, cfEndpoint string, cfInterval, cfTimeout uint) ProbeSpec {
@@ -249,4 +262,19 @@ func parseRoutes(cfRoutes AppManifestRoutes) Routes {
 		routes = append(routes, r)
 	}
 	return routes
+}
+
+func validateApplication(app Application) ValidationErrorList {
+	validate := validator.New(validator.WithRequiredStructEnabled())
+	err := validate.Struct(app)
+
+	if err != nil {
+		var validationErrors ValidationErrorList
+		for _, err := range err.(validator.ValidationErrors) {
+			validationErrors = append(validationErrors,
+				fmt.Errorf("field validation for '%s' failed on the '%s' tag", err.Field(), err.Tag()))
+		}
+		return validationErrors
+	}
+	return nil
 }
