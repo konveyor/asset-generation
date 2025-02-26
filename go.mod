@@ -1,6 +1,6 @@
 module github.com/konveyor/asset-generation
 
-go 1.23.3
+go 1.22.9
 
 require (
 	github.com/onsi/ginkgo/v2 v2.22.2
