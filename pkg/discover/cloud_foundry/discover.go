@@ -272,7 +272,7 @@ func validateApplication(app Application) ValidationErrorList {
 		var validationErrors ValidationErrorList
 		for _, err := range err.(validator.ValidationErrors) {
 			validationErrors = append(validationErrors,
-				fmt.Errorf("field validation for '%s' failed on the '%s' tag", err.Field(), err.Tag()))
+				fmt.Errorf("field validation for key '%s' field '%s' failed on the '%s' tag", err.Namespace(), err.Field(), err.Tag()))
 		}
 		return validationErrors
 	}

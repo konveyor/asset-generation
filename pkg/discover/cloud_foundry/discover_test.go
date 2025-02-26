@@ -26,7 +26,6 @@ var _ = Describe("Health Checks tests", func() {
 		}
 		DescribeTable("validate the correctness of the parsing logic", func(app AppManifestProcess, expected ProbeSpec) {
 			result := parseHealthCheck(app.HealthCheckType, app.HealthCheckHTTPEndpoint, app.HealthCheckInterval, app.HealthCheckInvocationTimeout)
-			// Use Gomega's Expect function for assertions
 			Expect(result).To(Equal(expected))
 		},
 			Entry("with default values",
@@ -79,7 +78,6 @@ var _ = Describe("Health Checks tests", func() {
 		}
 		DescribeTable("validate the correctness of the parsing logic", func(app AppManifestProcess, expected ProbeSpec) {
 			result := parseReadinessHealthCheck(app.ReadinessHealthCheckType, app.ReadinessHealthCheckHttpEndpoint, app.ReadinessHealthCheckInterval, app.ReadinessHealthInvocationTimeout)
-			// Use Gomega's Expect function for assertions
 			Expect(result).To(Equal(expected))
 		},
 			Entry("with default values",
@@ -608,19 +606,16 @@ var _ = Describe("Validate discover manifest", func() {
 						Instances: 1,
 						Docker:    Docker{Username: "foo"},
 					}
-					expectedErrorMessage := []string{
-						generateErrorMessage("Image", "required"),
+					expectedErrorMessages := []string{
+						generateErrorMessage("Application.Docker.Image", "Image", "required"),
 					}
-					expectedErrorCount := 1
 
 					validationErrors := validateApplication(manifestContent)
 					Expect(validationErrors).ToNot(BeNil(), "Expected an error due to missing image, but got none")
-					Expect(len(validationErrors)).To(Equal(expectedErrorCount), "Expected a specific number of validation errors")
+					Expect(len(validationErrors)).To(Equal(len(expectedErrorMessages)), "Expected a specific number of validation errors")
+					Expect(getValidationErrorMsgs(validationErrors)).To(ConsistOf(expectedErrorMessages),
+						"Validation errors did not match expected errors exactly")
 
-					for _, expectedMsg := range expectedErrorMessage {
-						Expect(validationErrors).To(MatchError(expectedMsg),
-							fmt.Sprintf("Expected error message '%s' was not found in any validation errors", expectedMsg))
-					}
 				})
 
 				When("both Docker image and username are provided", func() {
@@ -756,17 +751,16 @@ var _ = Describe("Validate discover manifest", func() {
 							},
 						},
 					}
-					expectedErrorMessage := []string{
-						generateErrorMessage("Route", "required"),
-						generateErrorMessage("Protocol", "required"),
+					expectedErrorMessages := []string{
+						generateErrorMessage("Application.Routes.Routes[0].Route", "Route", "required"),
+						generateErrorMessage("Application.Routes.Routes[0].Protocol", "Protocol", "required"),
 					}
-					expectedErrorCount := 2
 
 					validationErrors := validateApplication(manifestContent)
 					Expect(validationErrors).ToNot(BeNil(), "Expected an error due to invalid manifest content, got none")
-					Expect(len(validationErrors)).To(Equal(expectedErrorCount), "Expected a specific number of validation errors")
+					Expect(len(validationErrors)).To(Equal(len(expectedErrorMessages)), "Expected a specific number of validation errors")
 
-					Expect(getValidationErrorMsgs(validationErrors)).To(ConsistOf(expectedErrorMessage),
+					Expect(getValidationErrorMsgs(validationErrors)).To(ConsistOf(expectedErrorMessages),
 						"Validation errors did not match expected errors exactly")
 				})
 			})
@@ -784,14 +778,15 @@ var _ = Describe("Validate discover manifest", func() {
 							},
 						},
 					}
-					expectedErrorMessage := []string{generateErrorMessage("Protocol", "required"), generateErrorMessage("LoadBalancing", "oneof")}
-					expectedErrorCount := 2
+					expectedErrorMessages := []string{
+						generateErrorMessage("Application.Routes.Routes[0].Protocol", "Protocol", "required"),
+						generateErrorMessage("Application.Routes.Routes[0].Options.LoadBalancing", "LoadBalancing", "oneof")}
 
 					validationErrors := validateApplication(manifestContent)
 					Expect(validationErrors).ToNot(BeNil(), "Expected an error due to invalid manifest content, got none")
-					Expect(len(validationErrors)).To(Equal(expectedErrorCount), "Expected a specific number of validation errors")
-					Expect(getValidationErrorMsgs((validationErrors))).To(ConsistOf(expectedErrorMessage),
-						fmt.Sprintf("Expected error message '%s' was not found in any validation errors", expectedErrorMessage[0]))
+					Expect(len(validationErrors)).To(Equal(len(expectedErrorMessages)), "Expected a specific number of validation errors")
+					Expect(getValidationErrorMsgs((validationErrors))).To(ConsistOf(expectedErrorMessages),
+						fmt.Sprintf("Expected error message '%s' was not found in any validation errors", expectedErrorMessages[0]))
 				})
 			})
 
@@ -808,14 +803,15 @@ var _ = Describe("Validate discover manifest", func() {
 							},
 						},
 					}
-					expectedErrorMessage := []string{generateErrorMessage("Route", "required"), generateErrorMessage("LoadBalancing", "oneof")}
-					expectedErrorCount := 2
+					expectedErrorMessages := []string{
+						generateErrorMessage("Application.Routes.Routes[0].Route", "Route", "required"),
+						generateErrorMessage("Application.Routes.Routes[0].Options.LoadBalancing", "LoadBalancing", "oneof")}
 
 					validationErrors := validateApplication(manifestContent)
 					Expect(validationErrors).ToNot(BeNil(), "Expected an error due to invalid manifest content, got none")
-					Expect(len(validationErrors)).To(Equal(expectedErrorCount), "Expected a specific number of validation errors")
-					Expect(getValidationErrorMsgs(validationErrors)).To(ConsistOf(expectedErrorMessage),
-						fmt.Sprintf("Expected error message '%s' was not found in any validation errors", expectedErrorMessage[0]))
+					Expect(len(validationErrors)).To(Equal(len(expectedErrorMessages)), "Expected a specific number of validation errors")
+					Expect(getValidationErrorMsgs(validationErrors)).To(ConsistOf(expectedErrorMessages),
+						fmt.Sprintf("Expected error message '%s' was not found in any validation errors", expectedErrorMessages[0]))
 				})
 			})
 			When("routes has name, loadbalancing", func() {
@@ -834,14 +830,13 @@ var _ = Describe("Validate discover manifest", func() {
 								},
 							},
 						}
-						expectedErrorMessage := []string{generateErrorMessage("Protocol", "oneof")}
-						expectedErrorCount := 1
+						expectedErrorMessages := []string{generateErrorMessage("Application.Routes.Routes[0].Protocol", "Protocol", "oneof")}
 
 						validationErrors := validateApplication(manifestContent)
 						Expect(validationErrors).ToNot(BeNil(), "Expected an error due to invalid manifest content, got none")
-						Expect(len(validationErrors)).To(Equal(expectedErrorCount), "Expected a specific number of validation errors")
-						Expect(validationErrors).To(MatchError(expectedErrorMessage[0]),
-							fmt.Sprintf("Expected error message '%s' was not found in any validation errors", expectedErrorMessage[0]))
+						Expect(len(validationErrors)).To(Equal(len(expectedErrorMessages)), "Expected a specific number of validation errors")
+						Expect(getValidationErrorMsgs(validationErrors)).To(ConsistOf(expectedErrorMessages),
+							"Validation errors did not match expected errors exactly")
 					})
 				})
 
@@ -906,6 +901,120 @@ var _ = Describe("Validate discover manifest", func() {
 				})
 			})
 		})
+		Context("when validating processes", func() {
+
+			When("when process is empty", func() {
+				It("should not return any errors", func() {
+					manifestContent := Application{
+						Metadata:  Metadata{Name: "test-name"},
+						Instances: 1,
+						Processes: Processes{},
+					}
+					validationErrors := validateApplication(manifestContent)
+					Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
+				})
+			})
+
+			When("when process is nil", func() {
+				It("should return errors for missing required fields", func() {
+					manifestContent := Application{
+						Metadata:  Metadata{Name: "test-name"},
+						Instances: 1,
+						Processes: Processes{
+							ProcessSpec{},
+						},
+					}
+					expectedErrorMessages := []string{
+						generateErrorMessage("Application.Processes[0].Type", "Type", "required"),
+						generateErrorMessage("Application.Processes[0].Memory", "Memory", "required"),
+						generateErrorMessage("Application.Processes[0].HealthCheck", "HealthCheck", "required"),
+						generateErrorMessage("Application.Processes[0].ReadinessCheck", "ReadinessCheck", "required"),
+						generateErrorMessage("Application.Processes[0].Instances", "Instances", "required"),
+						generateErrorMessage("Application.Processes[0].LogRateLimit", "LogRateLimit", "required"),
+						generateErrorMessage("Application.Processes[0].Lifecycle", "Lifecycle", "required"),
+					}
+
+					validationErrors := validateApplication(manifestContent)
+					Expect(getValidationErrorMsgs(validationErrors)).To(ConsistOf(expectedErrorMessages),
+						"Validation errors did not match expected errors exactly")
+					Expect(validationErrors).ToNot(BeNil(), "Expected an error due to invalid manifest content, got none")
+					Expect(len(validationErrors)).To(Equal(len(expectedErrorMessages)), "Expected a specific number of validation errors")
+
+				})
+			})
+			When("when process ProbeSpec is empty", func() {
+				It("should return errors for missing required fields", func() {
+					manifestContent := Application{
+						Metadata:  Metadata{Name: "test-name"},
+						Instances: 1,
+						Processes: Processes{
+							ProcessSpec{
+								Type:        Web,
+								Memory:      "50M",
+								HealthCheck: ProbeSpec{},
+								ReadinessCheck: ProbeSpec{
+									Endpoint: "readiness.com",
+								},
+								Instances:    42,
+								LogRateLimit: "10K",
+								Lifecycle:    BuildPackLifecycleType,
+							},
+						},
+					}
+					expectedErrorMessages := []string{
+						generateErrorMessage("Application.Processes[0].HealthCheck", "HealthCheck", "required"),
+						generateErrorMessage("Application.Processes[0].ReadinessCheck.Timeout", "Timeout", "required"),
+						generateErrorMessage("Application.Processes[0].ReadinessCheck.Interval", "Interval", "required"),
+						generateErrorMessage("Application.Processes[0].ReadinessCheck.Type", "Type", "required"),
+					}
+
+					validationErrors := validateApplication(manifestContent)
+					Expect(getValidationErrorMsgs(validationErrors)).To(ConsistOf(expectedErrorMessages),
+						"Validation errors did not match expected errors exactly")
+					Expect(validationErrors).ToNot(BeNil(), "Expected an error due to invalid manifest content, got none")
+					Expect(len(validationErrors)).To(Equal(len(expectedErrorMessages)), "Expected a specific number of validation errors")
+
+				})
+			})
+			When("when process ProbeSpec has only endpoint", func() {
+				It("should return errors for missing required fields", func() {
+					manifestContent := Application{
+						Metadata:  Metadata{Name: "test-name"},
+						Instances: 1,
+						Processes: Processes{
+							ProcessSpec{
+								Type:   Web,
+								Memory: "50M",
+								HealthCheck: ProbeSpec{
+									Endpoint: "healthcheck.com",
+								},
+								ReadinessCheck: ProbeSpec{
+									Endpoint: "readiness.com",
+								},
+								Instances:    42,
+								LogRateLimit: "10K",
+								Lifecycle:    BuildPackLifecycleType,
+							},
+						},
+					}
+					expectedErrorMessages := []string{
+						generateErrorMessage("Application.Processes[0].HealthCheck.Timeout", "Timeout", "required"),
+						generateErrorMessage("Application.Processes[0].HealthCheck.Interval", "Interval", "required"),
+						generateErrorMessage("Application.Processes[0].HealthCheck.Type", "Type", "required"),
+						generateErrorMessage("Application.Processes[0].ReadinessCheck.Timeout", "Timeout", "required"),
+						generateErrorMessage("Application.Processes[0].ReadinessCheck.Interval", "Interval", "required"),
+						generateErrorMessage("Application.Processes[0].ReadinessCheck.Type", "Type", "required"),
+					}
+
+					validationErrors := validateApplication(manifestContent)
+					Expect(getValidationErrorMsgs(validationErrors)).To(ConsistOf(expectedErrorMessages),
+						"Validation errors did not match expected errors exactly")
+					Expect(validationErrors).ToNot(BeNil(), "Expected an error due to invalid manifest content, got none")
+					Expect(len(validationErrors)).To(Equal(len(expectedErrorMessages)), "Expected a specific number of validation errors")
+
+				})
+			})
+		})
 	})
 })
 
@@ -914,10 +1023,8 @@ func ptrTo[T comparable](t T) *T {
 	return &t
 }
 
-func generateErrorMessage(field string, tag string) string {
-	// return fmt.Sprintf("key: '%s' field validation for '%s' failed on the '%s' tag", key, field, tag)
-	return fmt.Sprintf("field validation for '%s' failed on the '%s' tag", field, tag)
-
+func generateErrorMessage(namespace string, field string, tag string) string {
+	return fmt.Sprintf("field validation for key '%s' field '%s' failed on the '%s' tag", namespace, field, tag)
 }
 
 func getValidationErrorMsgs(validationErrors []error) []string {
