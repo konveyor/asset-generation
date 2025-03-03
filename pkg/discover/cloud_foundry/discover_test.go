@@ -410,30 +410,24 @@ var _ = Describe("Parse Services", func() {
 
 var _ = Describe("Parse metadata", func() {
 	When("parsing the metadata information", func() {
-		DescribeTable("validate the correctness of the parsing logic", func(metadata AppMetadata, version, space string, expected Metadata) {
-			result, err := Discover(AppManifest{Name: "test-app", Metadata: &metadata}, version, space)
+		DescribeTable("validate the correctness of the parsing logic", func(metadata AppMetadata, expected Metadata) {
+			result, err := Discover(AppManifest{Name: "test-app", Metadata: &metadata})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Metadata).To(Equal(expected))
 		},
 
-			Entry("when metadata is nil and version and space are empty", nil, "", "", Metadata{Name: "test-app", Version: "1"}),
-			Entry("when empty metadata, version and space", AppMetadata{}, "", "", Metadata{Name: "test-app", Version: "1"}),
-			Entry("when version is provided", AppMetadata{}, "2", "", Metadata{Name: "test-app", Version: "2"}),
-			Entry("when space is provided", AppMetadata{}, "", "default", Metadata{Name: "test-app", Version: "1", Space: "default"}),
-			Entry("when labels are provided", AppMetadata{Labels: map[string]*string{"foo": ptrTo("bar")}}, "", "", Metadata{Name: "test-app", Version: "1", Labels: map[string]*string{"foo": ptrTo("bar")}}),
-			Entry("when annotations are provided", AppMetadata{Annotations: map[string]*string{"bar": ptrTo("foo")}}, "", "", Metadata{Name: "test-app", Version: "1", Annotations: map[string]*string{"bar": ptrTo("foo")}}),
+			Entry("when metadata is nil", nil, Metadata{Name: "test-app"}),
+			Entry("when metadata is empty", AppMetadata{}, Metadata{Name: "test-app"}),
+			Entry("when labels are provided", AppMetadata{Labels: map[string]*string{"foo": ptrTo("bar")}}, Metadata{Name: "test-app", Labels: map[string]*string{"foo": ptrTo("bar")}}),
+			Entry("when annotations are provided", AppMetadata{Annotations: map[string]*string{"bar": ptrTo("foo")}}, Metadata{Name: "test-app", Annotations: map[string]*string{"bar": ptrTo("foo")}}),
 			Entry("when all fields are provided",
 				AppMetadata{
 					Labels:      map[string]*string{"foo": ptrTo("bar")},
 					Annotations: map[string]*string{"bar": ptrTo("foo")}},
-				"2",
-				"default",
 				Metadata{
 					Name:        "test-app",
 					Labels:      map[string]*string{"foo": ptrTo("bar")},
 					Annotations: map[string]*string{"bar": ptrTo("foo")},
-					Version:     "2",
-					Space:       "default",
 				}),
 		)
 	})
@@ -442,17 +436,15 @@ var _ = Describe("Parse metadata", func() {
 
 var _ = Describe("Parse Application", func() {
 	When("parsing the application information", func() {
-		DescribeTable("validate the correctness of the parsing logic", func(app AppManifest, version, space string, expected Application) {
-			result, err := Discover(app, version, space)
+		DescribeTable("validate the correctness of the parsing logic", func(app AppManifest, expected Application) {
+			result, err := Discover(app)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(expected))
 		},
 			Entry("when app is empty",
 				AppManifest{Name: "test-app"},
-				"",
-				"",
 				Application{
-					Metadata:  Metadata{Name: "test-app", Version: "1"},
+					Metadata:  Metadata{Name: "test-app"},
 					Timeout:   60,
 					Instances: 1,
 				},
@@ -462,10 +454,8 @@ var _ = Describe("Parse Application", func() {
 					Name:               "test-app",
 					AppManifestProcess: AppManifestProcess{Timeout: 30},
 				},
-				"",
-				"",
 				Application{
-					Metadata: Metadata{Name: "test-app", Version: "1"},
+					Metadata: Metadata{Name: "test-app"},
 					Routes: RouteSpec{
 						NoRoute:     false,
 						RandomRoute: false,
@@ -480,10 +470,8 @@ var _ = Describe("Parse Application", func() {
 					Name:               "test-app",
 					AppManifestProcess: AppManifestProcess{Instances: ptrTo(uint(2))},
 				},
-				"",
-				"",
 				Application{
-					Metadata:  Metadata{Name: "test-app", Version: "1"},
+					Metadata:  Metadata{Name: "test-app"},
 					Timeout:   60,
 					Instances: 2,
 				},
@@ -493,10 +481,8 @@ var _ = Describe("Parse Application", func() {
 					Name:       "test-app",
 					Buildpacks: []string{"foo", "bar"},
 				},
-				"",
-				"",
 				Application{
-					Metadata:   Metadata{Name: "test-app", Version: "1"},
+					Metadata:   Metadata{Name: "test-app"},
 					Timeout:    60,
 					Instances:  1,
 					BuildPacks: []string{"foo", "bar"},
@@ -507,10 +493,8 @@ var _ = Describe("Parse Application", func() {
 					Name: "test-app",
 					Env:  map[string]string{"foo": "bar"},
 				},
-				"",
-				"",
 				Application{
-					Metadata:  Metadata{Name: "test-app", Version: "1"},
+					Metadata:  Metadata{Name: "test-app"},
 					Timeout:   60,
 					Instances: 1,
 					Env:       map[string]string{"foo": "bar"},

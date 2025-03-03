@@ -10,12 +10,8 @@ import (
 
 type ValidationErrorList []error
 
-func Discover(cfApp AppManifest, version, space string) (Application, error) {
-	appVersion := "1"
-	if version != "" {
-		appVersion = version
+func Discover(cfApp AppManifest) (Application, error) {
 
-	}
 	timeout := 60
 	if cfApp.Timeout != 0 {
 		timeout = int(cfApp.Timeout)
@@ -41,11 +37,9 @@ func Discover(cfApp AppManifest, version, space string) (Application, error) {
 
 	app := Application{
 		Metadata: Metadata{
-			Version:     appVersion,
 			Name:        cfApp.Name,
 			Labels:      labels,
 			Annotations: annotations,
-			Space:       space,
 		},
 		Timeout:    timeout,
 		Instances:  instances,
