@@ -82,9 +82,7 @@ type Metadata struct {
 	// Annotations capture the annotations as defined in the `labels` field in the CF application manifest
 	Annotations map[string]*string `yaml:"annotations,omitempty"`
 	// Version captures the version of the manifest containing the resulting CF application manifests list retrieved via REST API.
-	// Only version 1 is supported at this moment See https://docs.cloudfoundry.org/devguide/deploy-apps/manifest-attributes.html#manifest-schema-version
-	// Defaults to 1
-	Version string `yaml:"version"`
+	Version string `yaml:"version,omitempty"`
 }
 
 type ProcessSpec struct {
