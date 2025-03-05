@@ -1,0 +1,58 @@
+name: Run Ginkgo Unit Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    outputs:
+      coverage:  ${{ steps.ginkgo-tests.outputs.coverage }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+
+      - run: go mod tidy && git diff --exit-code go.mod go.sum
+      - run: go vet ./...
+
+      - name: Run Ginkgo tests with coverage
+        id: ginkgo-tests
+        run: |
+          go run github.com/onsi/ginkgo/v2/ginkgo -r --randomize-all --randomize-suites --fail-on-pending --keep-going --cover --coverprofile=coverage.out --coverpkg=./...
+          go tool cover -func=coverage.out
+          COVERAGE=$(go tool cover --func=coverage.out | grep total | grep -Eo '[0-9]+\.[0-9]+')
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+           
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-coverage
+          path: coverage.out
+
+  Coverage:
+    needs: test
+    name: "Test Coverage ${{ needs.test.outputs.coverage }}"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install bc
+        run: sudo apt-get update && sudo apt-get install -y bc
+
+      - name: Check Coverage
+        run: |
+          COVERAGE=${{ needs.test.outputs.coverage }}
+          if [[ -z "$COVERAGE" ]]; then
+            echo "Error: Coverage value is empty!"
+            exit 1
+          fi
+          echo "Coverage status: $COVERAGE"
+          if (( $(echo "$COVERAGE < 73.8" | bc -l) )); then 
+            echo "Min coverage failed"; 
+            exit 1; 
+          fi
