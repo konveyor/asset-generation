@@ -51,6 +51,7 @@ func Discover(cfApp AppManifest) (Application, error) {
 		Docker:     docker,
 		Sidecars:   sidecars,
 		Processes:  processes,
+		Memory:     cfApp.Memory,
 	}
 
 	validationErrors := validateApplication(app)

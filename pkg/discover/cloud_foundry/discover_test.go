@@ -500,6 +500,18 @@ var _ = Describe("Parse Application", func() {
 					Env:       map[string]string{"foo": "bar"},
 				},
 			),
+			Entry("when memory is set",
+				AppManifest{
+					Name:               "test-app",
+					AppManifestProcess: AppManifestProcess{Memory: "42G"},
+				},
+				Application{
+					Metadata:  Metadata{Name: "test-app"},
+					Timeout:   60,
+					Instances: 1,
+					Memory:    "42G",
+				},
+			),
 		)
 	})
 })
