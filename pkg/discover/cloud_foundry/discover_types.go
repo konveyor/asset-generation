@@ -28,6 +28,8 @@ type Application struct {
 	Timeout int `yaml:"timeout" validate:"min=0,max=180"`
 	// BuildPacks capture the buildpacks defined in the CF application manifest.
 	BuildPacks []string `yaml:"buildPacks,omitempty"`
+	// Memory capture the memory defined in the CF application manifest.
+	Memory string `yaml:"memory,omitempty"`
 	// Docker captures the Docker specification in the CF application manifest.
 	Docker Docker `yaml:"docker,omitempty" validate:"omitempty"`
 	// Instances captures the number of instances to run concurrently for this application. Default is 1.
