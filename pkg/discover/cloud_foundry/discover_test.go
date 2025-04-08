@@ -114,27 +114,101 @@ var _ = Describe("Health Checks tests", func() {
 		)
 	})
 })
+var _ = Describe("parseProcessSpecs", func() {
+	var (
+		defaultAppManifest = AppManifest{}
+	)
+
+	When("parsing template process", func() {
+		It("should return a template with default values if empty", func() {
+			template, _, err := parseProcessSpecs(defaultAppManifest)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(template).To(BeNil()) // Template is nil if empty
+		})
+
+		It("should set LogRateLimit from AppManifest", func() {
+			appManifest := AppManifest{
+				AppManifestProcess: AppManifestProcess{
+					LogRateLimitPerSecond: "32K",
+				},
+			}
+			template, _, err := parseProcessSpecs(appManifest)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(template.LogRateLimit).To(Equal("32K"))
+		})
+	})
+
+	When("parsing inline process", func() {
+		It("should set Memory to default if not specified", func() {
+			appManifest := AppManifest{
+				AppManifestProcess: AppManifestProcess{
+					Type:                  WebAppProcessType,
+					LogRateLimitPerSecond: "32K",
+				},
+			}
+			templateProcess, processSpec, err := parseProcessSpecs(appManifest)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(templateProcess).To(BeNil())
+			Expect(processSpec).ToNot(BeNil())
+			Expect(processSpec.Memory).To(Equal("1G")) // Default memory
+		})
+
+		It("should set Instances to default if not specified", func() {
+			appManifest := AppManifest{
+				AppManifestProcess: AppManifestProcess{
+					Type: WebAppProcessType,
+				},
+			}
+			templateProcess, processSpec, err := parseProcessSpecs(appManifest)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(templateProcess).To(BeNil())
+			Expect(processSpec).ToNot(BeNil())
+			Expect(processSpec.ProcessSpecTemplate.Instances).To(Equal(1)) // Default instances
+		})
+
+		It("should set LogRateLimit to default if not specified", func() {
+			appManifest := AppManifest{
+				AppManifestProcess: AppManifestProcess{
+					Type: WebAppProcessType,
+				},
+			}
+			templateProcess, processSpec, err := parseProcessSpecs(appManifest)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(templateProcess).To(BeNil())
+			Expect(processSpec).ToNot(BeNil())
+			Expect(processSpec.ProcessSpecTemplate.LogRateLimit).To(Equal("16K"))
+		})
+
+		// It("should return an error if marshaling fails", func() {
+		// 	// Use a type that cannot be marshaled to JSON
+		// 	struct testStruct {
+		// 		a string
+		// 	}
+		// 	appManifest := AppManifest{
+		// 		Type: "inline",
+		// 		// Add a field that causes marshaling to fail
+		// 	}
+		// 	_, _, err := parseProcessSpecs(appManifest)
+		// 	Expect(err).To(HaveOccurred())
+		// })
+	})
+})
 
 var _ = Describe("Parse Process", func() {
 
 	When("parsing a process", func() {
-		defaultProcessSpec := ProcessSpec{
-			Type:   "",
-			Memory: "1G",
-			HealthCheck: ProbeSpec{
-				Type:     PortProbeType,
-				Endpoint: "/",
-				Timeout:  1,
-				Interval: 30,
-			},
-			ReadinessCheck: ProbeSpec{
-				Type:     ProcessProbeType,
-				Endpoint: "/",
-				Timeout:  1,
-				Interval: 30,
-			},
+		defaultProcessSpecTemplate := ProcessSpecTemplate{
+			Memory:       "1G",
 			Instances:    1,
 			LogRateLimit: "16K",
+		}
+
+		defaultProcessSpec := ProcessSpec{
+			Type:                "",
+			ProcessSpecTemplate: defaultProcessSpecTemplate,
 		}
 		overrideDefaultProcessSpec := func(overrides ...func(*ProcessSpec)) ProcessSpec {
 			spec := defaultProcessSpec
@@ -144,64 +218,106 @@ var _ = Describe("Parse Process", func() {
 			return spec
 		}
 
-		DescribeTable("validate the correctness of the parsing logic", func(app AppManifestProcess, expected ProcessSpec) {
-			result := parseProcess(app)
-			Expect(result).To(Equal(expected))
+		DescribeTable("validate the correctness of the parsing logic", func(cfApp AppManifest, expectedTemplate *ProcessSpecTemplate, expectedProcesses *Processes) {
+			appManifestProcess, inlineProcess, err := parseProcessSpecs(cfApp)
+			Expect(err).ToNot(HaveOccurred())
+			if expectedTemplate == nil {
+				Expect(appManifestProcess).To(BeNil())
+			} else {
+				Expect(*appManifestProcess).To(Equal(*expectedTemplate))
+			}
+
+			if inlineProcess == nil {
+				Expect(inlineProcess).To(BeNil())
+			} else {
+				Expect(*inlineProcess).To(Equal(*expectedProcesses))
+			}
 		},
 			Entry("default values",
-				AppManifestProcess{},
-				defaultProcessSpec,
+				AppManifest{},
+				nil,
+				nil,
 			),
-			Entry("with memory only",
-				AppManifestProcess{
+			Entry("with memory only - inline",
+				AppManifest{
+					AppManifestProcess: AppManifestProcess{
+						Memory: "512M",
+					},
+				},
+				&ProcessSpecTemplate{
 					Memory: "512M",
 				},
-				overrideDefaultProcessSpec(func(spec *ProcessSpec) {
-					spec.Memory = "512M"
-				}),
-			),
-			Entry("with instance only",
-				AppManifestProcess{
-					Instances: ptrTo(uint(42)),
-				},
-				overrideDefaultProcessSpec(func(spec *ProcessSpec) {
-					spec.Instances = 42
-				}),
-			),
-			Entry("with only lograte",
-				AppManifestProcess{
-					LogRateLimitPerSecond: "42K",
-				},
-				overrideDefaultProcessSpec(func(spec *ProcessSpec) {
-					spec.LogRateLimit = "42K"
-				}),
-			),
-		)
-	})
-	When("parsing a process type", func() {
-		DescribeTable("validate the correctness of the parsing logic", func(cfProcessTypes []AppProcessType, expected []ProcessType) {
-			result := parseProcessTypes(cfProcessTypes)
-			Expect(result).To(Equal(expected))
-		},
-			Entry("default values with nil input",
 				nil,
-				[]ProcessType{},
 			),
-			Entry("default values with empty input",
-				[]AppProcessType{},
-				[]ProcessType{},
+			Entry("with memory only - in processes",
+				AppManifest{
+					Processes: &AppManifestProcesses{
+						AppManifestProcess{
+							Type:   WorkerAppProcessType,
+							Memory: "512M",
+						},
+					},
+				},
+				nil,
+				&Processes{
+					overrideDefaultProcessSpec(func(spec *ProcessSpec) {
+						spec.Memory = "512M"
+					}),
+				},
 			),
-			Entry("with web type",
-				[]AppProcessType{WebAppProcessType},
-				[]ProcessType{Web},
+			Entry("with instance only - inline",
+				AppManifest{
+					AppManifestProcess: AppManifestProcess{
+						Instances: ptrTo(uint(42)),
+					},
+				},
+
+				&ProcessSpecTemplate{
+					Instances: 42,
+				},
+				nil,
 			),
-			Entry("with worker type",
-				[]AppProcessType{WorkerAppProcessType},
-				[]ProcessType{Worker},
+			Entry("with instance only - in processes",
+				AppManifest{
+					Processes: &AppManifestProcesses{
+						AppManifestProcess{
+							Type:      WorkerAppProcessType,
+							Instances: ptrTo(uint(42)),
+						},
+					},
+				},
+				nil,
+				&Processes{
+					overrideDefaultProcessSpec(func(spec *ProcessSpec) {
+						spec.Instances = 2
+					}),
+				},
 			),
-			Entry("with multiple type",
-				[]AppProcessType{"web", "worker"},
-				[]ProcessType{Web, Worker},
+			Entry("with lograte pnly - inline",
+				AppManifest{
+					AppManifestProcess: AppManifestProcess{
+						LogRateLimitPerSecond: "42K",
+					},
+				},
+				&ProcessSpecTemplate{
+					LogRateLimit: "42K",
+				},
+				nil,
+			),
+			Entry("with lograte only - in processes",
+				AppManifest{
+					Processes: &AppManifestProcesses{
+						AppManifestProcess{
+							Type:                  WorkerAppProcessType,
+							LogRateLimitPerSecond: "42K",
+						},
+					},
+				},
+				nil,
+				&Processes{
+					overrideDefaultProcessSpec(func(spec *ProcessSpec) {
+						spec.LogRateLimit = "42K"
+					})},
 			),
 		)
 	})
@@ -211,7 +327,8 @@ var _ = Describe("Parse Sidecars", func() {
 
 	When("parsing sidecars", func() {
 		DescribeTable("validate the correctness of the parsing logic", func(cfSidecars *AppManifestSideCars, expected Sidecars) {
-			result := parseSidecars(cfSidecars)
+			result, err := marshalUnmarshal[Sidecars](cfSidecars)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(expected))
 		},
 			Entry("default values with nil input",
@@ -230,8 +347,7 @@ var _ = Describe("Parse Sidecars", func() {
 				},
 				Sidecars{
 					{
-						Name:         "test-name",
-						ProcessTypes: []ProcessType{},
+						Name: "test-name",
 					},
 				},
 			),
@@ -243,8 +359,7 @@ var _ = Describe("Parse Sidecars", func() {
 				},
 				Sidecars{
 					{
-						Command:      "test-command",
-						ProcessTypes: []ProcessType{},
+						Command: "test-command",
 					},
 				},
 			),
@@ -366,10 +481,11 @@ var _ = Describe("Parse Routes", func() {
 var _ = Describe("Parse Services", func() {
 	When("parsing the service information", func() {
 		DescribeTable("validate the correctness of the parsing logic", func(services AppManifestServices, expected Services) {
-			result := parseServices(&services)
+			result, err := marshalUnmarshal[Services](services)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(expected))
 		},
-			Entry("when services are nil", nil, Services{}),
+			Entry("when services are nil", nil, nil),
 			Entry("when services are empty", AppManifestServices{}, Services{}),
 			Entry("when one service is provided with only name populated", AppManifestServices{{Name: "foo"}}, Services{{Name: "foo"}}),
 			Entry("when one service is provided with parameters provided",
@@ -444,9 +560,8 @@ var _ = Describe("Parse Application", func() {
 			Entry("when app is empty",
 				AppManifest{Name: "test-app"},
 				Application{
-					Metadata:  Metadata{Name: "test-app"},
-					Timeout:   60,
-					Instances: 1,
+					Metadata: Metadata{Name: "test-app"},
+					Timeout:  60,
 				},
 			),
 			Entry("when timeout is set",
@@ -461,8 +576,7 @@ var _ = Describe("Parse Application", func() {
 						RandomRoute: false,
 						Routes:      nil,
 					},
-					Timeout:   30,
-					Instances: 1,
+					Timeout: 30,
 				},
 			),
 			Entry("when instances is set",
@@ -471,9 +585,11 @@ var _ = Describe("Parse Application", func() {
 					AppManifestProcess: AppManifestProcess{Instances: ptrTo(uint(2))},
 				},
 				Application{
-					Metadata:  Metadata{Name: "test-app"},
-					Timeout:   60,
-					Instances: 2,
+					Metadata: Metadata{Name: "test-app"},
+					Timeout:  60,
+					ProcessSpecTemplate: ProcessSpecTemplate{
+						Instances: 2,
+					},
 				},
 			),
 			Entry("when buildpacks are set",
@@ -484,7 +600,6 @@ var _ = Describe("Parse Application", func() {
 				Application{
 					Metadata:   Metadata{Name: "test-app"},
 					Timeout:    60,
-					Instances:  1,
 					BuildPacks: []string{"foo", "bar"},
 				},
 			),
@@ -494,10 +609,9 @@ var _ = Describe("Parse Application", func() {
 					Env:  map[string]string{"foo": "bar"},
 				},
 				Application{
-					Metadata:  Metadata{Name: "test-app"},
-					Timeout:   60,
-					Instances: 1,
-					Env:       map[string]string{"foo": "bar"},
+					Metadata: Metadata{Name: "test-app"},
+					Timeout:  60,
+					Env:      map[string]string{"foo": "bar"},
 				},
 			),
 			Entry("when memory is set",
@@ -506,10 +620,11 @@ var _ = Describe("Parse Application", func() {
 					AppManifestProcess: AppManifestProcess{Memory: "42G"},
 				},
 				Application{
-					Metadata:  Metadata{Name: "test-app"},
-					Timeout:   60,
-					Instances: 1,
-					Memory:    "42G",
+					Metadata: Metadata{Name: "test-app"},
+					Timeout:  60,
+					ProcessSpecTemplate: ProcessSpecTemplate{
+						Memory: "42G",
+					},
 				},
 			),
 		)
@@ -519,7 +634,8 @@ var _ = Describe("Parse Application", func() {
 var _ = Describe("Parse docker", func() {
 	When("parsing the docker information", func() {
 		DescribeTable("validate the correctness of the parsing logic", func(docker AppManifestDocker, expected Docker) {
-			result := parseDocker(&docker)
+			result, err := marshalUnmarshal[Docker](docker)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(expected))
 		},
 			Entry("when docker is nil", nil, Docker{}),
@@ -547,8 +663,10 @@ var _ = Describe("Validate discover manifest", func() {
 			When("a buildpack list contains an empty entry", func() {
 				It("should not return any errors", func() {
 					manifestContent := Application{
-						Metadata:   Metadata{Name: "test-name"},
-						Instances:  1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						BuildPacks: []string{"java_buildpack", "", "go_buildpack"},
 					}
 					validationErrors := validateApplication(manifestContent)
@@ -559,8 +677,10 @@ var _ = Describe("Validate discover manifest", func() {
 			When("the buildpacks list is entirely empty", func() {
 				It("should not return any errors", func() {
 					manifestContent := Application{
-						Metadata:   Metadata{Name: "test-name"},
-						Instances:  1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						BuildPacks: []string{"", ""},
 					}
 					validationErrors := validateApplication(manifestContent)
@@ -571,8 +691,10 @@ var _ = Describe("Validate discover manifest", func() {
 			When("all buildpacks are valid and non-empty", func() {
 				It("should not return any errors", func() {
 					manifestContent := Application{
-						Metadata:   Metadata{Name: "test-name"},
-						Instances:  1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						BuildPacks: []string{"java_buildpack", "go_buildpack"},
 					}
 					validationErrors := validateApplication(manifestContent)
@@ -586,9 +708,11 @@ var _ = Describe("Validate discover manifest", func() {
 			When("Docker is empty", func() {
 				It("should not return any errors", func() {
 					manifestContent := Application{
-						Metadata:  Metadata{Name: "test-name"},
-						Instances: 1,
-						Docker:    Docker{},
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
+						Docker: Docker{},
 					}
 					validationErrors := validateApplication(manifestContent)
 					Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
@@ -598,9 +722,11 @@ var _ = Describe("Validate discover manifest", func() {
 			When("only the Docker username is provided without an image", func() {
 				It("should return a validation error for missing image", func() {
 					manifestContent := Application{
-						Metadata:  Metadata{Name: "test-name"},
-						Instances: 1,
-						Docker:    Docker{Username: "foo"},
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
+						Docker: Docker{Username: "foo"},
 					}
 					expectedErrorMessages := []string{
 						generateErrorMessage("Application.Docker.Image", "Image", "required"),
@@ -617,9 +743,11 @@ var _ = Describe("Validate discover manifest", func() {
 				When("both Docker image and username are provided", func() {
 					It("should not return any errors", func() {
 						manifestContent := Application{
-							Metadata:  Metadata{Name: "test-name"},
-							Instances: 1,
-							Docker:    Docker{Image: "my-app:latest", Username: "foo"},
+							Metadata: Metadata{Name: "test-name"},
+							ProcessSpecTemplate: ProcessSpecTemplate{
+								Instances: 1,
+							},
+							Docker: Docker{Image: "my-app:latest", Username: "foo"},
 						}
 						validationErrors := validateApplication(manifestContent)
 						Expect(validationErrors).To(BeNil(), "Expected no error for valid manifest, but got one")
@@ -633,8 +761,10 @@ var _ = Describe("Validate discover manifest", func() {
 			When("when map items are set", func() {
 				It("should not return any errors", func() {
 					manifestContent := Application{
-						Metadata:  Metadata{Name: "test-name"},
-						Instances: 1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						Env: map[string]string{
 							"DATABASE_URL": "postgres://user:pass@localhost:5432/mydb",
 							"API_KEY":      "myapikey12345",
@@ -650,8 +780,10 @@ var _ = Describe("Validate discover manifest", func() {
 			When("random route is true", func() {
 				It("should not return any errors", func() {
 					manifestContent := Application{
-						Metadata:  Metadata{Name: "test-name"},
-						Instances: 1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						Routes: RouteSpec{
 							RandomRoute: true,
 						},
@@ -663,8 +795,10 @@ var _ = Describe("Validate discover manifest", func() {
 			Context("when random route is false", func() {
 				It("should not return any errors", func() {
 					manifestContent := Application{
-						Metadata:  Metadata{Name: "test-name"},
-						Instances: 1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						Routes: RouteSpec{
 							RandomRoute: false,
 						},
@@ -678,8 +812,10 @@ var _ = Describe("Validate discover manifest", func() {
 			Context("when noroute is true", func() {
 				It("should not return any errors", func() {
 					manifestContent := Application{
-						Metadata:  Metadata{Name: "test-name"},
-						Instances: 1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						Routes: RouteSpec{
 							NoRoute: true,
 						},
@@ -692,8 +828,10 @@ var _ = Describe("Validate discover manifest", func() {
 			When("when noroute is false", func() {
 				It("should not return any errors", func() {
 					manifestContent := Application{
-						Metadata:  Metadata{Name: "test-name"},
-						Instances: 1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						Routes: RouteSpec{
 							NoRoute: false,
 						},
@@ -709,8 +847,10 @@ var _ = Describe("Validate discover manifest", func() {
 			When("when routes is empty", func() {
 				It("should not return any errors", func() {
 					manifestContent := Application{
-						Metadata:  Metadata{Name: "test-name"},
-						Instances: 1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						Routes: RouteSpec{
 							Routes: Routes{},
 						},
@@ -723,8 +863,10 @@ var _ = Describe("Validate discover manifest", func() {
 			When("routes is nil", func() {
 				It("should not return any errors", func() {
 					manifestContent := Application{
-						Metadata:  Metadata{Name: "test-name"},
-						Instances: 1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						Routes: RouteSpec{
 							Routes: nil,
 						},
@@ -737,8 +879,10 @@ var _ = Describe("Validate discover manifest", func() {
 			When("routes has only options", func() {
 				It("should return the correct errors", func() {
 					manifestContent := Application{
-						Metadata:  Metadata{Name: "test-name"},
-						Instances: 1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						Routes: RouteSpec{
 							Routes: Routes{
 								{
@@ -764,8 +908,10 @@ var _ = Describe("Validate discover manifest", func() {
 			When("routes has only route name", func() {
 				It("should return error", func() {
 					manifestContent := Application{
-						Metadata:  Metadata{Name: "test-name"},
-						Instances: 1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						Routes: RouteSpec{
 							Routes: Routes{
 								{
@@ -789,8 +935,10 @@ var _ = Describe("Validate discover manifest", func() {
 			When("routes has only protocol", func() {
 				It("should return error", func() {
 					manifestContent := Application{
-						Metadata:  Metadata{Name: "test-name"},
-						Instances: 1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						Routes: RouteSpec{
 							Routes: Routes{
 								{
@@ -814,8 +962,10 @@ var _ = Describe("Validate discover manifest", func() {
 				When("invalid protocol", func() {
 					It("should return error", func() {
 						manifestContent := Application{
-							Metadata:  Metadata{Name: "test-name"},
-							Instances: 1,
+							Metadata: Metadata{Name: "test-name"},
+							ProcessSpecTemplate: ProcessSpecTemplate{
+								Instances: 1,
+							},
 							Routes: RouteSpec{
 								Routes: Routes{
 									{
@@ -839,8 +989,10 @@ var _ = Describe("Validate discover manifest", func() {
 				When("http1 protocol", func() {
 					It("should return the error", func() {
 						manifestContent := Application{
-							Metadata:  Metadata{Name: "test-name"},
-							Instances: 1,
+							Metadata: Metadata{Name: "test-name"},
+							ProcessSpecTemplate: ProcessSpecTemplate{
+								Instances: 1,
+							},
 							Routes: RouteSpec{
 								Routes: Routes{
 									{
@@ -859,8 +1011,10 @@ var _ = Describe("Validate discover manifest", func() {
 				When("http2 protocol", func() {
 					It("should not return any errors", func() {
 						manifestContent := Application{
-							Metadata:  Metadata{Name: "test-name"},
-							Instances: 1,
+							Metadata: Metadata{Name: "test-name"},
+							ProcessSpecTemplate: ProcessSpecTemplate{
+								Instances: 1,
+							},
 							Routes: RouteSpec{
 								Routes: Routes{
 									{
@@ -879,8 +1033,10 @@ var _ = Describe("Validate discover manifest", func() {
 				Context("tcp protocol", func() {
 					It("should not return any errors", func() {
 						manifestContent := Application{
-							Metadata:  Metadata{Name: "test-name"},
-							Instances: 1,
+							Metadata: Metadata{Name: "test-name"},
+							ProcessSpecTemplate: ProcessSpecTemplate{
+								Instances: 1,
+							},
 							Routes: RouteSpec{
 								Routes: Routes{
 									{
@@ -902,8 +1058,10 @@ var _ = Describe("Validate discover manifest", func() {
 			When("when process is empty", func() {
 				It("should not return any errors", func() {
 					manifestContent := Application{
-						Metadata:  Metadata{Name: "test-name"},
-						Instances: 1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						Processes: Processes{},
 					}
 					validationErrors := validateApplication(manifestContent)
@@ -914,20 +1072,16 @@ var _ = Describe("Validate discover manifest", func() {
 			When("when process is nil", func() {
 				It("should return errors for missing required fields", func() {
 					manifestContent := Application{
-						Metadata:  Metadata{Name: "test-name"},
-						Instances: 1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						Processes: Processes{
 							ProcessSpec{},
 						},
 					}
 					expectedErrorMessages := []string{
 						generateErrorMessage("Application.Processes[0].Type", "Type", "required"),
-						generateErrorMessage("Application.Processes[0].Memory", "Memory", "required"),
-						generateErrorMessage("Application.Processes[0].HealthCheck", "HealthCheck", "required"),
-						generateErrorMessage("Application.Processes[0].ReadinessCheck", "ReadinessCheck", "required"),
-						generateErrorMessage("Application.Processes[0].Instances", "Instances", "required"),
-						generateErrorMessage("Application.Processes[0].LogRateLimit", "LogRateLimit", "required"),
-						generateErrorMessage("Application.Processes[0].Lifecycle", "Lifecycle", "required"),
 					}
 
 					validationErrors := validateApplication(manifestContent)
@@ -941,27 +1095,30 @@ var _ = Describe("Validate discover manifest", func() {
 			When("when process ProbeSpec is empty", func() {
 				It("should return errors for missing required fields", func() {
 					manifestContent := Application{
-						Metadata:  Metadata{Name: "test-name"},
-						Instances: 1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						Processes: Processes{
 							ProcessSpec{
-								Type:        Web,
-								Memory:      "50M",
-								HealthCheck: ProbeSpec{},
-								ReadinessCheck: ProbeSpec{
-									Endpoint: "readiness.com",
+								Type: Web,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Memory:      "50M",
+									HealthCheck: ProbeSpec{},
+									ReadinessCheck: ProbeSpec{
+										Endpoint: "readiness.com",
+									},
+									Instances:    42,
+									LogRateLimit: "10K",
+									Lifecycle:    BuildPackLifecycleType,
 								},
-								Instances:    42,
-								LogRateLimit: "10K",
-								Lifecycle:    BuildPackLifecycleType,
 							},
 						},
 					}
 					expectedErrorMessages := []string{
-						generateErrorMessage("Application.Processes[0].HealthCheck", "HealthCheck", "required"),
-						generateErrorMessage("Application.Processes[0].ReadinessCheck.Timeout", "Timeout", "required"),
-						generateErrorMessage("Application.Processes[0].ReadinessCheck.Interval", "Interval", "required"),
-						generateErrorMessage("Application.Processes[0].ReadinessCheck.Type", "Type", "required"),
+						generateErrorMessage("Application.Processes[0].ProcessSpecTemplate.ReadinessCheck.Timeout", "Timeout", "required"),
+						generateErrorMessage("Application.Processes[0].ProcessSpecTemplate.ReadinessCheck.Interval", "Interval", "required"),
+						generateErrorMessage("Application.Processes[0].ProcessSpecTemplate.ReadinessCheck.Type", "Type", "required"),
 					}
 
 					validationErrors := validateApplication(manifestContent)
@@ -975,31 +1132,35 @@ var _ = Describe("Validate discover manifest", func() {
 			When("when process ProbeSpec has only endpoint", func() {
 				It("should return errors for missing required fields", func() {
 					manifestContent := Application{
-						Metadata:  Metadata{Name: "test-name"},
-						Instances: 1,
+						Metadata: Metadata{Name: "test-name"},
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							Instances: 1,
+						},
 						Processes: Processes{
 							ProcessSpec{
-								Type:   Web,
-								Memory: "50M",
-								HealthCheck: ProbeSpec{
-									Endpoint: "healthcheck.com",
+								Type: Web,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Memory: "50M",
+									HealthCheck: ProbeSpec{
+										Endpoint: "healthcheck.com",
+									},
+									ReadinessCheck: ProbeSpec{
+										Endpoint: "readiness.com",
+									},
+									Instances:    42,
+									LogRateLimit: "10K",
+									Lifecycle:    BuildPackLifecycleType,
 								},
-								ReadinessCheck: ProbeSpec{
-									Endpoint: "readiness.com",
-								},
-								Instances:    42,
-								LogRateLimit: "10K",
-								Lifecycle:    BuildPackLifecycleType,
 							},
 						},
 					}
 					expectedErrorMessages := []string{
-						generateErrorMessage("Application.Processes[0].HealthCheck.Timeout", "Timeout", "required"),
-						generateErrorMessage("Application.Processes[0].HealthCheck.Interval", "Interval", "required"),
-						generateErrorMessage("Application.Processes[0].HealthCheck.Type", "Type", "required"),
-						generateErrorMessage("Application.Processes[0].ReadinessCheck.Timeout", "Timeout", "required"),
-						generateErrorMessage("Application.Processes[0].ReadinessCheck.Interval", "Interval", "required"),
-						generateErrorMessage("Application.Processes[0].ReadinessCheck.Type", "Type", "required"),
+						generateErrorMessage("Application.Processes[0].ProcessSpecTemplate.HealthCheck.Timeout", "Timeout", "required"),
+						generateErrorMessage("Application.Processes[0].ProcessSpecTemplate.HealthCheck.Interval", "Interval", "required"),
+						generateErrorMessage("Application.Processes[0].ProcessSpecTemplate.HealthCheck.Type", "Type", "required"),
+						generateErrorMessage("Application.Processes[0].ProcessSpecTemplate.ReadinessCheck.Timeout", "Timeout", "required"),
+						generateErrorMessage("Application.Processes[0].ProcessSpecTemplate.ReadinessCheck.Interval", "Interval", "required"),
+						generateErrorMessage("Application.Processes[0].ProcessSpecTemplate.ReadinessCheck.Type", "Type", "required"),
 					}
 
 					validationErrors := validateApplication(manifestContent)
@@ -1010,6 +1171,45 @@ var _ = Describe("Validate discover manifest", func() {
 
 				})
 			})
+		})
+	})
+})
+var _ = Describe("MarshalUnmarshal", func() {
+	var (
+		inputStruct = struct {
+			Name string `json:"name"`
+			Age  int    `json:"age"`
+		}{
+			Name: "John",
+			Age:  30,
+		}
+	)
+
+	When("marshaling and unmarshaling a struct", func() {
+		It("should return the same data", func() {
+			var output struct {
+				Name string `json:"name"`
+				Age  int    `json:"age"`
+			}
+			output, err := marshalUnmarshal[struct {
+				Name string `json:"name"`
+				Age  int    `json:"age"`
+			}](inputStruct)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(output).To(Equal(struct {
+				Name string `json:"name"`
+				Age  int    `json:"age"`
+			}{
+				Name: "John",
+				Age:  30,
+			}))
+		})
+	})
+	When("marshaling fails", func() {
+		It("should return an error", func() {
+			// Use a type that cannot be marshaled to JSON
+			_, err := marshalUnmarshal[func()](func() {})
+			Expect(err).To(HaveOccurred())
 		})
 	})
 })

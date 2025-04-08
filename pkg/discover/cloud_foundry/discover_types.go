@@ -28,12 +28,10 @@ type Application struct {
 	Timeout int `yaml:"timeout" validate:"min=0,max=180"`
 	// BuildPacks capture the buildpacks defined in the CF application manifest.
 	BuildPacks []string `yaml:"buildPacks,omitempty"`
-	// Memory capture the memory defined in the CF application manifest.
-	Memory string `yaml:"memory,omitempty"`
 	// Docker captures the Docker specification in the CF application manifest.
 	Docker Docker `yaml:"docker,omitempty" validate:"omitempty"`
-	// Instances captures the number of instances to run concurrently for this application. Default is 1.
-	Instances int `yaml:"instances" validate:"required,min=1"`
+	// ProcessSpec embeds the process specification details, which are inlined and validated if present.
+	ProcessSpecTemplate `yaml:",inline" validate:"omitempty"`
 }
 
 type Services []ServiceSpec
@@ -90,24 +88,28 @@ type Metadata struct {
 type ProcessSpec struct {
 	// Type captures the `type` field in the Process specification.
 	// Accepted values are `web` or `worker`
-	Type ProcessType `yaml:"type" validate:"required,oneof=web worker"`
+	Type                ProcessType `yaml:"type" validate:"required,oneof=web worker"`
+	ProcessSpecTemplate `yaml:",inline" validate:"omitempty"`
+}
+
+type ProcessSpecTemplate struct {
 	// Command represents the command used to run the process.
-	Command string `yaml:"command,omitempty"`
+	Command string `yaml:"command,omitempty" validate:"omitempty"`
 	// DiskQuota represents the amount of persistent disk requested by the process.
-	DiskQuota string `yaml:"disk,omitempty"`
+	DiskQuota string `yaml:"disk,omitempty" validate:"omitempty"`
 	// Memory represents the amount of memory requested by the process.
-	Memory string `yaml:"memory" validate:"required"`
+	Memory string `yaml:"memory" validate:"omitempty"`
 	// HealthCheck captures the health check information
-	HealthCheck ProbeSpec `yaml:"healthCheck" validate:"required"`
+	HealthCheck ProbeSpec `yaml:"healthCheck,omitempty" validate:"omitempty"`
 	// ReadinessCheck captures the readiness check information.
-	ReadinessCheck ProbeSpec `yaml:"readinessCheck" validate:"required"`
+	ReadinessCheck ProbeSpec `yaml:"readinessCheck,omitempty" validate:"omitempty"`
 	// Instances represents the number of instances for this process to run.
-	Instances int `yaml:"instances" validate:"required,min=1"`
+	Instances int `yaml:"instances,omitempty" validate:"omitempty,min=1"`
 	// LogRateLimit represents the maximum amount of logs to be captured per second. Defaults to `16K`
-	LogRateLimit string `yaml:"logRateLimit" validate:"required"`
+	LogRateLimit string `yaml:"logRateLimit,omitempty" validate:"omitempty"`
 	// Lifecycle captures the value fo the lifecycle field in the CF application manifest.
 	// Valid values are `buildpack`, `cnb`, and `docker`. Defaults to `buildpack`
-	Lifecycle LifecycleType `yaml:"lifecycle,omitempty" validate:"required,oneof=buildpack cnb docker"`
+	Lifecycle LifecycleType `yaml:"lifecycle,omitempty" validate:"omitempty,oneof=buildpack cnb docker"`
 }
 
 type LifecycleType string
