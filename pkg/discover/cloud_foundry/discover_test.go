@@ -921,8 +921,7 @@ var _ = Describe("Validate discover manifest", func() {
 						},
 					}
 					expectedErrorMessages := []string{
-						generateErrorMessage("Application.Routes.Routes[0].Protocol", "Protocol", "required"),
-						generateErrorMessage("Application.Routes.Routes[0].Options.LoadBalancing", "LoadBalancing", "oneof")}
+						generateErrorMessage("Application.Routes.Routes[0].Protocol", "Protocol", "required")}
 
 					validationErrors := validateApplication(manifestContent)
 					Expect(validationErrors).ToNot(BeNil(), "Expected an error due to invalid manifest content, got none")
@@ -948,8 +947,7 @@ var _ = Describe("Validate discover manifest", func() {
 						},
 					}
 					expectedErrorMessages := []string{
-						generateErrorMessage("Application.Routes.Routes[0].Route", "Route", "required"),
-						generateErrorMessage("Application.Routes.Routes[0].Options.LoadBalancing", "LoadBalancing", "oneof")}
+						generateErrorMessage("Application.Routes.Routes[0].Route", "Route", "required")}
 
 					validationErrors := validateApplication(manifestContent)
 					Expect(validationErrors).ToNot(BeNil(), "Expected an error due to invalid manifest content, got none")

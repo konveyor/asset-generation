@@ -167,7 +167,7 @@ type Route struct {
 	// for CF deployments that use HTTP/2 routing.
 	Protocol RouteProtocol `yaml:"protocol,omitempty" validate:"required,oneof=http1 http2 tcp"`
 	// Options captures the options for the Route. Only load balancing is supported at the moment.
-	Options RouteOptions `yaml:"options,omitempty"`
+	Options RouteOptions `yaml:"options,omitempty" validate:"omitempty"`
 }
 
 type RouteOptions struct {
