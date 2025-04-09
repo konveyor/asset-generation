@@ -16,15 +16,21 @@ func Discover(cfApp AppManifest) (Application, error) {
 	if cfApp.Timeout != 0 {
 		timeout = int(cfApp.Timeout)
 	}
-	var instances int = 1
-	if cfApp.Instances != nil {
-		instances = int(*cfApp.Instances)
+	services, err := marshalUnmarshal[Services](cfApp.Services)
+	if err != nil {
+		return Application{}, err
 	}
-	services := parseServices(cfApp.Services)
 	routeSpec := parseRouteSpec(cfApp.Routes, cfApp.RandomRoute, cfApp.NoRoute)
-	docker := parseDocker(cfApp.Docker)
-	sidecars := parseSidecars(cfApp.Sidecars)
-	processes, err := parseProcesses(cfApp)
+
+	docker, err := marshalUnmarshal[Docker](cfApp.Docker)
+	if err != nil {
+		return Application{}, err
+	}
+	sidecars, err := marshalUnmarshal[Sidecars](cfApp.Sidecars)
+	if err != nil {
+		return Application{}, err
+	}
+	processes, err := marshalUnmarshal[Processes](cfApp.Processes)
 	if err != nil {
 		return Application{}, err
 	}
@@ -35,6 +41,19 @@ func Discover(cfApp AppManifest) (Application, error) {
 		annotations = cfApp.Metadata.Annotations
 	}
 
+	appManifestProcess, inlineProcess, err := parseProcessSpecs(cfApp)
+	if err != nil {
+		return Application{}, err
+	}
+
+	var appManifestProcessTemplate *ProcessSpecTemplate
+	if appManifestProcess != nil {
+		appManifestProcessTemplate = appManifestProcess
+	}
+	if inlineProcess != (nil) {
+		processes = append(processes, *inlineProcess)
+	}
+
 	app := Application{
 		Metadata: Metadata{
 			Name:        cfApp.Name,
@@ -42,7 +61,6 @@ func Discover(cfApp AppManifest) (Application, error) {
 			Annotations: annotations,
 		},
 		Timeout:    timeout,
-		Instances:  instances,
 		BuildPacks: cfApp.Buildpacks,
 		Env:        cfApp.Env,
 		Stack:      cfApp.Stack,
@@ -51,7 +69,10 @@ func Discover(cfApp AppManifest) (Application, error) {
 		Docker:     docker,
 		Sidecars:   sidecars,
 		Processes:  processes,
-		Memory:     cfApp.Memory,
+	}
+
+	if appManifestProcessTemplate != nil {
+		app.ProcessSpecTemplate = *appManifestProcessTemplate
 	}
 
 	validationErrors := validateApplication(app)
@@ -112,113 +133,65 @@ func parseReadinessHealthCheck(cfType AppHealthCheckType, cfEndpoint string, cfI
 	}
 }
 
-func parseProcesses(cfApp AppManifest) (Processes, error) {
-	processes := Processes{}
-	if cfApp.Processes == nil {
-		return nil, nil
-	}
-	for _, cfProcess := range *cfApp.Processes {
-		processes = append(processes, parseProcess(cfProcess))
-	}
-	if cfApp.Type != "" {
-		// Type is the only mandatory field for the process.
-		// https://github.com/SchemaStore/schemastore/blob/c06e2183289c50bdb0816050dfec002e5ebd8477/src/schemas/json/cloudfoundry-application-manifest.json#L280
-		// If it's not defined it means there is no process spec at the application field level and we should return an empty structure
-		proc, err := parseInlinedProcessSpec(cfApp)
-		if err != nil {
-			return nil, err
-		}
-		processes = append(processes, parseProcess(proc))
-	}
-	return processes, nil
-}
+// parseProcessSpecs creates a ProcessSpec if Type is defined inline or a
+// ProcessSpecTemplate when Type is empty.
+func parseProcessSpecs(cfApp AppManifest) (*ProcessSpecTemplate, *ProcessSpec, error) {
+	var template ProcessSpecTemplate
+	var processSpec ProcessSpec
+	var err error
 
-func parseInlinedProcessSpec(cfApp AppManifest) (AppManifestProcess, error) {
-	cfProc := AppManifestProcess{}
-	b, err := json.Marshal(cfApp)
-	if err != nil {
-		return cfProc, err
-	}
-	err = json.Unmarshal(b, &cfProc)
-	return cfProc, err
-}
-
-func parseProcess(cfProcess AppManifestProcess) ProcessSpec {
+	// dafault values
 	memory := "1G"
-	if len(cfProcess.Memory) != 0 {
-		memory = cfProcess.Memory
-	}
 	instances := 1
-	if cfProcess.Instances != nil {
-		instances = int(*cfProcess.Instances)
-	}
 	logRateLimit := "16K"
-	if len(cfProcess.LogRateLimitPerSecond) > 0 {
-		logRateLimit = cfProcess.LogRateLimitPerSecond
-	}
-	p := ProcessSpec{
-		Type:           ProcessType(cfProcess.Type),
-		Command:        cfProcess.Command,
-		DiskQuota:      cfProcess.DiskQuota,
-		Memory:         memory,
-		HealthCheck:    parseHealthCheck(cfProcess.HealthCheckType, cfProcess.HealthCheckHTTPEndpoint, cfProcess.HealthCheckInterval, cfProcess.HealthCheckInvocationTimeout),
-		ReadinessCheck: parseReadinessHealthCheck(cfProcess.ReadinessHealthCheckType, cfProcess.ReadinessHealthCheckHttpEndpoint, cfProcess.ReadinessHealthCheckInterval, cfProcess.ReadinessHealthInvocationTimeout),
-		Instances:      instances,
-		LogRateLimit:   logRateLimit,
-		Lifecycle:      LifecycleType(cfProcess.Lifecycle),
-	}
-	return p
-}
 
-func parseProcessTypes(cfProcessTypes []AppProcessType) []ProcessType {
-	types := []ProcessType{}
-	for _, cfType := range cfProcessTypes {
-		types = append(types, ProcessType(cfType))
-	}
-	return types
-
-}
-func parseSidecars(cfSidecars *AppManifestSideCars) Sidecars {
-	sidecars := Sidecars{}
-	if cfSidecars == nil {
-		return nil
-	}
-	for _, cfSidecar := range *cfSidecars {
-		pt := parseProcessTypes(cfSidecar.ProcessTypes)
-		s := SidecarSpec{
-			Name:         cfSidecar.Name,
-			Command:      cfSidecar.Command,
-			ProcessTypes: pt,
-			Memory:       cfSidecar.Memory,
+	if cfApp.Type == "" {
+		// Handle template process
+		template, err = marshalUnmarshal[ProcessSpecTemplate](cfApp)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to parse template spec: %w", err)
 		}
-		sidecars = append(sidecars, s)
+		if cfApp.LogRateLimitPerSecond != "" {
+			template.LogRateLimit = cfApp.LogRateLimitPerSecond
+		}
+
+		if (template == ProcessSpecTemplate{}) {
+			return nil, nil, nil
+		}
+
+		return &template, nil, nil
 	}
-	return sidecars
+
+	// Handle inline process
+	processSpec, err = marshalUnmarshal[ProcessSpec](cfApp)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse inline spec: %w", err)
+	}
+
+	if processSpec.Memory == "" {
+		processSpec.Memory = memory
+	}
+	if processSpec.Instances == 0 {
+		processSpec.Instances = instances
+	}
+	if cfApp.LogRateLimitPerSecond != "" {
+		processSpec.LogRateLimit = cfApp.LogRateLimitPerSecond
+	}
+	if processSpec.LogRateLimit == "" {
+		processSpec.LogRateLimit = logRateLimit
+	}
+	return nil, &processSpec, nil
 }
 
-func parseDocker(cfDocker *AppManifestDocker) Docker {
-	if cfDocker == nil {
-		return Docker{}
+// Generic helper for marshaling/unmarshaling between types
+func marshalUnmarshal[T any](input interface{}) (T, error) {
+	var result T
+	b, err := json.Marshal(input)
+	if err != nil {
+		return result, err
 	}
-	return Docker{
-		Image:    cfDocker.Image,
-		Username: cfDocker.Username,
-	}
-}
-func parseServices(cfServices *AppManifestServices) Services {
-	services := Services{}
-	if cfServices == nil {
-		return nil
-	}
-	for _, svc := range *cfServices {
-		s := ServiceSpec{
-			Name:        svc.Name,
-			Parameters:  svc.Parameters,
-			BindingName: svc.BindingName,
-		}
-		services = append(services, s)
-	}
-	return services
+	err = json.Unmarshal(b, &result)
+	return result, err
 }
 
 func parseRouteSpec(cfRoutes *AppManifestRoutes, randomRoute, noRoute bool) RouteSpec {
