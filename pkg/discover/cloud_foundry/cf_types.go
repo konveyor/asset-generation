@@ -33,8 +33,8 @@ type CloudFoundryManifest struct {
 
 // Metadata allows you to tag API resources with information that does not directly affect its functionality.
 type AppMetadata struct {
-	Labels      map[string]*string `json:"labels"`
-	Annotations map[string]*string `json:"annotations"`
+	Labels      map[string]*string `yaml:"labels,omitempty"`
+	Annotations map[string]*string `yaml:"annotations,omitempty"`
 }
 type AppManifest struct {
 	Name               string                `yaml:"name"`
