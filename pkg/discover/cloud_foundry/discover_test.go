@@ -578,9 +578,14 @@ var _ = Describe("Parse Services", func() {
 var _ = Describe("Parse metadata", func() {
 	When("parsing the metadata information", func() {
 		DescribeTable("validate the correctness of the parsing logic", func(metadata AppMetadata, expected Metadata) {
-			result, err := Discover(AppManifest{Name: "test-app", Metadata: &metadata})
+			result, err := Discover(CloudFoundryManifest{
+				Applications: []*AppManifest{
+					&AppManifest{Name: "test-app", Metadata: &metadata},
+				},
+			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Metadata).To(Equal(expected))
+			Expect(result).NotTo(BeEmpty())
+			Expect(result[0].Metadata).To(Equal(expected))
 		},
 
 			Entry("when metadata is nil", nil, Metadata{Name: "test-app"}),
@@ -604,9 +609,9 @@ var _ = Describe("Parse metadata", func() {
 var _ = Describe("Parse Application", func() {
 	When("parsing the application information", func() {
 		DescribeTable("validate the correctness of the parsing logic", func(app AppManifest, expected Application) {
-			result, err := Discover(app)
+			result, err := Discover(*NewCloudFoundryManifest("", &app))
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(Equal(expected))
+			Expect(result[0]).To(Equal(expected))
 		},
 			Entry("when app is empty",
 				AppManifest{Name: "test-app"},

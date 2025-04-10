@@ -10,77 +10,83 @@ import (
 
 type ValidationErrorList []error
 
-func Discover(cfApp AppManifest) (Application, error) {
+func Discover(cfManifest CloudFoundryManifest) ([]Application, error) {
+	// TODO
+	// cfManifest.Space
+	// cfManifest.Version
 
-	timeout := 60
-	if cfApp.Timeout != 0 {
-		timeout = int(cfApp.Timeout)
-	}
-	services, err := marshalUnmarshal[Services](cfApp.Services)
-	if err != nil {
-		return Application{}, err
-	}
-	routeSpec := parseRouteSpec(cfApp.Routes, cfApp.RandomRoute, cfApp.NoRoute)
+	apps := []Application{}
+	for _, cfApp := range cfManifest.Applications {
+		timeout := 60
+		if cfApp.Timeout != 0 {
+			timeout = int(cfApp.Timeout)
+		}
+		services, err := marshalUnmarshal[Services](cfApp.Services)
+		if err != nil {
+			return []Application{}, err
+		}
+		routeSpec := parseRouteSpec(cfApp.Routes, cfApp.RandomRoute, cfApp.NoRoute)
 
-	docker, err := marshalUnmarshal[Docker](cfApp.Docker)
-	if err != nil {
-		return Application{}, err
-	}
-	sidecars, err := marshalUnmarshal[Sidecars](cfApp.Sidecars)
-	if err != nil {
-		return Application{}, err
-	}
-	processes, err := marshalUnmarshal[Processes](cfApp.Processes)
-	if err != nil {
-		return Application{}, err
-	}
-	var labels, annotations map[string]*string
+		docker, err := marshalUnmarshal[Docker](cfApp.Docker)
+		if err != nil {
+			return []Application{}, err
+		}
+		sidecars, err := marshalUnmarshal[Sidecars](cfApp.Sidecars)
+		if err != nil {
+			return []Application{}, err
+		}
+		processes, err := marshalUnmarshal[Processes](cfApp.Processes)
+		if err != nil {
+			return []Application{}, err
+		}
+		var labels, annotations map[string]*string
 
-	if cfApp.Metadata != nil {
-		labels = cfApp.Metadata.Labels
-		annotations = cfApp.Metadata.Annotations
-	}
+		if cfApp.Metadata != nil {
+			labels = cfApp.Metadata.Labels
+			annotations = cfApp.Metadata.Annotations
+		}
 
-	appManifestProcess, inlineProcess, err := parseProcessSpecs(cfApp)
-	if err != nil {
-		return Application{}, err
-	}
+		appManifestProcess, inlineProcess, err := parseProcessSpecs(*cfApp)
+		if err != nil {
+			return []Application{}, err
+		}
 
-	var appManifestProcessTemplate *ProcessSpecTemplate
-	if appManifestProcess != nil {
-		appManifestProcessTemplate = appManifestProcess
-	}
-	if inlineProcess != (nil) {
-		processes = append(processes, *inlineProcess)
-	}
+		var appManifestProcessTemplate *ProcessSpecTemplate
+		if appManifestProcess != nil {
+			appManifestProcessTemplate = appManifestProcess
+		}
+		if inlineProcess != (nil) {
+			processes = append(processes, *inlineProcess)
+		}
 
-	app := Application{
-		Metadata: Metadata{
-			Name:        cfApp.Name,
-			Labels:      labels,
-			Annotations: annotations,
-		},
-		Timeout:    timeout,
-		BuildPacks: cfApp.Buildpacks,
-		Env:        cfApp.Env,
-		Stack:      cfApp.Stack,
-		Services:   services,
-		Routes:     routeSpec,
-		Docker:     docker,
-		Sidecars:   sidecars,
-		Processes:  processes,
-	}
+		app := Application{
+			Metadata: Metadata{
+				Name:        cfApp.Name,
+				Labels:      labels,
+				Annotations: annotations,
+			},
+			Timeout:    timeout,
+			BuildPacks: cfApp.Buildpacks,
+			Env:        cfApp.Env,
+			Stack:      cfApp.Stack,
+			Services:   services,
+			Routes:     routeSpec,
+			Docker:     docker,
+			Sidecars:   sidecars,
+			Processes:  processes,
+		}
 
-	if appManifestProcessTemplate != nil {
-		app.ProcessSpecTemplate = *appManifestProcessTemplate
-	}
+		if appManifestProcessTemplate != nil {
+			app.ProcessSpecTemplate = *appManifestProcessTemplate
+		}
 
-	validationErrors := validateApplication(app)
-	if validationErrors != nil {
-		return Application{}, errors.Join(validationErrors...)
+		validationErrors := validateApplication(app)
+		if validationErrors != nil {
+			return []Application{}, errors.Join(validationErrors...)
+		}
+		apps = append(apps, app)
 	}
-
-	return app, nil
+	return apps, nil
 }
 
 func parseHealthCheck(cfType AppHealthCheckType, cfEndpoint string, cfInterval, cfTimeout uint) ProbeSpec {
