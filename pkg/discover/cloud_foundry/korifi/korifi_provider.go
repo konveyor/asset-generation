@@ -18,7 +18,7 @@ type KorifiProvider interface {
 }
 
 type KorifiConfig struct {
-	baseURL        string
+	// baseURL        string
 	username       string
 	kubeconfigPath string
 }
@@ -40,13 +40,13 @@ func (t *authHeaderRoundTripper) RoundTrip(req *http.Request) (*http.Response, e
 	reqClone.Header.Set("Authorization", "ClientCert "+t.certPEM)
 	reqClone.Header.Set("X-Username", "kubernetes-admin")
 	// Use the base transport to execute the request
-
 	return t.base.RoundTrip(reqClone)
 }
 
 func NewKorifiProvider(config KorifiConfig) KorifiProvider {
 	return &korifiProviderImpl{config: config}
 }
+
 func (k *korifiProviderImpl) GetKubeConfig() (*api.Config, error) {
 	return getKubeConfig(k.config.kubeconfigPath)
 }
