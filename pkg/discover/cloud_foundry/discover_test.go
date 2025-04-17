@@ -8,6 +8,33 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+var defaultProcessSpecTemplate = ProcessSpecTemplate{
+	HealthCheck: ProbeSpec{
+		Type:     PortProbeType,
+		Endpoint: "/",
+		Interval: 30,
+		Timeout:  1,
+	},
+	ReadinessCheck: ProbeSpec{
+		Type:     ProcessProbeType,
+		Endpoint: "/",
+		Interval: 30,
+		Timeout:  1,
+	},
+}
+var defaultProcessSpec = ProcessSpec{
+	Type:                "",
+	ProcessSpecTemplate: defaultProcessSpecTemplate,
+}
+
+func overrideWith[T any](defaultVal T, overrides ...func(*T)) *T {
+	val := defaultVal
+	for _, override := range overrides {
+		override(&val)
+	}
+	return &val
+}
+
 var _ = Describe("Health Checks tests", func() {
 
 	When("parsing health check probe", func() {
@@ -123,7 +150,8 @@ var _ = Describe("parseProcessSpecs", func() {
 		It("should return a template with default values if empty", func() {
 			template, _, err := parseProcessSpecs(defaultAppManifest)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(template).To(BeNil()) // Template is nil if empty
+			Expect(template).ToNot(BeNil())
+			Expect(*template).To(Equal(defaultProcessSpecTemplate))
 		})
 
 		It("should set LogRateLimit from AppManifest", func() {
@@ -135,6 +163,44 @@ var _ = Describe("parseProcessSpecs", func() {
 			template, _, err := parseProcessSpecs(appManifest)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(template.LogRateLimit).To(Equal("32K"))
+		})
+		It("should set HealtCheck from AppManifest", func() {
+			expectedHC := ProbeSpec{
+				Type:     HTTPProbeType,
+				Endpoint: "/healthcheck",
+				Timeout:  42,
+				Interval: 10,
+			}
+			appManifest := AppManifest{
+				AppManifestProcess: AppManifestProcess{
+					HealthCheckType:              AppHealthCheckType(expectedHC.Type),
+					HealthCheckHTTPEndpoint:      expectedHC.Endpoint,
+					HealthCheckInterval:          uint(expectedHC.Interval),
+					HealthCheckInvocationTimeout: uint(expectedHC.Timeout),
+				},
+			}
+			template, _, err := parseProcessSpecs(appManifest)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(template.HealthCheck).To(Equal(expectedHC))
+		})
+		It("should set ReadinessHealthCheck from AppManifest", func() {
+			expectedReadinessHC := ProbeSpec{
+				Type:     HTTPProbeType,
+				Endpoint: "/healthcheck",
+				Timeout:  42,
+				Interval: 10,
+			}
+			appManifest := AppManifest{
+				AppManifestProcess: AppManifestProcess{
+					ReadinessHealthCheckType:         AppHealthCheckType(expectedReadinessHC.Type),
+					ReadinessHealthCheckHttpEndpoint: expectedReadinessHC.Endpoint,
+					ReadinessHealthCheckInterval:     uint(expectedReadinessHC.Interval),
+					ReadinessHealthInvocationTimeout: uint(expectedReadinessHC.Timeout),
+				},
+			}
+			template, _, err := parseProcessSpecs(appManifest)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(template.ReadinessCheck).To(Equal(expectedReadinessHC))
 		})
 	})
 
@@ -200,42 +266,27 @@ var _ = Describe("parseProcessSpecs", func() {
 var _ = Describe("Parse Process", func() {
 
 	When("parsing a process", func() {
-		defaultProcessSpecTemplate := ProcessSpecTemplate{
-			Memory:       "1G",
-			Instances:    1,
-			LogRateLimit: "16K",
-		}
+		DescribeTable("validate the correctness of the parsing logic",
+			func(cfApp AppManifest,
+				expectedTemplate *ProcessSpecTemplate,
+				expectedProcesses *Processes) {
+				appManifestProcess, inlineProcess, err := parseProcessSpecs(cfApp)
+				Expect(err).ToNot(HaveOccurred())
+				if expectedTemplate == nil {
+					Expect(*appManifestProcess).To(Equal(defaultProcessSpecTemplate))
+				} else {
+					Expect(*appManifestProcess).To(Equal(*expectedTemplate))
+				}
 
-		defaultProcessSpec := ProcessSpec{
-			Type:                "",
-			ProcessSpecTemplate: defaultProcessSpecTemplate,
-		}
-		overrideDefaultProcessSpec := func(overrides ...func(*ProcessSpec)) ProcessSpec {
-			spec := defaultProcessSpec
-			for _, override := range overrides {
-				override(&spec)
-			}
-			return spec
-		}
-
-		DescribeTable("validate the correctness of the parsing logic", func(cfApp AppManifest, expectedTemplate *ProcessSpecTemplate, expectedProcesses *Processes) {
-			appManifestProcess, inlineProcess, err := parseProcessSpecs(cfApp)
-			Expect(err).ToNot(HaveOccurred())
-			if expectedTemplate == nil {
-				Expect(appManifestProcess).To(BeNil())
-			} else {
-				Expect(*appManifestProcess).To(Equal(*expectedTemplate))
-			}
-
-			if inlineProcess == nil {
-				Expect(inlineProcess).To(BeNil())
-			} else {
-				Expect(*inlineProcess).To(Equal(*expectedProcesses))
-			}
-		},
+				if inlineProcess == nil {
+					Expect(inlineProcess).To(BeNil())
+				} else {
+					Expect(*inlineProcess).To(Equal(*expectedProcesses))
+				}
+			},
 			Entry("default values",
 				AppManifest{},
-				nil,
+				&defaultProcessSpecTemplate,
 				nil,
 			),
 			Entry("with memory only - inline",
@@ -244,9 +295,9 @@ var _ = Describe("Parse Process", func() {
 						Memory: "512M",
 					},
 				},
-				&ProcessSpecTemplate{
-					Memory: "512M",
-				},
+				overrideWith(defaultProcessSpecTemplate, func(spec *ProcessSpecTemplate) {
+					spec.Memory = "512M"
+				}),
 				nil,
 			),
 			Entry("with memory only - in processes",
@@ -258,9 +309,9 @@ var _ = Describe("Parse Process", func() {
 						},
 					},
 				},
-				nil,
+				&defaultProcessSpecTemplate,
 				&Processes{
-					overrideDefaultProcessSpec(func(spec *ProcessSpec) {
+					*overrideWith(defaultProcessSpec, func(spec *ProcessSpec) {
 						spec.Memory = "512M"
 					}),
 				},
@@ -271,10 +322,9 @@ var _ = Describe("Parse Process", func() {
 						Instances: ptrTo(uint(42)),
 					},
 				},
-
-				&ProcessSpecTemplate{
-					Instances: 42,
-				},
+				overrideWith(defaultProcessSpecTemplate, func(spec *ProcessSpecTemplate) {
+					spec.Instances = 42
+				}),
 				nil,
 			),
 			Entry("with instance only - in processes",
@@ -288,20 +338,20 @@ var _ = Describe("Parse Process", func() {
 				},
 				nil,
 				&Processes{
-					overrideDefaultProcessSpec(func(spec *ProcessSpec) {
+					*overrideWith(defaultProcessSpec, func(spec *ProcessSpec) {
 						spec.Instances = 2
 					}),
 				},
 			),
-			Entry("with lograte pnly - inline",
+			Entry("with lograte only - inline",
 				AppManifest{
 					AppManifestProcess: AppManifestProcess{
 						LogRateLimitPerSecond: "42K",
 					},
 				},
-				&ProcessSpecTemplate{
-					LogRateLimit: "42K",
-				},
+				overrideWith(defaultProcessSpecTemplate, func(spec *ProcessSpecTemplate) {
+					spec.LogRateLimit = "42K"
+				}),
 				nil,
 			),
 			Entry("with lograte only - in processes",
@@ -313,11 +363,12 @@ var _ = Describe("Parse Process", func() {
 						},
 					},
 				},
-				nil,
+				&defaultProcessSpecTemplate,
 				&Processes{
-					overrideDefaultProcessSpec(func(spec *ProcessSpec) {
+					*overrideWith(defaultProcessSpec, func(spec *ProcessSpec) {
 						spec.LogRateLimit = "42K"
-					})},
+					}),
+				},
 			),
 		)
 	})
@@ -560,14 +611,15 @@ var _ = Describe("Parse Application", func() {
 			Entry("when app is empty",
 				AppManifest{Name: "test-app"},
 				Application{
-					Metadata: Metadata{Name: "test-app"},
-					Timeout:  60,
+					Metadata:            Metadata{Name: "test-app"},
+					Timeout:             60,
+					ProcessSpecTemplate: defaultProcessSpecTemplate,
 				},
 			),
 			Entry("when timeout is set",
 				AppManifest{
 					Name:               "test-app",
-					AppManifestProcess: AppManifestProcess{Timeout: 30},
+					AppManifestProcess: AppManifestProcess{Timeout: 42},
 				},
 				Application{
 					Metadata: Metadata{Name: "test-app"},
@@ -576,7 +628,8 @@ var _ = Describe("Parse Application", func() {
 						RandomRoute: false,
 						Routes:      nil,
 					},
-					Timeout: 30,
+					ProcessSpecTemplate: defaultProcessSpecTemplate,
+					Timeout:             42,
 				},
 			),
 			Entry("when instances is set",
@@ -587,9 +640,11 @@ var _ = Describe("Parse Application", func() {
 				Application{
 					Metadata: Metadata{Name: "test-app"},
 					Timeout:  60,
-					ProcessSpecTemplate: ProcessSpecTemplate{
-						Instances: 2,
-					},
+					ProcessSpecTemplate: func() ProcessSpecTemplate {
+						p := defaultProcessSpecTemplate
+						p.Instances = 2
+						return p
+					}(),
 				},
 			),
 			Entry("when buildpacks are set",
@@ -598,9 +653,10 @@ var _ = Describe("Parse Application", func() {
 					Buildpacks: []string{"foo", "bar"},
 				},
 				Application{
-					Metadata:   Metadata{Name: "test-app"},
-					Timeout:    60,
-					BuildPacks: []string{"foo", "bar"},
+					Metadata:            Metadata{Name: "test-app"},
+					Timeout:             60,
+					BuildPacks:          []string{"foo", "bar"},
+					ProcessSpecTemplate: defaultProcessSpecTemplate,
 				},
 			),
 			Entry("when environment values are set",
@@ -609,9 +665,10 @@ var _ = Describe("Parse Application", func() {
 					Env:  map[string]string{"foo": "bar"},
 				},
 				Application{
-					Metadata: Metadata{Name: "test-app"},
-					Timeout:  60,
-					Env:      map[string]string{"foo": "bar"},
+					Metadata:            Metadata{Name: "test-app"},
+					Timeout:             60,
+					Env:                 map[string]string{"foo": "bar"},
+					ProcessSpecTemplate: defaultProcessSpecTemplate,
 				},
 			),
 			Entry("when memory is set",
@@ -622,9 +679,11 @@ var _ = Describe("Parse Application", func() {
 				Application{
 					Metadata: Metadata{Name: "test-app"},
 					Timeout:  60,
-					ProcessSpecTemplate: ProcessSpecTemplate{
-						Memory: "42G",
-					},
+					ProcessSpecTemplate: func() ProcessSpecTemplate {
+						p := defaultProcessSpecTemplate // copy the struct value
+						p.Memory = "42G"                // override Instances
+						return p
+					}(),
 				},
 			),
 		)

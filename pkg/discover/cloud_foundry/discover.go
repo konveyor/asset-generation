@@ -151,6 +151,17 @@ func parseProcessSpecs(cfApp AppManifest) (*ProcessSpecTemplate, *ProcessSpec, e
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to parse template spec: %w", err)
 		}
+		template.HealthCheck = parseHealthCheck(
+			cfApp.HealthCheckType,
+			cfApp.HealthCheckHTTPEndpoint,
+			cfApp.HealthCheckInterval,
+			cfApp.HealthCheckInvocationTimeout)
+		template.ReadinessCheck = parseReadinessHealthCheck(
+			cfApp.ReadinessHealthCheckType,
+			cfApp.ReadinessHealthCheckHttpEndpoint,
+			cfApp.ReadinessHealthCheckInterval,
+			cfApp.ReadinessHealthInvocationTimeout)
+
 		if cfApp.LogRateLimitPerSecond != "" {
 			template.LogRateLimit = cfApp.LogRateLimitPerSecond
 		}
