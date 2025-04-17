@@ -7,24 +7,23 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	korifi "github.com/konveyor/asset-generation/pkg/discover/cloud_foundry/korifi"
-	korifiApi "github.com/konveyor/asset-generation/pkg/discover/cloud_foundry/korifi/api"
+	kApi "github.com/konveyor/asset-generation/pkg/discover/cloud_foundry/korifi/api"
+	kProvider "github.com/konveyor/asset-generation/pkg/discover/cloud_foundry/korifi/provider"
 	"gopkg.in/yaml.v2"
 )
 
 type LiveDiscovererImpl struct {
-	// client   *http.Client
 	logger   *logr.Logger
-	provider korifi.KorifiProvider
-	cfAPI    *korifiApi.CFAPIClient
+	provider kProvider.KorifiProvider
+	cfAPI    *kApi.CFAPIClient
 }
 
-func NewLiveDiscoverer(log logr.Logger, provider korifi.KorifiProvider) (*LiveDiscovererImpl, error) {
+func NewLiveDiscoverer(log logr.Logger, provider kProvider.KorifiProvider) (*LiveDiscovererImpl, error) {
 	client, err := provider.GetKorifiHttpClient()
 	if err != nil {
 		return nil, fmt.Errorf("error creating Korifi client: %v", err)
 	}
-	return &LiveDiscovererImpl{cfAPI: korifiApi.NewCFAPIClient(client, "https://localhost/"), logger: &log, provider: provider}, nil
+	return &LiveDiscovererImpl{cfAPI: kApi.NewCFAPIClient(client, provider.GetKorifiConfig().BaseURL), logger: &log, provider: provider}, nil
 }
 
 func (ld *LiveDiscovererImpl) Discover() (*CloudFoundryManifest, error) {
@@ -44,12 +43,12 @@ func (ld *LiveDiscovererImpl) Discover() (*CloudFoundryManifest, error) {
 			return nil, fmt.Errorf("error getting environment for app %s: %v", app.GUID, err)
 		}
 
-		appName, err := korifiApi.GetAppName(*appEnv)
+		appName, err := kApi.GetAppName(*appEnv)
 		if err != nil {
 			return nil, fmt.Errorf("error getting app name: %v", err)
 		}
 
-		normalizedAppName, err := korifiApi.NormalizeForMetadataName(strings.TrimSpace(appName))
+		normalizedAppName, err := kApi.NormalizeForMetadataName(strings.TrimSpace(appName))
 		if err != nil {
 			return nil, fmt.Errorf("error normalizing app name: %v", err)
 		}
@@ -95,8 +94,8 @@ func (ld *LiveDiscovererImpl) Discover() (*CloudFoundryManifest, error) {
 			})
 		}
 
-		labels := korifiApi.ConvertMapToPointer(app.Metadata.Labels)
-		annotations := korifiApi.ConvertMapToPointer(app.Metadata.Annotations)
+		labels := kApi.ConvertMapToPointer(app.Metadata.Labels)
+		annotations := kApi.ConvertMapToPointer(app.Metadata.Annotations)
 		appManifest := AppManifest{
 			Name: normalizedAppName,
 			Env:  appEnv.EnvironmentVariables,
@@ -127,13 +126,11 @@ func (ld *LiveDiscovererImpl) Discover() (*CloudFoundryManifest, error) {
 }
 
 func writeToYAMLFile(data interface{}, filename string) error {
-	// Marshal the data to YAML
 	yamlData, err := yaml.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("error marshaling to YAML: %w", err)
 	}
 
-	// Write to file with 0644 permissions
 	err = os.WriteFile(filename, yamlData, 0644)
 	if err != nil {
 		return fmt.Errorf("error writing YAML to file: %w", err)

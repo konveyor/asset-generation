@@ -1,4 +1,4 @@
-package korifi
+package provider
 
 import (
 	"crypto/tls"
@@ -10,17 +10,17 @@ import (
 	"k8s.io/client-go/tools/clientcmd/api"
 )
 
-// Assisted by watsonx Code Assistant
 type KorifiProvider interface {
 	GetKubeConfig() (*api.Config, error)
+	GetKorifiConfig() *KorifiConfig
 	GetClientCertificate(config *api.Config) (string, error)
 	GetKorifiHttpClient() (*http.Client, error)
 }
 
 type KorifiConfig struct {
-	// baseURL        string
-	username       string
-	kubeconfigPath string
+	BaseURL        string
+	Username       string
+	KubeconfigPath string
 }
 
 type korifiProviderImpl struct {
@@ -48,15 +48,19 @@ func NewKorifiProvider(config KorifiConfig) KorifiProvider {
 }
 
 func (k *korifiProviderImpl) GetKubeConfig() (*api.Config, error) {
-	return getKubeConfig(k.config.kubeconfigPath)
+	return getKubeConfig(k.config.KubeconfigPath)
+}
+
+func (k *korifiProviderImpl) GetKorifiConfig() *KorifiConfig {
+	return &k.config
 }
 
 func (k *korifiProviderImpl) GetClientCertificate(config *api.Config) (string, error) {
-	return getClientCertificate(config, k.config.username)
+	return getClientCertificate(config, k.config.Username)
 }
 
 func (k *korifiProviderImpl) GetKorifiHttpClient() (*http.Client, error) {
-	return getKorifiHttpClient(k.config.kubeconfigPath, k.config.username)
+	return getKorifiHttpClient(k.config.KubeconfigPath, k.config.Username)
 }
 
 func getKubeConfig(kubeconfigPath string) (*api.Config, error) {
@@ -69,7 +73,6 @@ func getKubeConfig(kubeconfigPath string) (*api.Config, error) {
 }
 
 func getClientCertificate(config *api.Config, username string) (string, error) {
-	// Find the desired user context (in this case, "kind-korifi")
 	var dataCert, keyCert []byte
 	for authInfoUsername, authInfo := range config.AuthInfos {
 		if authInfoUsername == username {

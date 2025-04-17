@@ -5,15 +5,15 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/konveyor/asset-generation/pkg/discover/cloud_foundry/korifi"
+	kTModels "github.com/konveyor/asset-generation/pkg/discover/cloud_foundry/korifi/models"
 )
 
-func GetAppName(appEnv korifi.AppEnvResponse) (string, error) {
+func GetAppName(appEnv kTModels.AppEnvResponse) (string, error) {
 	vcap, valid := appEnv.ApplicationEnvJSON["VCAP_APPLICATION"]
 	if !valid {
 		return "", fmt.Errorf("can't find ")
 	}
-	vcapMap, valid := vcap.(map[string]any) // Ensure it's a map
+	vcapMap, valid := vcap.(map[string]any)
 	if !valid {
 		return "", fmt.Errorf("VCAP_APPLICATION is not a valid map: %v", vcap)
 	}

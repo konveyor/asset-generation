@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/konveyor/asset-generation/pkg/discover/cloud_foundry/korifi"
+	kModels "github.com/konveyor/asset-generation/pkg/discover/cloud_foundry/korifi/models"
 	"github.com/pkg/errors"
 )
 
-// CF API Client
 type CFAPIClient struct {
 	httpClient *http.Client
 	baseURL    string
@@ -22,7 +21,7 @@ func NewCFAPIClient(httpClient *http.Client, baseURL string) *CFAPIClient {
 	}
 }
 
-func (c *CFAPIClient) ListApps() (*korifi.ListResponse[korifi.AppResponse], error) {
+func (c *CFAPIClient) ListApps() (*kModels.ListResponse[kModels.AppResponse], error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps")
 	if err != nil {
 		return nil, err
@@ -32,7 +31,7 @@ func (c *CFAPIClient) ListApps() (*korifi.ListResponse[korifi.AppResponse], erro
 		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	var i korifi.ListResponse[korifi.AppResponse]
+	var i kModels.ListResponse[kModels.AppResponse]
 	err = json.NewDecoder(resp.Body).Decode(&i)
 	if err != nil {
 		return nil, errors.Wrap(err, "Error unmarshalling info")
@@ -40,7 +39,7 @@ func (c *CFAPIClient) ListApps() (*korifi.ListResponse[korifi.AppResponse], erro
 	return &i, nil
 }
 
-func (c *CFAPIClient) GetEnv(guid string) (*korifi.AppEnvResponse, error) {
+func (c *CFAPIClient) GetEnv(guid string) (*kModels.AppEnvResponse, error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps/" + guid + "/env")
 	if err != nil {
 		return nil, err
@@ -51,14 +50,14 @@ func (c *CFAPIClient) GetEnv(guid string) (*korifi.AppEnvResponse, error) {
 		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	var i korifi.AppEnvResponse
+	var i kModels.AppEnvResponse
 	err = json.NewDecoder(resp.Body).Decode(&i)
 	if err != nil {
 		return nil, errors.Wrap(err, "Error unmarshalling info")
 	}
 	return &i, nil
 }
-func (c *CFAPIClient) GetProcesses(guid string) (*korifi.ListResponse[korifi.ProcessResponse], error) {
+func (c *CFAPIClient) GetProcesses(guid string) (*kModels.ListResponse[kModels.ProcessResponse], error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps/" + guid + "/processes")
 	if err != nil {
 		return nil, err
@@ -69,7 +68,7 @@ func (c *CFAPIClient) GetProcesses(guid string) (*korifi.ListResponse[korifi.Pro
 		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	var i korifi.ListResponse[korifi.ProcessResponse]
+	var i kModels.ListResponse[kModels.ProcessResponse]
 	err = json.NewDecoder(resp.Body).Decode(&i)
 	if err != nil {
 		return nil, errors.Wrap(err, "Error unmarshalling info")
@@ -77,7 +76,7 @@ func (c *CFAPIClient) GetProcesses(guid string) (*korifi.ListResponse[korifi.Pro
 	return &i, nil
 }
 
-func (c *CFAPIClient) GetRoutes(guid string) (*korifi.ListResponse[korifi.RouteResponse], error) {
+func (c *CFAPIClient) GetRoutes(guid string) (*kModels.ListResponse[kModels.RouteResponse], error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps/" + guid + "/routes")
 	if err != nil {
 		return nil, err
@@ -88,7 +87,7 @@ func (c *CFAPIClient) GetRoutes(guid string) (*korifi.ListResponse[korifi.RouteR
 		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	var i korifi.ListResponse[korifi.RouteResponse]
+	var i kModels.ListResponse[kModels.RouteResponse]
 	err = json.NewDecoder(resp.Body).Decode(&i)
 	if err != nil {
 		return nil, errors.Wrap(err, "Error unmarshalling info")
