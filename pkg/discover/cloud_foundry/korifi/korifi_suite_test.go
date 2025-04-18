@@ -1,4 +1,4 @@
-package cloud_foundry_test
+package korifi_test
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestDiscover(t *testing.T) {
+func TestKorifi(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Discover Suite")
+	RunSpecs(t, "Korifi Suite")
 }

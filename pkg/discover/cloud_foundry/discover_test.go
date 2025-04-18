@@ -123,7 +123,7 @@ var _ = Describe("parseProcessSpecs", func() {
 		It("should return a template with default values if empty", func() {
 			template, _, err := parseProcessSpecs(defaultAppManifest)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(template).To(BeNil()) // Template is nil if empty
+			Expect(template).To(BeNil())
 		})
 
 		It("should set LogRateLimit from AppManifest", func() {
@@ -181,19 +181,6 @@ var _ = Describe("parseProcessSpecs", func() {
 			Expect(processSpec).ToNot(BeNil())
 			Expect(processSpec.ProcessSpecTemplate.LogRateLimit).To(Equal("16K"))
 		})
-
-		// It("should return an error if marshaling fails", func() {
-		// 	// Use a type that cannot be marshaled to JSON
-		// 	struct testStruct {
-		// 		a string
-		// 	}
-		// 	appManifest := AppManifest{
-		// 		Type: "inline",
-		// 		// Add a field that causes marshaling to fail
-		// 	}
-		// 	_, _, err := parseProcessSpecs(appManifest)
-		// 	Expect(err).To(HaveOccurred())
-		// })
 	})
 })
 
@@ -527,9 +514,14 @@ var _ = Describe("Parse Services", func() {
 var _ = Describe("Parse metadata", func() {
 	When("parsing the metadata information", func() {
 		DescribeTable("validate the correctness of the parsing logic", func(metadata AppMetadata, expected Metadata) {
-			result, err := Discover(AppManifest{Name: "test-app", Metadata: &metadata})
+			result, err := Discover(CloudFoundryManifest{
+				Applications: []*AppManifest{
+					&AppManifest{Name: "test-app", Metadata: &metadata},
+				},
+			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Metadata).To(Equal(expected))
+			Expect(result).NotTo(BeEmpty())
+			Expect(result[0].Metadata).To(Equal(expected))
 		},
 
 			Entry("when metadata is nil", nil, Metadata{Name: "test-app"}),
@@ -553,9 +545,9 @@ var _ = Describe("Parse metadata", func() {
 var _ = Describe("Parse Application", func() {
 	When("parsing the application information", func() {
 		DescribeTable("validate the correctness of the parsing logic", func(app AppManifest, expected Application) {
-			result, err := Discover(app)
+			result, err := Discover(*NewCloudFoundryManifest("", &app))
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(Equal(expected))
+			Expect(result[0]).To(Equal(expected))
 		},
 			Entry("when app is empty",
 				AppManifest{Name: "test-app"},
