@@ -16,113 +16,137 @@ type LiveDiscovererImpl struct {
 	logger   *logr.Logger
 	provider kProvider.KorifiProvider
 	cfAPI    *kApi.CFAPIClient
+	spaces   *[]string //GUID lists
 }
 
-func NewLiveDiscoverer(log logr.Logger, provider kProvider.KorifiProvider) (*LiveDiscovererImpl, error) {
+func NewLiveDiscoverer(log logr.Logger, provider kProvider.KorifiProvider, spaces *[]string) (*LiveDiscovererImpl, error) {
 	client, err := provider.GetKorifiHttpClient()
 	if err != nil {
 		return nil, fmt.Errorf("error creating Korifi client: %v", err)
 	}
-	return &LiveDiscovererImpl{cfAPI: kApi.NewCFAPIClient(client, provider.GetKorifiConfig().BaseURL), logger: &log, provider: provider}, nil
+	return &LiveDiscovererImpl{
+		cfAPI:    kApi.NewCFAPIClient(client, provider.GetKorifiConfig().BaseURL),
+		logger:   &log,
+		provider: provider,
+		spaces:   spaces}, nil
 }
 
-func (ld *LiveDiscovererImpl) Discover() (*CloudFoundryManifest, error) {
-	apps, err := ld.cfAPI.ListApps()
-	if err != nil {
-		return nil, fmt.Errorf("error listing CF apps: %v", err)
+func (ld *LiveDiscovererImpl) Discover() (*[]CloudFoundryManifest, error) {
+	var spaces []string
+	var manifests []CloudFoundryManifest
+	if ld.spaces == nil || len(*ld.spaces) == 0 {
+		cfSpaces, err := ld.cfAPI.ListSpaces()
+		if err != nil {
+			return nil, fmt.Errorf("error listing CF spaces: %v", err)
+		}
+
+		for _, space := range cfSpaces.Resources {
+			spaces = append(spaces, space.GUID)
+		}
+	} else {
+		spaces = *ld.spaces
 	}
 
-	log.Println("Apps discovered:", apps)
+	for _, space := range spaces {
+		log.Println("Analyzing space: ", space)
 
-	var cfManifest CloudFoundryManifest
-	for _, app := range apps.Resources {
-		log.Println("Processing app:", app.GUID)
-
-		appEnv, err := ld.cfAPI.GetEnv(app.GUID)
+		apps, err := ld.cfAPI.ListApps(space)
 		if err != nil {
-			return nil, fmt.Errorf("error getting environment for app %s: %v", app.GUID, err)
+			return nil, fmt.Errorf("error listing CF apps: %v", err)
 		}
 
-		appName, err := kApi.GetAppName(*appEnv)
+		log.Println("Apps discovered: ", apps.PaginationData.TotalResults)
+
+		var cfManifest CloudFoundryManifest
+		for _, app := range apps.Resources {
+			log.Println("Processing app:", app.GUID)
+
+			appEnv, err := ld.cfAPI.GetEnv(app.GUID)
+			if err != nil {
+				return nil, fmt.Errorf("error getting environment for app %s: %v", app.GUID, err)
+			}
+
+			appName, err := kApi.GetAppName(*appEnv)
+			if err != nil {
+				return nil, fmt.Errorf("error getting app name: %v", err)
+			}
+
+			normalizedAppName, err := kApi.NormalizeForMetadataName(strings.TrimSpace(appName))
+			if err != nil {
+				return nil, fmt.Errorf("error normalizing app name: %v", err)
+			}
+
+			process, err := ld.cfAPI.GetProcesses(app.GUID)
+			if err != nil {
+				return nil, fmt.Errorf("error getting processes: %v", err)
+			}
+
+			appProcesses := AppManifestProcesses{}
+			for _, proc := range process.Resources {
+				procInstances := uint(proc.Instances)
+
+				appProcesses = append(appProcesses, AppManifestProcess{
+					Type:                         AppProcessType(proc.Type),
+					Command:                      proc.Command,
+					DiskQuota:                    fmt.Sprintf("%d", proc.DiskQuotaMB),
+					HealthCheckType:              AppHealthCheckType(proc.HealthCheck.Type),
+					HealthCheckHTTPEndpoint:      proc.HealthCheck.Data.HTTPEndpoint,
+					HealthCheckInvocationTimeout: uint(proc.HealthCheck.Data.InvocationTimeout),
+					Instances:                    &procInstances,
+					// LogRateLimitPerSecond
+					Memory: fmt.Sprintf("%dMB", proc.MemoryMB),
+					// Timeout
+					// ReadinessHealthCheckType
+					// ReadinessHealthCheckHttpEndpoint
+					// ReadinessHealthInvocationTimeout
+					// ReadinessHealthCheckInterval
+					Lifecycle: string(app.Lifecycle.Type),
+				})
+			}
+
+			routes, err := ld.cfAPI.GetRoutes(app.GUID)
+			if err != nil {
+				return nil, fmt.Errorf("error getting processes: %v", err)
+			}
+			appRoutes := AppManifestRoutes{}
+			for _, r := range routes.Resources {
+				appRoutes = append(appRoutes, AppManifestRoute{
+					Route:    r.URL,
+					Protocol: AppRouteProtocol(r.Protocol),
+					// TODO: Options: loadbalancing?
+				})
+			}
+
+			labels := kApi.ConvertMapToPointer(app.Metadata.Labels)
+			annotations := kApi.ConvertMapToPointer(app.Metadata.Annotations)
+			appManifest := AppManifest{
+				Name: normalizedAppName,
+				Env:  appEnv.EnvironmentVariables,
+				Metadata: &AppMetadata{
+					Labels:      labels,
+					Annotations: annotations,
+				},
+				Processes: &appProcesses,
+				Routes:    &appRoutes,
+				// AppManifestProcess
+				// Buildpacks
+				// RandomRoute
+				// NoRoute
+				// Services
+				// Sidecars
+				// Stack
+			}
+			cfManifest.Applications = append(cfManifest.Applications, &appManifest)
+		}
+
+		err = writeToYAMLFile(cfManifest, "manifest.yaml")
 		if err != nil {
-			return nil, fmt.Errorf("error getting app name: %v", err)
+			return nil, fmt.Errorf("error writing manifest to file: %v", err)
 		}
-
-		normalizedAppName, err := kApi.NormalizeForMetadataName(strings.TrimSpace(appName))
-		if err != nil {
-			return nil, fmt.Errorf("error normalizing app name: %v", err)
-		}
-
-		process, err := ld.cfAPI.GetProcesses(app.GUID)
-		if err != nil {
-			return nil, fmt.Errorf("error getting processes: %v", err)
-		}
-
-		appProcesses := AppManifestProcesses{}
-		for _, proc := range process.Resources {
-			procInstances := uint(proc.Instances)
-
-			appProcesses = append(appProcesses, AppManifestProcess{
-				Type:                         AppProcessType(proc.Type),
-				Command:                      proc.Command,
-				DiskQuota:                    fmt.Sprintf("%d", proc.DiskQuotaMB),
-				HealthCheckType:              AppHealthCheckType(proc.HealthCheck.Type),
-				HealthCheckHTTPEndpoint:      proc.HealthCheck.Data.HTTPEndpoint,
-				HealthCheckInvocationTimeout: uint(proc.HealthCheck.Data.InvocationTimeout),
-				Instances:                    &procInstances,
-				// LogRateLimitPerSecond
-				Memory: fmt.Sprintf("%dMB", proc.MemoryMB),
-				// Timeout
-				// ReadinessHealthCheckType
-				// ReadinessHealthCheckHttpEndpoint
-				// ReadinessHealthInvocationTimeout
-				// ReadinessHealthCheckInterval
-				Lifecycle: string(app.Lifecycle.Type),
-			})
-		}
-
-		routes, err := ld.cfAPI.GetRoutes(app.GUID)
-		if err != nil {
-			return nil, fmt.Errorf("error getting processes: %v", err)
-		}
-		appRoutes := AppManifestRoutes{}
-		for _, r := range routes.Resources {
-			appRoutes = append(appRoutes, AppManifestRoute{
-				Route:    r.URL,
-				Protocol: AppRouteProtocol(r.Protocol),
-				// TODO: Options: loadbalancing?
-			})
-		}
-
-		labels := kApi.ConvertMapToPointer(app.Metadata.Labels)
-		annotations := kApi.ConvertMapToPointer(app.Metadata.Annotations)
-		appManifest := AppManifest{
-			Name: normalizedAppName,
-			Env:  appEnv.EnvironmentVariables,
-			Metadata: &AppMetadata{
-				Labels:      labels,
-				Annotations: annotations,
-			},
-			Processes: &appProcesses,
-			Routes:    &appRoutes,
-			// AppManifestProcess
-			// Buildpacks
-			// RandomRoute
-			// NoRoute
-			// Services
-			// Sidecars
-			// Stack
-		}
-		cfManifest.Applications = append(cfManifest.Applications, &appManifest)
-
+		cfManifest.Space = space
+		manifests = append(manifests, cfManifest)
 	}
-
-	err = writeToYAMLFile(cfManifest, "manifest.yaml")
-	if err != nil {
-		return nil, fmt.Errorf("error writing manifest to file: %v", err)
-	}
-
-	return &cfManifest, nil
+	return &manifests, nil
 }
 
 func writeToYAMLFile(data interface{}, filename string) error {

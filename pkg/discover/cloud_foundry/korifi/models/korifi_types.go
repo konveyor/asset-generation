@@ -1,7 +1,24 @@
 package korifi
 
 // From https://github.com/cloudfoundry/korifi/blob/main/api/presenter/info.go#L10
+// ------------------------------------------------
 
+type SpaceResponse struct {
+	Name          string                       `json:"name"`
+	GUID          string                       `json:"guid"`
+	CreatedAt     string                       `json:"created_at"`
+	UpdatedAt     string                       `json:"updated_at"`
+	Links         SpaceLinks                   `json:"links"`
+	Metadata      Metadata                     `json:"metadata"`
+	Relationships map[string]ToOneRelationship `json:"relationships"`
+}
+
+type SpaceLinks struct {
+	Self         *Link `json:"self"`
+	Organization *Link `json:"organization"`
+}
+
+// -----------------------------------------------
 type InfoV3Response struct {
 	Build       string                 `json:"build"`
 	CLIVersion  InfoCLIVersion         `json:"cli_version"`

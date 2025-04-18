@@ -41,8 +41,9 @@ var _ = Describe("CFAPIClient", func() {
 	})
 
 	Describe("ListApps", func() {
+		testSpaceGUID := "example93847523894052745"
 		It("should return the list of apps from the API", func() {
-			result, err := client.ListApps()
+			result, err := client.ListApps(testSpaceGUID)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.Resources).To(HaveLen(2))
@@ -57,7 +58,7 @@ var _ = Describe("CFAPIClient", func() {
 				json.NewEncoder(w).Encode(korifi.ListResponse[korifi.AppResponse]{})
 			})
 
-			result, err := client.ListApps()
+			result, err := client.ListApps(testSpaceGUID)
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.Resources).To(BeEmpty())
@@ -69,7 +70,7 @@ var _ = Describe("CFAPIClient", func() {
 				w.Write([]byte("Internal Server Error"))
 			})
 
-			result, err := client.ListApps()
+			result, err := client.ListApps(testSpaceGUID)
 
 			Expect(err).To(HaveOccurred())
 			Expect(result).To(BeNil())
