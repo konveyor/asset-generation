@@ -1,0 +1,34 @@
+name: Tag Version
+description: Reads version.go and tags the repository
+
+inputs:
+  token:
+    description: "GitHub token for authentication"
+    required: true
+  repository:
+    description: "The repository to tag"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Get version from version.go
+      shell: bash
+      id: version
+      run: |
+        VERSION=$(grep 'Version =' version.go | sed -E 's/.*"(.+)"$/\1/')
+        echo "Version: $VERSION"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Configure git
+      shell: bash
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+    - name: Create and push tag
+      shell: bash
+      run: |
+        git tag ${{ steps.version.outputs.version }}
+        git remote set-url origin https://x-access-token:${{ inputs.token }}@github.com/${{ inputs.repository }}
+        git push origin ${{ steps.version.outputs.version }}
