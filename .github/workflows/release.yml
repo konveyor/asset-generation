@@ -1,0 +1,26 @@
+name: Release on Version Bump
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Check Version
+        uses: ./.github/actions/version-check
+
+      - name: Tag New Version
+        uses: ./.github/actions/tag-version
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}         # Pass the GITHUB_TOKEN as input
+          repository: ${{ github.repository }}       # Pass the repo name as input
