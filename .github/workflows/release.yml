@@ -1,26 +1,32 @@
-name: Release on Version Bump
+name: Manual Release Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to tag (e.g., v1.2.3)'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
-on:
-  push:
-    branches: [main]
-
 jobs:
-  release:
+  tag:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Check Version
-        uses: ./.github/actions/version-check
+      - name: Show current version
+        run: make version
 
-      - name: Tag New Version
-        uses: ./.github/actions/tag-version
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}         # Pass the GITHUB_TOKEN as input
-          repository: ${{ github.repository }}       # Pass the repo name as input
+      - name: Tag the repository
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: make tag
+      
+      - name: Show new version
+        run: make version
