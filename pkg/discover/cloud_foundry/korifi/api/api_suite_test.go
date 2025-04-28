@@ -1,4 +1,4 @@
-package asset_generation_test
+package api_test
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestAssetGeneration(t *testing.T) {
+func TestApi(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "AssetGeneration Suite")
+	RunSpecs(t, "Api Suite")
 }
