@@ -39,6 +39,24 @@ func (c *CFAPIClient) ListSpaces() (*kModels.ListResponse[kModels.SpaceResponse]
 	return &i, nil
 }
 
+func (c *CFAPIClient) GetSpace(spaceName string) (*kModels.SpaceResponse, error) {
+	resp, err := c.httpClient.Get(c.baseURL + "/v3/spaces?names=" + spaceName)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, resp.Status)
+	}
+
+	var i kModels.SpaceResponse
+	err = json.NewDecoder(resp.Body).Decode(&i)
+	if err != nil {
+		return nil, errors.Wrap(err, "Error unmarshalling info")
+	}
+	return &i, nil
+}
+
 func (c *CFAPIClient) ListApps(space string) (*kModels.ListResponse[kModels.AppResponse], error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps?space_guids=" + space)
 	if err != nil {

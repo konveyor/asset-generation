@@ -13,10 +13,10 @@ import (
 )
 
 type LiveDiscovererImpl struct {
-	logger   *logr.Logger
-	provider kProvider.KorifiProvider
-	cfAPI    *kApi.CFAPIClient
-	spaces   *[]string //GUID lists
+	logger     *logr.Logger
+	provider   kProvider.KorifiProvider
+	cfAPI      *kApi.CFAPIClient
+	spaceNames *[]string //Space name lists
 }
 
 func NewLiveDiscoverer(log logr.Logger, provider kProvider.KorifiProvider, spaces *[]string) (*LiveDiscovererImpl, error) {
@@ -136,12 +136,9 @@ func (ld *LiveDiscovererImpl) Discover() (*[]CloudFoundryManifest, error) {
 				// Sidecars
 				// Stack
 			}
-			cfManifest.Applications = append(cfManifest.Applications, &appManifest)
-		}
-
-		err = writeToYAMLFile(cfManifest, "manifest.yaml")
-		if err != nil {
-			return nil, fmt.Errorf("error writing manifest to file: %v", err)
+			if writeToYAMLFile(appManifest, fmt.Sprintf("manifest_%s_%s.yaml", spaceName, appManifest.Name)) != nil {
+				return fmt.Errorf("error writing manifest to file: %v", err)
+			}
 		}
 		cfManifest.Space = space
 		manifests = append(manifests, cfManifest)
