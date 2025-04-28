@@ -25,60 +25,55 @@ func NewLiveDiscoverer(log logr.Logger, provider kProvider.KorifiProvider, space
 		return nil, fmt.Errorf("error creating Korifi client: %v", err)
 	}
 	return &LiveDiscovererImpl{
-		cfAPI:    kApi.NewCFAPIClient(client, provider.GetKorifiConfig().BaseURL),
-		logger:   &log,
-		provider: provider,
-		spaces:   spaces}, nil
+		cfAPI:      kApi.NewCFAPIClient(client, provider.GetKorifiConfig().BaseURL),
+		logger:     &log,
+		provider:   provider,
+		spaceNames: spaces}, nil
 }
 
-func (ld *LiveDiscovererImpl) Discover() (*[]CloudFoundryManifest, error) {
-	var spaces []string
-	var manifests []CloudFoundryManifest
-	if ld.spaces == nil || len(*ld.spaces) == 0 {
-		cfSpaces, err := ld.cfAPI.ListSpaces()
-		if err != nil {
-			return nil, fmt.Errorf("error listing CF spaces: %v", err)
-		}
-
-		for _, space := range cfSpaces.Resources {
-			spaces = append(spaces, space.GUID)
-		}
-	} else {
-		spaces = *ld.spaces
+func (ld *LiveDiscovererImpl) Discover() error {
+	var spaceNames []string
+	if ld.spaceNames == nil || len(*ld.spaceNames) == 0 {
+		return fmt.Errorf("no spaces provided for discovery")
 	}
 
-	for _, space := range spaces {
-		log.Println("Analyzing space: ", space)
+	spaceNames = *ld.spaceNames
+	for _, spaceName := range spaceNames {
+		log.Println("Analyzing space: ", spaceName)
 
-		apps, err := ld.cfAPI.ListApps(space)
+		// Get space guid
+		spaceObj, err := ld.cfAPI.GetSpace(spaceName)
 		if err != nil {
-			return nil, fmt.Errorf("error listing CF apps: %v", err)
+			return fmt.Errorf("can't find space %s: %v", spaceName, err)
+		}
+		apps, err := ld.cfAPI.ListApps(spaceObj.GUID)
+		if err != nil {
+			return fmt.Errorf("error listing CF apps for space %s: %v", spaceName, err)
 		}
 
 		log.Println("Apps discovered: ", apps.PaginationData.TotalResults)
 
-		var cfManifest CloudFoundryManifest
 		for _, app := range apps.Resources {
 			log.Println("Processing app:", app.GUID)
 
 			appEnv, err := ld.cfAPI.GetEnv(app.GUID)
 			if err != nil {
-				return nil, fmt.Errorf("error getting environment for app %s: %v", app.GUID, err)
+				return fmt.Errorf("error getting environment for app %s: %v", app.GUID, err)
 			}
 
 			appName, err := kApi.GetAppName(*appEnv)
 			if err != nil {
-				return nil, fmt.Errorf("error getting app name: %v", err)
+				return fmt.Errorf("error getting app name: %v", err)
 			}
 
 			normalizedAppName, err := kApi.NormalizeForMetadataName(strings.TrimSpace(appName))
 			if err != nil {
-				return nil, fmt.Errorf("error normalizing app name: %v", err)
+				return fmt.Errorf("error normalizing app name: %v", err)
 			}
 
 			process, err := ld.cfAPI.GetProcesses(app.GUID)
 			if err != nil {
-				return nil, fmt.Errorf("error getting processes: %v", err)
+				return fmt.Errorf("error getting processes: %v", err)
 			}
 
 			appProcesses := AppManifestProcesses{}
@@ -106,7 +101,7 @@ func (ld *LiveDiscovererImpl) Discover() (*[]CloudFoundryManifest, error) {
 
 			routes, err := ld.cfAPI.GetRoutes(app.GUID)
 			if err != nil {
-				return nil, fmt.Errorf("error getting processes: %v", err)
+				return fmt.Errorf("error getting processes: %v", err)
 			}
 			appRoutes := AppManifestRoutes{}
 			for _, r := range routes.Resources {
@@ -140,10 +135,8 @@ func (ld *LiveDiscovererImpl) Discover() (*[]CloudFoundryManifest, error) {
 				return fmt.Errorf("error writing manifest to file: %v", err)
 			}
 		}
-		cfManifest.Space = space
-		manifests = append(manifests, cfManifest)
 	}
-	return &manifests, nil
+	return nil
 }
 
 func writeToYAMLFile(data interface{}, filename string) error {
