@@ -5,7 +5,8 @@ GINKGO_PKG ?= -r
 GINKGO_VERBOSE ?= false
 GINKGO_FLAGS := $(if $(filter 1,$(GINKGO_VERBOSE)),-v) --cover --coverprofile=coverage.out --coverpkg=./... --output-dir=$(COVERAGE_DIR)
 
-.PHONY: help test test-cloudfoundry test-helm coverage
+version: ## Show latest git tag
+	@echo "Current version: $$(git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)"
 
 define PRINT_HELP
 	@echo "$(1) targets:"
@@ -20,11 +21,7 @@ define PRINT_HELP
 	@echo ""
 endef
 
-help: ## Show this help message
-	@echo "Usage:"
-	@echo "  make <target>"
-	@echo ""
-	$(call PRINT_HELP,Makefile,$(firstword $(MAKEFILE_LIST)))
+.PHONY: help
 
 
 ## Testing
