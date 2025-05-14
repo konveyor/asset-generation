@@ -49,7 +49,7 @@ export BOSH_CLIENT_SECRET=`bosh int ./creds.yml --path /admin_password`
 bosh alias-env vbox -e 192.168.56.6 --ca-cert <(bosh int ./creds.yml --path /director_ssl/ca)
 ```
 
-if it returns somenthing like this, it's ok
+if it returns something like this, it's ok
 ```bash
 Using environment '192.168.56.6' as client 'admin'
 
@@ -79,26 +79,44 @@ then try
 they should succeed both.
 
 
-<!-- (Fix the yml path)
-
-
+<!--
 the cloud config tells the BOSH Director how to provision VMs, networks, disks, and other IaaS-specific resources in your environment. -->
 
-`bosh -e vbox update-cloud-config ~/cf-deployment/iaas-support/bosh-lite`
+`bosh -e vbox update-cloud-config ~/cf-deployment/iaas-support/bosh-lite/cloud-config.yml`
 
-`bosh -e vbox upload-stemcell https://bosh.io/d/stemcells/bosh-warden-boshlite-ubuntu-jammy-go_agent`
+```bash
+bosh -e vbox upload-stemcell \
+  --sha1 4ad3b7265af38de84d83887bf334193259a59981 \
+  "https://bosh.io/d/stemcells/bosh-warden-boshlite-ubuntu-jammy-go_agent?v=1.423"
+```
 
 
 ```bash
 git clone https://github.com/cloudfoundry/cf-deployment.git
 cd cf-deployment
-bosh -e vbox -d cf deploy ~/cf-deployment/cf-cloud-config.yml \
+#Update default value to use precompiled release
+yq e '.stemcells[0].alias = "default" | .stemcells[0].os = "ubuntu-jammy" | .stemcells[0].version = "1.423"' -i cf-deployment.yaml
+bosh -n -e vbox -d cf deploy \
+  cf-deployment.yml \
   -o operations/bosh-lite.yml \
-  -v system_domain=bosh-lite.com
-  -n
+  -o operations/use-compiled-releases.yml \
+  -v system_domain=bosh-lite.com \
+  -v stemcell_os=ubuntu-jammy \
+  -v stemcell_version=1.423
 ```
 
+Verify that you can set target api
 
+```bash
+» cf api https://api.bosh-lite.com --skip-ssl-validation
+Setting API endpoint to https://api.bosh-lite.com...
+OK
+
+API endpoint:   https://api.bosh-lite.com
+API version:    3.193.0
+
+Not logged in. Use 'cf login' or 'cf login --sso' to log in.
+```
 
 ### Troubleshooting
 if you can't create vms, delete old state
