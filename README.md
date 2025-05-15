@@ -118,14 +118,125 @@ API version:    3.193.0
 Not logged in. Use 'cf login' or 'cf login --sso' to log in.
 ```
 
-### Troubleshooting
-if you can't create vms, delete old state
 
-```bash 
-rm -f ./state.json ./creds.yml
-rm -rf ~/.bosh/installations
-```
-and rerun 
+# Login to CF
+
+## Retrieve credential from CredHub
+# Login to Cloud Foundry (CF)
+
+## 1. Retrieve Credentials from CredHub
+
+### Step 1: Install CredHub CLI
+
+Follow the instructions 👉 [here](https://github.com/cloudfoundry/credhub-cli#installing-the-cli)
+
+### Step 2: Set Up the Environment
+
 ```bash
-bosh create-env  [..omissis..]
+# Set CredHub server URL and credentials
+export CREDHUB_SERVER=https://192.168.56.6:8844
+export CREDHUB_CLIENT=credhub-admin
+export CREDHUB_SECRET=$(bosh int ~/deployments/vbox/creds.yml --path /credhub_admin_client_secret)
+
+# Extract the CA certificate
+bosh int ~/deployments/vbox/creds.yml --path /credhub_tls/ca > credhub-ca.crt
+export CREDHUB_CA_CERT=./credhub-ca.crt
+```
+
+Initialize CredHub CLI running:
+```bash
+credhub api $CREDHUB_SERVER --ca-cert=$CREDHUB_CA_CERT
+```
+
+the expected output is:
+
+```bash
+Setting the target url: https://192.168.56.6:8844
+```
+
+see troubleshooting section [Can't connect to the auth server via credhub](#cant-connect-to-the-auth-server-via-credhub)
+
+### Step 3: Verify CredHub Access
+
+Run the following command to verify that `credhub` is working:
+
+```bash
+credhub find
+```
+
+Expected output example:
+```bash
+credentials:
+    - name: /dns_api_client_tls
+      version_created_at: "2025-05-14T11:25:49Z"
+    - name: /dns_api_server_tls
+      version_created_at: "2025-05-14T11:25:49Z"
+    - name: /dns_api_tls_ca
+      version_created_at: "2025-05-14T11:25:49Z"
+    - name: /dns_healthcheck_client_tls
+      version_created_at: "2025-05-14T11:25:48Z"
+    - name: /dns_healthcheck_server_tls
+    ... etc ...
+```
+### Step 4: Retrieve CF Admin Password and Log In
+```bash
+# Get the admin password from CredHub
+CF_ADMIN_PASSWORD=$(credhub get -n /bosh-lite/cf/cf_admin_password --output-json | jq -r '.value')
+
+# Set CF API endpoint
+cf api https://api.bosh-lite.com --skip-ssl-validation
+
+# Log in to CF using retrieved credentials
+cf login -a https://api.bosh-lite.com --skip-ssl-validation -u admin -p "$CF_ADMIN_PASSWORD"
+```
+If successful, you'll see output like this:
+```bash
+API endpoint: https://api.bosh-lite.com
+
+Authenticating...
+OK
+
+Targeted org system.
+
+API endpoint:   https://api.bosh-lite.com
+API version:    3.193.0
+user:           admin
+org:            system
+space:          No space targeted, use 'cf target -s SPACE'
+```
+✅ You are now logged in and ready to use CF.
+
+### Troubleshooting
+#### ❌ Can't create VMs?
+
+  Remove old BOSH state and credentials:
+
+  ```bash
+  rm -f ./state.json ./creds.yml
+  rm -rf ~/.bosh/installations
+  ```
+  Then rerun:
+
+  ```bash
+  bosh create-env  [..omissis..]
+  ```
+
+#### ❌ Can't use `credhub`?
+
+Make sure you can reach the `CredHub` VM via SSH:
+`bosh -e vbox -d cf ssh credhub`
+
+#### ❌ Can't connect to the auth server via `credhub`?
+If you encounter the following error:
+```bash
+credhub api $CREDHUB_SERVER --ca-cert=$CREDHUB_CA_CERT
+Error connecting to the auth server: "Get \"https://192.168.56.6:8443/info\": tls: failed to verify certificate: x509: certificate signed by unknown authority". Please validate your target and retry your request.
+```
+add `--skip-tls-validation` flag and ignore the warning
+
+```bash
+credhub api $CREDHUB_SERVER --ca-cert=$CREDHUB_CA_CERT --skip-tls-validation
+Warning: The targeted TLS certificate has not been verified for this connection.
+Warning: The --skip-tls-validation flag is deprecated. Please use --ca-cert instead.
+Setting the target url: https://192.168.56.6:8844
 ```
