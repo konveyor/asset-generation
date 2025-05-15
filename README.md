@@ -206,6 +206,44 @@ space:          No space targeted, use 'cf target -s SPACE'
 ```
 ✅ You are now logged in and ready to use CF.
 
+### Step 5: Deploy an Example App
+
+Create an organization and space, target them, and push an example Docker-based app:
+
+```bash
+cf create-org org && cf create-space -o org space && cf target -o org
+cf push nginx --docker-image nginxinc/nginx-unprivileged:1.23.2
+```
+Once deployed, test the app using curl:
+```bash
+curl http://nginx.bosh-lite.com
+```
+Expected output:
+```html
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nginx!</title>
+<style>
+html { color-scheme: light dark; }
+body { width: 35em; margin: 0 auto;
+font-family: Tahoma, Verdana, Arial, sans-serif; }
+</style>
+</head>
+<body>
+<h1>Welcome to nginx!</h1>
+<p>If you see this page, the nginx web server is successfully installed and
+working. Further configuration is required.</p>
+
+<p>For online documentation and support please refer to
+<a href="http://nginx.org/">nginx.org</a>.<br/>
+Commercial support is available at
+<a href="http://nginx.com/">nginx.com</a>.</p>
+
+<p><em>Thank you for using nginx.</em></p>
+</body>
+</html>
+```
 ### Troubleshooting
 #### ❌ Can't create VMs?
 
@@ -240,3 +278,26 @@ Warning: The targeted TLS certificate has not been verified for this connection.
 Warning: The --skip-tls-validation flag is deprecated. Please use --ca-cert instead.
 Setting the target url: https://192.168.56.6:8844
 ```
+
+#### ❌ Can't Push Docker Images?
+
+If you're seeing an error like this when pushing a Docker image:
+
+```bash
+cf push nginx --docker-image nginxinc/nginx-unprivileged:1.23.2
+Pushing app nginx to org org / space space as admin...
+For application 'nginx': Feature Disabled: diego_docker
+FAILED
+```
+
+This means Docker support is not enabled in your Cloud Foundry deployment. By default, CF disables the [diego_docker feature flag](https://docs.cloudfoundry.org/adminguide/docker.html), which is required to push and run Docker images on Diego.
+Check the current feature flags:
+`cf feature-flags`
+
+Look for the `diego_docker` flag — it will likely show `disabled`.
+
+Enable Docker support:
+```bash
+cf enable-feature-flag diego_docker
+```
+After enabling the flag, retry your `cf push` command.
