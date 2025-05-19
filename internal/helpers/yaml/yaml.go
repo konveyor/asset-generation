@@ -1,4 +1,4 @@
-package cloud_foundry
+package yaml
 
 import (
 	"fmt"
@@ -6,19 +6,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
-
-type ProviderType string
-
-const (
-	ProviderTypeCF     ProviderType = "cf"
-	ProviderTypeKorifi ProviderType = "korifi"
-)
-
-type Provider interface {
-	GetProviderType() ProviderType
-	GetClient() (interface{}, error)
-	Discover(spaceNames []string) error
-}
 
 func WriteToYAMLFile(data interface{}, filename string) error {
 	yamlData, err := yaml.Marshal(data)

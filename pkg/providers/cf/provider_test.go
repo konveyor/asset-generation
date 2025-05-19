@@ -1,0 +1,78 @@
+package cf
+
+import (
+	"os"
+
+	pTypes "github.com/konveyor/asset-generation/pkg/providers/types"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
+
+var _ = Describe("CFProvider", func() {
+	var cfg *Config
+	var provider *CFProvider
+
+	BeforeEach(func() {
+		cfg = &Config{
+			CFConfigPath: "/some/path/to/config.json",
+			Username:     "admin",
+			Password:     "password",
+			APIEndpoint:  "https://api.example.com",
+		}
+		provider = New(cfg)
+	})
+
+	Context("Type() method", func() {
+		It("should return ProviderTypeCF", func() {
+			Expect(cfg.Type()).To(Equal(pTypes.ProviderTypeCF))
+		})
+	})
+
+	Context("GetProviderType() method", func() {
+		It("should return ProviderTypeCF", func() {
+			Expect(provider.GetProviderType()).To(Equal(pTypes.ProviderTypeCF))
+		})
+	})
+
+	Context("OffilineDiscover", func() {
+		It("should return not implemented error", func() {
+			apps, err := provider.OffilineDiscover()
+			Expect(err).To(MatchError("not implemented"))
+			Expect(apps).To(BeNil())
+		})
+	})
+	Context("GetClient", func() {
+		It("should fail if CF_HOME config is invalid", func() {
+			CFHomeOrig, had := os.LookupEnv("CF_HOME")
+			os.Setenv("CF_HOME", "/non/existent/dir")
+			defer func() {
+				if had {
+					os.Setenv("CF_HOME", CFHomeOrig)
+				} else {
+					os.Unsetenv("CF_HOME")
+				}
+			}()
+
+			client, err := provider.GetClient()
+			Expect(client).To(BeNil())
+			Expect(err).To(HaveOccurred())
+		})
+		It("should create client successfully", func() {
+			CFHomeOrig, had := os.LookupEnv("CF_HOME")
+			os.Setenv("CF_HOME", "./test_data")
+			defer func() {
+				if had {
+					os.Setenv("CF_HOME", CFHomeOrig)
+				} else {
+					os.Unsetenv("CF_HOME")
+				}
+			}()
+
+			client, err := provider.GetClient()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(client).NotTo(BeNil())
+		})
+
+	})
+
+})

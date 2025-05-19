@@ -1,4 +1,4 @@
-package korifi
+package models
 
 // From https://github.com/cloudfoundry/korifi/blob/main/api/presenter/info.go#L10
 // ------------------------------------------------

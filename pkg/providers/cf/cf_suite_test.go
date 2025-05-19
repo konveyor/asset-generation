@@ -1,4 +1,4 @@
-package provider_test
+package cf_test
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestProvider(t *testing.T) {
+func TestCf(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Provider Suite")
+	RunSpecs(t, "Cf Suite")
 }

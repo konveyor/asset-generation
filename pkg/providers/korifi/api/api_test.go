@@ -8,13 +8,13 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	korifi "github.com/konveyor/asset-generation/pkg/discover/cloud_foundry/korifi/models"
+	korifi "github.com/konveyor/asset-generation/pkg/providers/korifi/models"
 )
 
 var _ = Describe("CFAPIClient", func() {
 	var (
 		server       *httptest.Server
-		client       *CFAPIClient
+		client       *KorifiAPIClient
 		mockResponse korifi.ListResponse[korifi.AppResponse]
 	)
 
@@ -33,7 +33,7 @@ var _ = Describe("CFAPIClient", func() {
 			json.NewEncoder(w).Encode(mockResponse)
 		}))
 
-		client = NewCFAPIClient(&http.Client{}, server.URL)
+		client = NewKorifiAPIClient(&http.Client{}, server.URL)
 	})
 
 	AfterEach(func() {

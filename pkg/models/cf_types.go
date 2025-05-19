@@ -1,4 +1,4 @@
-package cloud_foundry
+package models
 
 // Original source from https://github.com/cloudfoundry/go-cfclient/blob/main/operation/manifest.go
 

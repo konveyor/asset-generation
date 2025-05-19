@@ -5,23 +5,23 @@ import (
 	"fmt"
 	"net/http"
 
-	kModels "github.com/konveyor/asset-generation/pkg/discover/cloud_foundry/korifi/models"
+	kModels "github.com/konveyor/asset-generation/pkg/providers/korifi/models"
 	"github.com/pkg/errors"
 )
 
-type CFAPIClient struct {
+type KorifiAPIClient struct {
 	httpClient *http.Client
 	baseURL    string
 }
 
-func NewCFAPIClient(httpClient *http.Client, baseURL string) *CFAPIClient {
-	return &CFAPIClient{
+func NewKorifiAPIClient(httpClient *http.Client, baseURL string) *KorifiAPIClient {
+	return &KorifiAPIClient{
 		httpClient: httpClient,
 		baseURL:    baseURL,
 	}
 }
 
-func (c *CFAPIClient) ListSpaces() (*kModels.ListResponse[kModels.SpaceResponse], error) {
+func (c *KorifiAPIClient) ListSpaces() (*kModels.ListResponse[kModels.SpaceResponse], error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/spaces")
 	if err != nil {
 		return nil, err
@@ -39,7 +39,7 @@ func (c *CFAPIClient) ListSpaces() (*kModels.ListResponse[kModels.SpaceResponse]
 	return &i, nil
 }
 
-func (c *CFAPIClient) GetSpace(spaceName string) (*kModels.SpaceResponse, error) {
+func (c *KorifiAPIClient) GetSpace(spaceName string) (*kModels.SpaceResponse, error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/spaces?names=" + spaceName)
 	if err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func (c *CFAPIClient) GetSpace(spaceName string) (*kModels.SpaceResponse, error)
 	return &i, nil
 }
 
-func (c *CFAPIClient) ListApps(space string) (*kModels.ListResponse[kModels.AppResponse], error) {
+func (c *KorifiAPIClient) ListApps(space string) (*kModels.ListResponse[kModels.AppResponse], error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps?space_guids=" + space)
 	if err != nil {
 		return nil, err
@@ -75,7 +75,7 @@ func (c *CFAPIClient) ListApps(space string) (*kModels.ListResponse[kModels.AppR
 	return &i, nil
 }
 
-func (c *CFAPIClient) GetEnv(guid string) (*kModels.AppEnvResponse, error) {
+func (c *KorifiAPIClient) GetEnv(guid string) (*kModels.AppEnvResponse, error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps/" + guid + "/env")
 	if err != nil {
 		return nil, err
@@ -93,7 +93,7 @@ func (c *CFAPIClient) GetEnv(guid string) (*kModels.AppEnvResponse, error) {
 	}
 	return &i, nil
 }
-func (c *CFAPIClient) GetProcesses(guid string) (*kModels.ListResponse[kModels.ProcessResponse], error) {
+func (c *KorifiAPIClient) GetProcesses(guid string) (*kModels.ListResponse[kModels.ProcessResponse], error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps/" + guid + "/processes")
 	if err != nil {
 		return nil, err
@@ -112,7 +112,7 @@ func (c *CFAPIClient) GetProcesses(guid string) (*kModels.ListResponse[kModels.P
 	return &i, nil
 }
 
-func (c *CFAPIClient) GetRoutes(guid string) (*kModels.ListResponse[kModels.RouteResponse], error) {
+func (c *KorifiAPIClient) GetRoutes(guid string) (*kModels.ListResponse[kModels.RouteResponse], error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps/" + guid + "/routes")
 	if err != nil {
 		return nil, err

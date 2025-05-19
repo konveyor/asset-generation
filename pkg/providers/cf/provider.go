@@ -8,38 +8,42 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 
-	cfTypes "github.com/konveyor/asset-generation/pkg/discover/cloud_foundry"
+	helpers "github.com/konveyor/asset-generation/internal/helpers/yaml"
+	cfTypes "github.com/konveyor/asset-generation/pkg/models"
+	pTypes "github.com/konveyor/asset-generation/pkg/providers/types"
 )
 
+type Config struct {
+	CFConfigPath      string // usato se esiste
+	Username          string // usato se CFConfigPath è vuoto
+	Password          string
+	Token             string
+	APIEndpoint       string
+	SkipSslValidation bool
+}
+
 type CFProvider struct {
-	config   CFConfig
-	cfClient *client.Client
-}
-type CFConfig struct {
-	cfURL string
+	cfg *Config
 }
 
-func NewCFProvider(cfconfig CFConfig) (*CFProvider, error) {
-
-	cfg, err := config.NewFromCFHome()
-	if err != nil {
-		return nil, err
-	}
-	cf, err := client.New(cfg)
-	if err != nil {
-		return nil, err
-	}
-	fmt.Println("CF Client created successfully")
-	return &CFProvider{
-		config:   cfconfig,
-		cfClient: cf}, nil
+func New(cfg *Config) *CFProvider {
+	return &CFProvider{cfg: cfg}
 }
 
-func (c *CFProvider) GetProviderType() cfTypes.ProviderType {
-	return cfTypes.ProviderTypeCF
+func (cfg *Config) Type() pTypes.ProviderType {
+	return pTypes.ProviderTypeCF
 }
 
-func (c *CFProvider) GetClient() (interface{}, error) {
+func (c *CFProvider) GetProviderType() pTypes.ProviderType {
+	return pTypes.ProviderTypeCF
+}
+
+// func NewCFProvider(cfconfig CFConfig) (*CFProvider, error) {
+func (c *CFProvider) OffilineDiscover() ([]pTypes.Application, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (c *CFProvider) GetClient() (*client.Client, error) {
 	cfg, err := config.NewFromCFHome()
 	if err != nil {
 		return nil, err
@@ -52,8 +56,8 @@ func (c *CFProvider) GetClient() (interface{}, error) {
 	return cf, nil
 }
 
-func (c *CFProvider) Discover(spaceNames []string) error {
-	if spaceNames == nil || len(spaceNames) == 0 {
+func (c *CFProvider) LiveDiscover(spaceNames []string) error {
+	if len(spaceNames) == 0 {
 		return fmt.Errorf("no spaces provided for discovery")
 	}
 
@@ -62,13 +66,17 @@ func (c *CFProvider) Discover(spaceNames []string) error {
 		log.Println("Analyzing space: ", spaceName)
 		spaceOpts := client.NewSpaceListOptions()
 		spaceOpts.Names.EqualTo(spaceName)
-		remoteSpace, err := c.cfClient.Spaces.First(ctx, spaceOpts)
+		cfClient, err := c.GetClient()
+		if err != nil {
+			return fmt.Errorf("error creating CF client: %v", err)
+		}
+		remoteSpace, err := cfClient.Spaces.First(ctx, spaceOpts)
 		if err != nil {
 			return fmt.Errorf("error finding CF space for spaceName %s: %v", spaceName, err)
 		}
 		appsOpt := client.NewAppListOptions()
 		appsOpt.SpaceGUIDs.EqualTo(remoteSpace.GUID)
-		apps, err := c.cfClient.Applications.ListAll(context.Background(), appsOpt)
+		apps, err := cfClient.Applications.ListAll(context.Background(), appsOpt)
 		if err != nil {
 			return fmt.Errorf("error listing CF apps for space %s: %v", spaceName, err)
 		}
@@ -80,14 +88,14 @@ func (c *CFProvider) Discover(spaceNames []string) error {
 			// 	if err != nil {
 			// 		return fmt.Errorf("error normalizing app name: %v", err)
 			// 	}
-			appEnv, err := c.cfClient.Applications.GetEnvironment(context.Background(), app.GUID)
+			appEnv, err := cfClient.Applications.GetEnvironment(context.Background(), app.GUID)
 			if err != nil {
 				return fmt.Errorf("error getting environment for app %s: %v", app.GUID, err)
 			}
 			log.Println("App Environment Variables: ", appEnv)
 			processOpts := client.NewProcessOptions()
 			processOpts.SpaceGUIDs.EqualTo(remoteSpace.GUID)
-			processes, err := c.cfClient.Processes.ListForAppAll(ctx, app.GUID, processOpts)
+			processes, err := cfClient.Processes.ListForAppAll(ctx, app.GUID, processOpts)
 			if err != nil {
 				return fmt.Errorf("error getting processes: %v", err)
 			}
@@ -117,7 +125,7 @@ func (c *CFProvider) Discover(spaceNames []string) error {
 			}
 			routeOpts := client.NewRouteListOptions()
 			routeOpts.SpaceGUIDs.EqualTo(remoteSpace.GUID)
-			routes, err := c.cfClient.Routes.ListForAppAll(ctx, app.GUID, routeOpts)
+			routes, err := cfClient.Routes.ListForAppAll(ctx, app.GUID, routeOpts)
 			if err != nil {
 				return fmt.Errorf("error getting processes: %v", err)
 			}
@@ -167,7 +175,7 @@ func (c *CFProvider) Discover(spaceNames []string) error {
 				// Sidecars
 				// Stack
 			}
-			if cfTypes.WriteToYAMLFile(appManifest, fmt.Sprintf("manifest_%s_%s.yaml", spaceName, appManifest.Name)) != nil {
+			if helpers.WriteToYAMLFile(appManifest, fmt.Sprintf("manifest_%s_%s.yaml", spaceName, appManifest.Name)) != nil {
 				return fmt.Errorf("error writing manifest to file: %v", err)
 			}
 		}

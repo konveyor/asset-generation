@@ -1,4 +1,4 @@
-package provider
+package korifi
 
 import (
 	"crypto/tls"
@@ -13,16 +13,15 @@ import (
 var _ = Describe("KubeConfig Utilities", func() {
 	Describe("getKubeConfig", func() {
 		It("returns error when file does not exist", func() {
-			provider := NewKorifiProvider(KorifiConfig{})
+			provider := New(&Config{})
 			config, err := provider.GetKubeConfig()
 			Expect(config).To(BeNil())
 			Expect(err).To(HaveOccurred())
 		})
 
 		It("returns config when file is valid", func() {
-			provider := NewKorifiProvider(KorifiConfig{
-				KubeconfigPath: "../../test_data/test_config.yaml",
-			})
+			provider := New(&Config{
+				KubeconfigPath: "./test_data/test_config.yaml"})
 			config, err := provider.GetKubeConfig()
 			Expect(config).ToNot(BeNil())
 			Expect(err).NotTo(HaveOccurred())
@@ -44,8 +43,8 @@ var _ = Describe("KubeConfig Utilities", func() {
 		})
 
 		It("returns base64 encoded cert+key for existing user", func() {
-			provider := NewKorifiProvider(KorifiConfig{
-				KubeconfigPath: "../../test_data/test_config.yaml",
+			provider := New(&Config{
+				KubeconfigPath: "./test_data/test_config.yaml",
 				Username:       "kind-korifi",
 			})
 			cert, err := provider.GetClientCertificate(config)
@@ -55,8 +54,8 @@ var _ = Describe("KubeConfig Utilities", func() {
 		})
 
 		It("returns error if user does not exist", func() {
-			provider := NewKorifiProvider(KorifiConfig{
-				KubeconfigPath: "../../test_data/test_config.yaml",
+			provider := New(&Config{
+				KubeconfigPath: "./test_data/test_config.yaml",
 				Username:       "non-existent-user",
 			})
 			cert, err := provider.GetClientCertificate(config)
@@ -65,8 +64,8 @@ var _ = Describe("KubeConfig Utilities", func() {
 		})
 
 		It("returns error if cert or key data missing", func() {
-			provider := NewKorifiProvider(KorifiConfig{
-				KubeconfigPath: "../../test_data/test_config.yaml",
+			provider := New(&Config{
+				KubeconfigPath: "./test_data/test_config.yaml",
 				Username:       "kind-korifi",
 			})
 			config.AuthInfos["kind-korifi"].ClientCertificateData = nil
@@ -78,8 +77,8 @@ var _ = Describe("KubeConfig Utilities", func() {
 
 	Describe("getKorifiHttpClient", func() {
 		It("returns error if kubeconfig is invalid", func() {
-			provider := NewKorifiProvider(KorifiConfig{
-				KubeconfigPath: "../../test_data/non-existing-config.yaml",
+			provider := New(&Config{
+				KubeconfigPath: "./test_data/non-existing-config.yaml",
 			})
 			client, err := provider.GetKorifiHttpClient()
 			Expect(client).To(BeNil())
@@ -87,8 +86,8 @@ var _ = Describe("KubeConfig Utilities", func() {
 		})
 
 		It("returns error if user not found in kubeconfig", func() {
-			provider := NewKorifiProvider(KorifiConfig{
-				KubeconfigPath: "../../test_data/test_config.yaml",
+			provider := New(&Config{
+				KubeconfigPath: "./test_data/test_config.yaml",
 				Username:       "non-existent-user",
 			})
 			client, err := provider.GetKorifiHttpClient()
@@ -97,8 +96,8 @@ var _ = Describe("KubeConfig Utilities", func() {
 		})
 
 		It("returns http.Client when everything is valid", func() {
-			provider := NewKorifiProvider(KorifiConfig{
-				KubeconfigPath: "../../test_data/test_config.yaml",
+			provider := New(&Config{
+				KubeconfigPath: "./test_data/test_config.yaml",
 				Username:       "kind-korifi",
 			})
 			client, err := provider.GetKorifiHttpClient()
@@ -107,7 +106,7 @@ var _ = Describe("KubeConfig Utilities", func() {
 			Expect(client.Transport).NotTo(BeNil())
 			Expect(client.Transport).NotTo(BeNil())
 
-			apiConfig, err := getKubeConfig("../../test_data/test_config.yaml")
+			apiConfig, err := provider.GetKubeConfig()
 			Expect(err).NotTo(HaveOccurred())
 
 			cert, _ := provider.GetClientCertificate(apiConfig)

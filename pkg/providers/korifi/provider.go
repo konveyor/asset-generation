@@ -1,4 +1,4 @@
-package provider
+package korifi
 
 import (
 	"crypto/tls"
@@ -8,70 +8,40 @@ import (
 	"net/http"
 	"strings"
 
+	kHelpers "github.com/konveyor/asset-generation/internal/helpers/korifi"
+	ymlHelpers "github.com/konveyor/asset-generation/internal/helpers/yaml"
+	cfTypes "github.com/konveyor/asset-generation/pkg/models"
+	korifiApi "github.com/konveyor/asset-generation/pkg/providers/korifi/api"
+	. "github.com/konveyor/asset-generation/pkg/providers/types"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 )
 
-// type KorifiProvider interface {
-// 	GetProviderType() string
-// 	GetKubeConfig() (*api.Config, error)
-// 	GetKorifiConfig() *KorifiConfig
-// 	GetClientCertificate(config *api.Config) (string, error)
-// 	GetKorifiHttpClient() (*http.Client, error)
-// }
-
-type KorifiConfig struct {
+type Config struct {
 	BaseURL        string
 	Username       string
 	KubeconfigPath string
+	providerType   ProviderType
 }
 
 type KorifiProvider struct {
-	config KorifiConfig
+	cfg *Config
 }
 
-// Custom RoundTripper to add Authorization header
-type authHeaderRoundTripper struct {
-	certPEM string
-	base    http.RoundTripper
+func New(cfg *Config) *KorifiProvider {
+	return &KorifiProvider{cfg: cfg}
 }
 
-func (t *authHeaderRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	reqClone := req.Clone(req.Context())
-
-	// Set the Authorization header
-	reqClone.Header.Set("Authorization", "ClientCert "+t.certPEM)
-	reqClone.Header.Set("X-Username", "kubernetes-admin")
-	// Use the base transport to execute the request
-	return t.base.RoundTrip(reqClone)
+func (c *Config) Type() ProviderType {
+	return c.providerType
 }
 
-func NewKorifiProvider(config KorifiConfig) *KorifiProvider {
-	return &KorifiProvider{config: config}
-}
-
-func (k *KorifiProvider) GetKubeConfig() (*api.Config, error) {
-	return getKubeConfig(k.config.KubeconfigPath)
-}
-
-func (k *KorifiProvider) GetProviderType() ProviderType {
+func (c *KorifiProvider) GetProviderType() ProviderType {
 	return ProviderTypeKorifi
 }
 
-func (k *KorifiProvider) GetKorifiConfig() *KorifiConfig {
-	return &k.config
-}
-
-func (k *KorifiProvider) GetClientCertificate(config *api.Config) (string, error) {
-	return getClientCertificate(config, k.config.Username)
-}
-
-func (k *KorifiProvider) GetClient() (interface{}, error) {
-	return getKorifiHttpClient(k.config.KubeconfigPath, k.config.Username)
-}
-
-func getKubeConfig(kubeconfigPath string) (*api.Config, error) {
-	config, err := clientcmd.LoadFromFile(kubeconfigPath)
+func (k *KorifiProvider) GetKubeConfig() (*api.Config, error) {
+	config, err := clientcmd.LoadFromFile(k.cfg.KubeconfigPath)
 	if err != nil {
 		fmt.Printf("Error loading kubeconfig: %v\n", err)
 		return nil, err
@@ -79,10 +49,14 @@ func getKubeConfig(kubeconfigPath string) (*api.Config, error) {
 	return config, nil
 }
 
-func getClientCertificate(config *api.Config, username string) (string, error) {
+func (k *KorifiProvider) GetKorifiConfig() *Config {
+	return k.cfg
+}
+
+func (k *KorifiProvider) GetClientCertificate(config *api.Config) (string, error) {
 	var dataCert, keyCert []byte
 	for authInfoUsername, authInfo := range config.AuthInfos {
-		if authInfoUsername == username {
+		if authInfoUsername == k.cfg.Username {
 			dataCert = authInfo.ClientCertificateData
 			keyCert = authInfo.ClientKeyData
 			break
@@ -96,12 +70,12 @@ func getClientCertificate(config *api.Config, username string) (string, error) {
 	return base64.StdEncoding.EncodeToString(append(dataCert, keyCert...)), nil
 }
 
-func getKorifiHttpClient(kubeconfigPath string, username string) (*http.Client, error) {
-	config, err := getKubeConfig(kubeconfigPath)
+func (k *KorifiProvider) GetKorifiHttpClient() (*http.Client, error) {
+	k8sConfig, err := k.GetKubeConfig()
 	if err != nil {
 		return nil, err
 	}
-	certPEM, err := getClientCertificate(config, username)
+	certPEM, err := k.GetClientCertificate(k8sConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -124,22 +98,45 @@ func getKorifiHttpClient(kubeconfigPath string, username string) (*http.Client, 
 	}, nil
 }
 
-func (c *KorifiProvider) Discover(spaceName string) error {
-	var spaceNames []string
-	if ld.spaceNames == nil || len(*ld.spaceNames) == 0 {
+// Custom RoundTripper to add Authorization header
+type authHeaderRoundTripper struct {
+	certPEM string
+	base    http.RoundTripper
+}
+
+func (t *authHeaderRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	reqClone := req.Clone(req.Context())
+
+	// Set the Authorization header
+	reqClone.Header.Set("Authorization", "ClientCert "+t.certPEM)
+	reqClone.Header.Set("X-Username", "kubernetes-admin")
+	// Use the base transport to execute the request
+	return t.base.RoundTrip(reqClone)
+}
+
+func (c *KorifiProvider) OffilineDiscover() ([]Application, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (c *KorifiProvider) LiveDiscover(spaceNames []string) error {
+	if spaceNames == nil || len(spaceNames) == 0 {
 		return fmt.Errorf("no spaces provided for discovery")
 	}
 
-	spaceNames = *ld.spaceNames
 	for _, spaceName := range spaceNames {
 		log.Println("Analyzing space: ", spaceName)
 
+		korifiHttpClient, err := c.GetKorifiHttpClient()
+		if err != nil {
+			return fmt.Errorf("error creating Korifi HTTP client: %v", err)
+		}
+		kAPI := korifiApi.NewKorifiAPIClient(korifiHttpClient, c.cfg.BaseURL)
 		// Get space guid
-		spaceObj, err := ld.cfAPI.GetSpace(spaceName)
+		spaceObj, err := kAPI.GetSpace(spaceName)
 		if err != nil {
 			return fmt.Errorf("can't find space %s: %v", spaceName, err)
 		}
-		apps, err := ld.cfAPI.ListApps(spaceObj.GUID)
+		apps, err := kAPI.ListApps(spaceObj.GUID)
 		if err != nil {
 			return fmt.Errorf("error listing CF apps for space %s: %v", spaceName, err)
 		}
@@ -149,35 +146,35 @@ func (c *KorifiProvider) Discover(spaceName string) error {
 		for _, app := range apps.Resources {
 			log.Println("Processing app:", app.GUID)
 
-			appEnv, err := ld.cfAPI.GetEnv(app.GUID)
+			appEnv, err := kAPI.GetEnv(app.GUID)
 			if err != nil {
 				return fmt.Errorf("error getting environment for app %s: %v", app.GUID, err)
 			}
 
-			appName, err := kApi.GetAppName(*appEnv)
+			appName, err := kHelpers.GetAppName(*appEnv)
 			if err != nil {
 				return fmt.Errorf("error getting app name: %v", err)
 			}
 
-			normalizedAppName, err := kApi.NormalizeForMetadataName(strings.TrimSpace(appName))
+			normalizedAppName, err := kHelpers.NormalizeForMetadataName(strings.TrimSpace(appName))
 			if err != nil {
 				return fmt.Errorf("error normalizing app name: %v", err)
 			}
 
-			process, err := ld.cfAPI.GetProcesses(app.GUID)
+			process, err := kAPI.GetProcesses(app.GUID)
 			if err != nil {
 				return fmt.Errorf("error getting processes: %v", err)
 			}
 
-			appProcesses := AppManifestProcesses{}
+			appProcesses := cfTypes.AppManifestProcesses{}
 			for _, proc := range process.Resources {
 				procInstances := uint(proc.Instances)
 
-				appProcesses = append(appProcesses, AppManifestProcess{
-					Type:                         AppProcessType(proc.Type),
+				appProcesses = append(appProcesses, cfTypes.AppManifestProcess{
+					Type:                         cfTypes.AppProcessType(proc.Type),
 					Command:                      proc.Command,
 					DiskQuota:                    fmt.Sprintf("%d", proc.DiskQuotaMB),
-					HealthCheckType:              AppHealthCheckType(proc.HealthCheck.Type),
+					HealthCheckType:              cfTypes.AppHealthCheckType(proc.HealthCheck.Type),
 					HealthCheckHTTPEndpoint:      proc.HealthCheck.Data.HTTPEndpoint,
 					HealthCheckInvocationTimeout: uint(proc.HealthCheck.Data.InvocationTimeout),
 					Instances:                    &procInstances,
@@ -192,25 +189,25 @@ func (c *KorifiProvider) Discover(spaceName string) error {
 				})
 			}
 
-			routes, err := ld.cfAPI.GetRoutes(app.GUID)
+			routes, err := kAPI.GetRoutes(app.GUID)
 			if err != nil {
 				return fmt.Errorf("error getting processes: %v", err)
 			}
-			appRoutes := AppManifestRoutes{}
+			appRoutes := cfTypes.AppManifestRoutes{}
 			for _, r := range routes.Resources {
-				appRoutes = append(appRoutes, AppManifestRoute{
+				appRoutes = append(appRoutes, cfTypes.AppManifestRoute{
 					Route:    r.URL,
-					Protocol: AppRouteProtocol(r.Protocol),
+					Protocol: cfTypes.AppRouteProtocol(r.Protocol),
 					// TODO: Options: loadbalancing?
 				})
 			}
 
-			labels := kApi.ConvertMapToPointer(app.Metadata.Labels)
-			annotations := kApi.ConvertMapToPointer(app.Metadata.Annotations)
-			appManifest := AppManifest{
+			labels := kHelpers.ConvertMapToPointer(app.Metadata.Labels)
+			annotations := kHelpers.ConvertMapToPointer(app.Metadata.Annotations)
+			appManifest := cfTypes.AppManifest{
 				Name: normalizedAppName,
 				Env:  appEnv.EnvironmentVariables,
-				Metadata: &AppMetadata{
+				Metadata: &cfTypes.AppMetadata{
 					Labels:      labels,
 					Annotations: annotations,
 				},
@@ -224,7 +221,7 @@ func (c *KorifiProvider) Discover(spaceName string) error {
 				// Sidecars
 				// Stack
 			}
-			if writeToYAMLFile(appManifest, fmt.Sprintf("manifest_%s_%s.yaml", spaceName, appManifest.Name)) != nil {
+			if ymlHelpers.WriteToYAMLFile(appManifest, fmt.Sprintf("manifest_%s_%s.yaml", spaceName, appManifest.Name)) != nil {
 				return fmt.Errorf("error writing manifest to file: %v", err)
 			}
 		}

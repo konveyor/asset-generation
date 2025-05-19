@@ -1,11 +1,11 @@
-package api
+package korifi
 
 import (
 	"fmt"
 	"regexp"
 	"strings"
 
-	kTModels "github.com/konveyor/asset-generation/pkg/discover/cloud_foundry/korifi/models"
+	kTModels "github.com/konveyor/asset-generation/pkg/providers/korifi/models"
 )
 
 func GetAppName(appEnv kTModels.AppEnvResponse) (string, error) {
