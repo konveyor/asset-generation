@@ -12,7 +12,8 @@ import (
 	ymlHelpers "github.com/konveyor/asset-generation/internal/helpers/yaml"
 	cfTypes "github.com/konveyor/asset-generation/pkg/models"
 	korifiApi "github.com/konveyor/asset-generation/pkg/providers/korifi/api"
-	. "github.com/konveyor/asset-generation/pkg/providers/types"
+	discoverTypes "github.com/konveyor/asset-generation/pkg/providers/types/discover"
+	kTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 )
@@ -21,7 +22,7 @@ type Config struct {
 	BaseURL        string
 	Username       string
 	KubeconfigPath string
-	providerType   ProviderType
+	providerType   kTypes.ProviderType
 }
 
 type KorifiProvider struct {
@@ -32,12 +33,12 @@ func New(cfg *Config) *KorifiProvider {
 	return &KorifiProvider{cfg: cfg}
 }
 
-func (c *Config) Type() ProviderType {
+func (c *Config) Type() kTypes.ProviderType {
 	return c.providerType
 }
 
-func (c *KorifiProvider) GetProviderType() ProviderType {
-	return ProviderTypeKorifi
+func (k *KorifiProvider) GetProviderType() kTypes.ProviderType {
+	return kTypes.ProviderTypeKorifi
 }
 
 func (k *KorifiProvider) GetKubeConfig() (*api.Config, error) {
@@ -114,23 +115,23 @@ func (t *authHeaderRoundTripper) RoundTrip(req *http.Request) (*http.Response, e
 	return t.base.RoundTrip(reqClone)
 }
 
-func (c *KorifiProvider) OffilineDiscover() ([]Application, error) {
+func (k *KorifiProvider) OffilineDiscover() ([]discoverTypes.Application, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (c *KorifiProvider) LiveDiscover(spaceNames []string) error {
-	if spaceNames == nil || len(spaceNames) == 0 {
+func (k *KorifiProvider) LiveDiscover(spaceNames []string) error {
+	if len(spaceNames) == 0 {
 		return fmt.Errorf("no spaces provided for discovery")
 	}
 
 	for _, spaceName := range spaceNames {
 		log.Println("Analyzing space: ", spaceName)
 
-		korifiHttpClient, err := c.GetKorifiHttpClient()
+		korifiHttpClient, err := k.GetKorifiHttpClient()
 		if err != nil {
 			return fmt.Errorf("error creating Korifi HTTP client: %v", err)
 		}
-		kAPI := korifiApi.NewKorifiAPIClient(korifiHttpClient, c.cfg.BaseURL)
+		kAPI := korifiApi.NewKorifiAPIClient(korifiHttpClient, k.cfg.BaseURL)
 		// Get space guid
 		spaceObj, err := kAPI.GetSpace(spaceName)
 		if err != nil {

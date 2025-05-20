@@ -6,7 +6,7 @@ import (
 	"github.com/konveyor/asset-generation/pkg/providers/cf"
 	cfProvider "github.com/konveyor/asset-generation/pkg/providers/cf"
 	korifiProvider "github.com/konveyor/asset-generation/pkg/providers/korifi"
-	providerTypes "github.com/konveyor/asset-generation/pkg/providers/types"
+	providerTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 )
 
 func NewProvider(cfg Config) (Provider, error) {

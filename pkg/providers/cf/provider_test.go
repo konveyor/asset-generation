@@ -3,7 +3,7 @@ package cf
 import (
 	"os"
 
-	pTypes "github.com/konveyor/asset-generation/pkg/providers/types"
+	pTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )

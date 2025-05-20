@@ -1,4 +1,4 @@
-package types
+package provider
 
 type ProviderType string
 

@@ -10,7 +10,8 @@ import (
 
 	helpers "github.com/konveyor/asset-generation/internal/helpers/yaml"
 	cfTypes "github.com/konveyor/asset-generation/pkg/models"
-	pTypes "github.com/konveyor/asset-generation/pkg/providers/types"
+	discoverTypes "github.com/konveyor/asset-generation/pkg/providers/types/discover"
+	pTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 )
 
 type Config struct {
@@ -38,8 +39,7 @@ func (c *CFProvider) GetProviderType() pTypes.ProviderType {
 	return pTypes.ProviderTypeCF
 }
 
-// func NewCFProvider(cfconfig CFConfig) (*CFProvider, error) {
-func (c *CFProvider) OffilineDiscover() ([]pTypes.Application, error) {
+func (c *CFProvider) OffilineDiscover() ([]discoverTypes.Application, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
