@@ -23,6 +23,7 @@ type Config struct {
 	Username       string
 	KubeconfigPath string
 	providerType   kTypes.ProviderType
+	SpaceNames     []string
 }
 
 type KorifiProvider struct {
@@ -115,23 +116,24 @@ func (t *authHeaderRoundTripper) RoundTrip(req *http.Request) (*http.Response, e
 	return t.base.RoundTrip(reqClone)
 }
 
-func (k *KorifiProvider) OffilineDiscover() ([]discoverTypes.Application, error) {
+func (k *KorifiProvider) OfflineDiscover() ([]discoverTypes.Application, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (k *KorifiProvider) LiveDiscover(spaceNames []string) error {
-	if len(spaceNames) == 0 {
+func (k *KorifiProvider) Discover() error {
+	if len(k.cfg.SpaceNames) == 0 {
 		return fmt.Errorf("no spaces provided for discovery")
 	}
 
-	for _, spaceName := range spaceNames {
+	korifiHttpClient, err := k.GetKorifiHttpClient()
+	if err != nil {
+		return fmt.Errorf("error creating Korifi HTTP client: %v", err)
+	}
+	kAPI := korifiApi.NewKorifiAPIClient(korifiHttpClient, k.cfg.BaseURL)
+	
+	for _, spaceName := range k.cfg.SpaceNames {
 		log.Println("Analyzing space: ", spaceName)
 
-		korifiHttpClient, err := k.GetKorifiHttpClient()
-		if err != nil {
-			return fmt.Errorf("error creating Korifi HTTP client: %v", err)
-		}
-		kAPI := korifiApi.NewKorifiAPIClient(korifiHttpClient, k.cfg.BaseURL)
 		// Get space guid
 		spaceObj, err := kAPI.GetSpace(spaceName)
 		if err != nil {
