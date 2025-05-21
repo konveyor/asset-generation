@@ -1,0 +1,466 @@
+[
+  {
+    "SuitePath": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api",
+    "SuiteDescription": "Api Suite",
+    "SuiteLabels": [],
+    "SuiteSucceeded": true,
+    "SuiteHasProgrammaticFocus": false,
+    "SpecialSuiteFailureReasons": null,
+    "PreRunStats": {
+      "TotalSpecs": 12,
+      "SpecsThatWillRun": 0
+    },
+    "StartTime": "2025-05-19T17:33:58.967963316+02:00",
+    "EndTime": "2025-05-19T17:33:58.968375822+02:00",
+    "RunTime": 412506,
+    "SuiteConfig": {
+      "RandomSeed": 1747668837,
+      "RandomizeAllSpecs": false,
+      "FocusStrings": [
+        "KubeConfig Utilities"
+      ],
+      "SkipStrings": null,
+      "FocusFiles": null,
+      "SkipFiles": null,
+      "LabelFilter": "",
+      "FailOnPending": false,
+      "FailOnEmpty": false,
+      "FailFast": false,
+      "FlakeAttempts": 0,
+      "MustPassRepeatedly": 0,
+      "DryRun": false,
+      "PollProgressAfter": 0,
+      "PollProgressInterval": 0,
+      "Timeout": 3598698835034,
+      "EmitSpecProgress": false,
+      "OutputInterceptorMode": "",
+      "SourceRoots": null,
+      "GracePeriod": 30000000000,
+      "ParallelProcess": 1,
+      "ParallelTotal": 1,
+      "ParallelHost": ""
+    },
+    "SpecReports": [
+      {
+        "ContainerHierarchyTexts": [
+          "CFAPIClient",
+          "ListApps"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 14
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 43
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+          "LineNumber": 45
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should return the list of apps from the API",
+        "State": "skipped",
+        "StartTime": "2025-05-19T17:33:58.968126757+02:00",
+        "EndTime": "0001-01-01T00:00:00Z",
+        "RunTime": 0,
+        "ParallelProcess": 1,
+        "NumAttempts": 0,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0
+      },
+      {
+        "ContainerHierarchyTexts": [
+          "CFAPIClient",
+          "ListApps"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 14
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 43
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+          "LineNumber": 55
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should handle empty response gracefully",
+        "State": "skipped",
+        "StartTime": "2025-05-19T17:33:58.96816439+02:00",
+        "EndTime": "0001-01-01T00:00:00Z",
+        "RunTime": 0,
+        "ParallelProcess": 1,
+        "NumAttempts": 0,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0
+      },
+      {
+        "ContainerHierarchyTexts": [
+          "CFAPIClient",
+          "ListApps"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 14
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 43
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+          "LineNumber": 67
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should handle non-200 status codes gracefully",
+        "State": "skipped",
+        "StartTime": "2025-05-19T17:33:58.968182756+02:00",
+        "EndTime": "0001-01-01T00:00:00Z",
+        "RunTime": 0,
+        "ParallelProcess": 1,
+        "NumAttempts": 0,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0
+      },
+      {
+        "ContainerHierarchyTexts": [
+          "CFAPIClient",
+          "GetEnv"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 14
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 81
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+          "LineNumber": 82
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should return the environment variables for a given app",
+        "State": "skipped",
+        "StartTime": "2025-05-19T17:33:58.968205215+02:00",
+        "EndTime": "0001-01-01T00:00:00Z",
+        "RunTime": 0,
+        "ParallelProcess": 1,
+        "NumAttempts": 0,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0
+      },
+      {
+        "ContainerHierarchyTexts": [
+          "CFAPIClient",
+          "GetEnv"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 14
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 81
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+          "LineNumber": 103
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should handle empty environment variables gracefully",
+        "State": "skipped",
+        "StartTime": "2025-05-19T17:33:58.968226652+02:00",
+        "EndTime": "0001-01-01T00:00:00Z",
+        "RunTime": 0,
+        "ParallelProcess": 1,
+        "NumAttempts": 0,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0
+      },
+      {
+        "ContainerHierarchyTexts": [
+          "CFAPIClient",
+          "GetEnv"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 14
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 81
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+          "LineNumber": 116
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should handle non-200 status codes gracefully",
+        "State": "skipped",
+        "StartTime": "2025-05-19T17:33:58.96824891+02:00",
+        "EndTime": "0001-01-01T00:00:00Z",
+        "RunTime": 0,
+        "ParallelProcess": 1,
+        "NumAttempts": 0,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0
+      },
+      {
+        "ContainerHierarchyTexts": [
+          "CFAPIClient",
+          "GetEnv"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 14
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 81
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+          "LineNumber": 129
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should handle JSON unmarshalling errors gracefully",
+        "State": "skipped",
+        "StartTime": "2025-05-19T17:33:58.968264646+02:00",
+        "EndTime": "0001-01-01T00:00:00Z",
+        "RunTime": 0,
+        "ParallelProcess": 1,
+        "NumAttempts": 0,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0
+      },
+      {
+        "ContainerHierarchyTexts": [
+          "CFAPIClient",
+          "GetEnv"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 14
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 81
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+          "LineNumber": 143
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should handle network errors gracefully",
+        "State": "skipped",
+        "StartTime": "2025-05-19T17:33:58.968281263+02:00",
+        "EndTime": "0001-01-01T00:00:00Z",
+        "RunTime": 0,
+        "ParallelProcess": 1,
+        "NumAttempts": 0,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0
+      },
+      {
+        "ContainerHierarchyTexts": [
+          "CFAPIClient",
+          "GetProcesses"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 14
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 154
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+          "LineNumber": 155
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should return the processes for a given app",
+        "State": "skipped",
+        "StartTime": "2025-05-19T17:33:58.968304939+02:00",
+        "EndTime": "0001-01-01T00:00:00Z",
+        "RunTime": 0,
+        "ParallelProcess": 1,
+        "NumAttempts": 0,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0
+      },
+      {
+        "ContainerHierarchyTexts": [
+          "CFAPIClient",
+          "GetProcesses"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 14
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 154
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+          "LineNumber": 179
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should handle empty processes gracefully",
+        "State": "skipped",
+        "StartTime": "2025-05-19T17:33:58.968333184+02:00",
+        "EndTime": "0001-01-01T00:00:00Z",
+        "RunTime": 0,
+        "ParallelProcess": 1,
+        "NumAttempts": 0,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0
+      },
+      {
+        "ContainerHierarchyTexts": [
+          "CFAPIClient",
+          "GetRoutes"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 14
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 193
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+          "LineNumber": 194
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should return the routes for a given app",
+        "State": "skipped",
+        "StartTime": "2025-05-19T17:33:58.968350108+02:00",
+        "EndTime": "0001-01-01T00:00:00Z",
+        "RunTime": 0,
+        "ParallelProcess": 1,
+        "NumAttempts": 0,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0
+      },
+      {
+        "ContainerHierarchyTexts": [
+          "CFAPIClient",
+          "GetRoutes"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 14
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+            "LineNumber": 193
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/korifi/api/api_test.go",
+          "LineNumber": 218
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should handle empty routes gracefully",
+        "State": "skipped",
+        "StartTime": "2025-05-19T17:33:58.968362231+02:00",
+        "EndTime": "0001-01-01T00:00:00Z",
+        "RunTime": 0,
+        "ParallelProcess": 1,
+        "NumAttempts": 0,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0
+      }
+    ]
+  }
+]

@@ -1,0 +1,277 @@
+[
+  {
+    "SuitePath": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf",
+    "SuiteDescription": "Cf Suite",
+    "SuiteLabels": [],
+    "SuiteSucceeded": true,
+    "SuiteHasProgrammaticFocus": false,
+    "SpecialSuiteFailureReasons": null,
+    "PreRunStats": {
+      "TotalSpecs": 5,
+      "SpecsThatWillRun": 1
+    },
+    "StartTime": "2025-05-19T17:49:41.660336748+02:00",
+    "EndTime": "2025-05-19T17:49:41.661484436+02:00",
+    "RunTime": 1147704,
+    "SuiteConfig": {
+      "RandomSeed": 1747669781,
+      "RandomizeAllSpecs": false,
+      "FocusStrings": [
+        "CFProvider GetClient should create client successfully"
+      ],
+      "SkipStrings": null,
+      "FocusFiles": null,
+      "SkipFiles": null,
+      "LabelFilter": "",
+      "FailOnPending": false,
+      "FailOnEmpty": false,
+      "FailFast": false,
+      "FlakeAttempts": 0,
+      "MustPassRepeatedly": 0,
+      "DryRun": false,
+      "PollProgressAfter": 0,
+      "PollProgressInterval": 0,
+      "Timeout": 3599431864265,
+      "EmitSpecProgress": false,
+      "OutputInterceptorMode": "",
+      "SourceRoots": null,
+      "GracePeriod": 30000000000,
+      "ParallelProcess": 1,
+      "ParallelTotal": 1,
+      "ParallelHost": ""
+    },
+    "SpecReports": [
+      {
+        "ContainerHierarchyTexts": [
+          "CFProvider",
+          "Type() method"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+            "LineNumber": 11
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+            "LineNumber": 25
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+          "LineNumber": 26
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should return ProviderTypeCF",
+        "State": "skipped",
+        "StartTime": "2025-05-19T17:49:41.660542249+02:00",
+        "EndTime": "0001-01-01T00:00:00Z",
+        "RunTime": 0,
+        "ParallelProcess": 1,
+        "NumAttempts": 0,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0
+      },
+      {
+        "ContainerHierarchyTexts": [
+          "CFProvider",
+          "GetProviderType() method"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+            "LineNumber": 11
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+            "LineNumber": 31
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+          "LineNumber": 32
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should return ProviderTypeCF",
+        "State": "skipped",
+        "StartTime": "2025-05-19T17:49:41.660575427+02:00",
+        "EndTime": "0001-01-01T00:00:00Z",
+        "RunTime": 0,
+        "ParallelProcess": 1,
+        "NumAttempts": 0,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0
+      },
+      {
+        "ContainerHierarchyTexts": [
+          "CFProvider",
+          "OffilineDiscover"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+            "LineNumber": 11
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+            "LineNumber": 37
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+          "LineNumber": 38
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should return not implemented error",
+        "State": "skipped",
+        "StartTime": "2025-05-19T17:49:41.660595689+02:00",
+        "EndTime": "0001-01-01T00:00:00Z",
+        "RunTime": 0,
+        "ParallelProcess": 1,
+        "NumAttempts": 0,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0
+      },
+      {
+        "ContainerHierarchyTexts": [
+          "CFProvider",
+          "GetClient"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+            "LineNumber": 11
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+            "LineNumber": 44
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+          "LineNumber": 45
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should fail if CF_HOME config is invalid",
+        "State": "skipped",
+        "StartTime": "2025-05-19T17:49:41.660621948+02:00",
+        "EndTime": "0001-01-01T00:00:00Z",
+        "RunTime": 0,
+        "ParallelProcess": 1,
+        "NumAttempts": 0,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0
+      },
+      {
+        "ContainerHierarchyTexts": [
+          "CFProvider",
+          "GetClient"
+        ],
+        "ContainerHierarchyLocations": [
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+            "LineNumber": 11
+          },
+          {
+            "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+            "LineNumber": 44
+          }
+        ],
+        "ContainerHierarchyLabels": [
+          [],
+          []
+        ],
+        "LeafNodeType": "It",
+        "LeafNodeLocation": {
+          "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+          "LineNumber": 60
+        },
+        "LeafNodeLabels": [],
+        "LeafNodeText": "should create client successfully",
+        "State": "passed",
+        "StartTime": "2025-05-19T17:49:41.660646241+02:00",
+        "EndTime": "2025-05-19T17:49:41.661423712+02:00",
+        "RunTime": 777485,
+        "ParallelProcess": 1,
+        "NumAttempts": 1,
+        "MaxFlakeAttempts": 0,
+        "MaxMustPassRepeatedly": 0,
+        "SpecEvents": [
+          {
+            "SpecEventType": "Node",
+            "CodeLocation": {
+              "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+              "LineNumber": 15
+            },
+            "TimelineLocation": {
+              "Order": 1,
+              "Time": "2025-05-19T17:49:41.660654178+02:00"
+            },
+            "Message": "CFProvider",
+            "NodeType": "BeforeEach"
+          },
+          {
+            "SpecEventType": "Node (End)",
+            "CodeLocation": {
+              "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+              "LineNumber": 15
+            },
+            "TimelineLocation": {
+              "Order": 3,
+              "Time": "2025-05-19T17:49:41.660836407+02:00"
+            },
+            "Message": "CFProvider",
+            "Duration": 182250,
+            "NodeType": "BeforeEach"
+          },
+          {
+            "SpecEventType": "Node",
+            "CodeLocation": {
+              "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+              "LineNumber": 60
+            },
+            "TimelineLocation": {
+              "Order": 4,
+              "Time": "2025-05-19T17:49:41.660840728+02:00"
+            },
+            "Message": "should create client successfully",
+            "NodeType": "It"
+          },
+          {
+            "SpecEventType": "Node (End)",
+            "CodeLocation": {
+              "FileName": "/home/gloria/repos/asset-generation-dev/pkg/providers/cf/provider_test.go",
+              "LineNumber": 60
+            },
+            "TimelineLocation": {
+              "Order": 6,
+              "Time": "2025-05-19T17:49:41.661416371+02:00"
+            },
+            "Message": "should create client successfully",
+            "Duration": 575643,
+            "NodeType": "It"
+          }
+        ]
+      }
+    ]
+  }
+]
