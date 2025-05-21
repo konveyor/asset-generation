@@ -63,17 +63,17 @@ func ParseProcessSpecs(cfApp cfTypes.AppManifest) (*dTypes.ProcessSpecTemplate, 
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse inline spec: %w", err)
 	}
-	if dTypes.ProcessSpec.Memory == "" {
+	if processSpec.Memory == "" {
 		processSpec.Memory = memory
 	}
-	if dTypes.ProcessSpec.Instances == 0 {
+	if processSpec.Instances == 0 {
 		processSpec.Instances = instances
+	}
+	if processSpec.LogRateLimit == "" {
+		processSpec.LogRateLimit = logRateLimit
 	}
 	if cfApp.LogRateLimitPerSecond != "" {
 		processSpec.LogRateLimit = cfApp.LogRateLimitPerSecond
-	}
-	if dTypes.ProcessSpec.LogRateLimit == "" {
-		processSpec.LogRateLimit = logRateLimit
 	}
 	return nil, &processSpec, nil
 

@@ -1,9 +1,9 @@
 package providers
 
-func Discover[T any](cfg Config) (T, error) {
-	p, err := NewProvider(cfg)
+func Discover[T any](cfg Config) (result T, err error) {
+	p, err := NewProvider[T](cfg)
 	if err != nil {
-		return nil, err
+		return result, err
 	}
-	return p.Discover(cfg)
+	return p.Discover()
 }

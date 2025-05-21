@@ -33,14 +33,6 @@ var _ = Describe("CFProvider", func() {
 			Expect(provider.GetProviderType()).To(Equal(pTypes.ProviderTypeCF))
 		})
 	})
-
-	Context("OffilineDiscover", func() {
-		It("should return not implemented error", func() {
-			apps, err := provider.OffilineDiscover()
-			Expect(err).To(MatchError("not implemented"))
-			Expect(apps).To(BeNil())
-		})
-	})
 	Context("GetClient", func() {
 		It("should fail if CF_HOME config is invalid", func() {
 			CFHomeOrig, had := os.LookupEnv("CF_HOME")

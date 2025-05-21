@@ -4,7 +4,7 @@ import (
 	pTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 )
 
-type Provider interface {
+type Provider[T any] interface {
 	GetProviderType() pTypes.ProviderType
-	Discover() (T, error)
+	Discover() (result T, err error)
 }

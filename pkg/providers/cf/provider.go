@@ -28,13 +28,14 @@ type Config struct {
 	APIEndpoint       string
 	SkipSslValidation bool
 	SpaceNames        []string
+	OutputFolder      string
 }
 
 type CFProvider struct {
 	cfg *Config
 }
 
-func New(cfg *Config) *CFProvider {
+func New[T any](cfg *Config) *CFProvider {
 	return &CFProvider{cfg: cfg}
 }
 
@@ -72,6 +73,11 @@ func (c *CFProvider) Discover() ([]dTypes.Application, error) {
 	return c.discoverFromLiveAPI()
 }
 
+// DiscoverFromManifestFile reads the manifest file and returns a list of
+// applications from the manifest.
+// If the output folder is provided, it writes the manifest to a file in the
+// output folder with the name "manifest_<app_name>.yaml".
+// If the output folder is not provided, it returns a list of applications.
 func (c *CFProvider) discoverFromManifestFile() ([]dTypes.Application, error) {
 	data, err := os.ReadFile(c.cfg.ManifestPath)
 	if err != nil {
@@ -86,11 +92,24 @@ func (c *CFProvider) discoverFromManifestFile() ([]dTypes.Application, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create application: %w", err)
 	}
+	if c.cfg.OutputFolder != "" {
+		err = helpers.WriteToYAMLFile(manifest, fmt.Sprintf("%s/manifest_%s.yaml", c.cfg.OutputFolder, manifest.Name))
+		if err != nil {
+			return nil, fmt.Errorf("error writing manifest to file: %w", err)
+		}
+		return nil, nil
+	}
 	return []dTypes.Application{app}, nil
 }
 
+// discoverFromLiveAPI retrieves the application manifests from the live API
+// and returns a list of applications.
+// If the output folder is provided, it writes the manifest to a file in the
+// output folder with the name "manifest_<space_name>_<app_name>.yaml".
+// If the output folder is not provided, it returns a list of applications.
 func (c *CFProvider) discoverFromLiveAPI() ([]dTypes.Application, error) {
 	var apps []dTypes.Application
+	writeToFile := c.cfg.OutputFolder != ""
 	for _, spaceName := range c.cfg.SpaceNames {
 		cfManifests, err := c.createCFManifest(spaceName)
 		if err != nil {
@@ -102,7 +121,14 @@ func (c *CFProvider) discoverFromLiveAPI() ([]dTypes.Application, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to create app from manifest: %w", err)
 			}
-			apps = append(apps, app)
+			if writeToFile {
+				err = helpers.WriteToYAMLFile(m, fmt.Sprintf("%s/manifest_%s_%s.yaml", c.cfg.OutputFolder, spaceName, m.Name))
+				if err != nil {
+					return nil, fmt.Errorf("error writing manifest to file: %w", err)
+				}
+			} else {
+				apps = append(apps, app)
+			}
 		}
 	}
 	return apps, nil
@@ -228,7 +254,7 @@ func (c *CFProvider) createCFManifest(spaceName string) ([]cfTypes.AppManifest, 
 		if err != nil {
 			return nil, fmt.Errorf("error getting environment for app %s: %v", app.GUID, err)
 		}
-		log.Println("App Environment Variables: ", appEnv)
+		log.Printf("App Environment Variables: %s", appEnv)
 		processOpts := client.NewProcessOptions()
 		processOpts.SpaceGUIDs.EqualTo(remoteSpace.GUID)
 		processes, err := cfClient.Processes.ListForAppAll(ctx, app.GUID, processOpts)

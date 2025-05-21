@@ -58,7 +58,7 @@ func (c *KorifiAPIClient) GetSpace(spaceName string) (*kModels.SpaceResponse, er
 }
 
 func (c *KorifiAPIClient) ListApps(space string) (*kModels.ListResponse[kModels.AppResponse], error) {
-	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps?space_guids=" + space)
+	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps?space_guids=\"" + space + "\"")
 	if err != nil {
 		return nil, err
 	}

@@ -30,7 +30,7 @@ type KorifiProvider struct {
 	cfg *Config
 }
 
-func New(cfg *Config) *KorifiProvider {
+func New[T any](cfg *Config) *KorifiProvider {
 	return &KorifiProvider{cfg: cfg}
 }
 
@@ -130,7 +130,7 @@ func (k *KorifiProvider) Discover() error {
 		return fmt.Errorf("error creating Korifi HTTP client: %v", err)
 	}
 	kAPI := korifiApi.NewKorifiAPIClient(korifiHttpClient, k.cfg.BaseURL)
-	
+
 	for _, spaceName := range k.cfg.SpaceNames {
 		log.Println("Analyzing space: ", spaceName)
 
