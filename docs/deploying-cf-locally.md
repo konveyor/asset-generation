@@ -8,11 +8,37 @@ Deploying Cloud Foundry with Bosh-Lite is a low-cost, lightweight approach tailo
 Ensure that VirtualBox and its extension pack are installed and configured
 properly.
 
+> 💡 **Note:** Always download and install the latest version of the VirtualBox Extension Pack that matches your installed VirtualBox version. You can find it on the [official VirtualBox downloads page](https://www.virtualbox.org/wiki/Downloads).
+
 ```bash
 sudo dnf install virtualbox
+# Replace with the latest version of the Extension Pack
 VBoxManage extpack install --replace Oracle_VirtualBox_Extension_Pack-7.1.8.vbox-extpack
+```
+After installation, verify that the extension pack was installed correctly:
+
+```bash
 VBoxManage list extpacks
 ```
+You should see output similar to the following:
+
+```bash
+Extension Packs: 1
+Pack no. 0:   Oracle VirtualBox Extension Pack
+Version:        7.1.8
+Revision:       168469
+Edition:        
+Description:    Oracle Cloud Infrastructure integration, Host Webcam, VirtualBox RDP, PXE ROM, Disk Encryption, NVMe, full VM encryption.
+VRDE Module:    VBoxVRDP
+Crypto Module:  VBoxPuelCrypto
+Usable:         true
+Why unusable:
+```
+
+Make sure `Usable: true` is present in the output — this indicates that the extension pack is functioning correctly.
+If `Why unusable:` contains any message, the extension pack installation may
+have issues (e.g., version mismatch or missing dependencies).
+
 Reboot your system after installation:
 
 ```bash
@@ -91,43 +117,79 @@ directly:
 
 `sudo ip route add 10.244.0.0/16 via 192.168.56.6 # Linux (using iproute2 suite)`
 
-try ping 
-`ping 192.168.56.6`
+try `ping 192.168.56.6`
 
-then try 
-`bosh -e vbox env`
-
-They should succeed both.
-
-## Upload cloud config and stemcell
-<!--
-the cloud config tells the BOSH Director how to provision VMs, networks, disks, and other IaaS-specific resources in your environment. -->
+Expected output: 
 
 ```bash
-bosh -e vbox update-cloud-config ~/cf-deployment/iaas-support/bosh-lite/cloud-config.yml
+PING 192.168.56.6 (192.168.56.6) 56(84) bytes of data.
+64 bytes from 192.168.56.6: icmp_seq=1 ttl=64 time=0.364 ms
+64 bytes from 192.168.56.6: icmp_seq=2 ttl=64 time=0.372 ms
+64 bytes from 192.168.56.6: icmp_seq=3 ttl=64 time=0.301 ms
 ```
 
+then try `bosh -e vbox env`
+
+Expected output:
+
 ```bash
-bosh -e vbox upload-stemcell \
-  --sha1 4ad3b7265af38de84d83887bf334193259a59981 \
-  "https://bosh.io/d/stemcells/bosh-warden-boshlite-ubuntu-jammy-go_agent?v=1.423"
+Using environment '192.168.56.6' as client 'admin'
+
+Name               bosh-lite  
+UUID               6afb466e-b6ab-4b52-a4d2-c833ae02776a  
+Version            282.0.4 (00000000)  
+Director Stemcell  -/1.822  
+CPI                warden_cpi  
+Features           config_server: enabled  
+                   local_dns: enabled  
+                   snapshots: disabled  
+User               admin  
+
+Succeeded
 ```
+
 
 ## Clone the cf-deployment repository
-
-
-
 
 ```bash
 git clone https://github.com/cloudfoundry/cf-deployment.git
 cd cf-deployment
 ```
 
-Update the deployment file to use precompiled releases:
+To ensure you're using the latest precompiled stemcell version, first check which version is referenced in the `operations/use-compiled-releases.yml` file:
+```bash
+export STEMCELL_VERSION=$(grep -A 2 stemcell operations/use-compiled-releases.yml | grep version | sort -u | awk -F'"' '{print $2}')
+STEMCELL_SHA1=$(curl -s "https://bosh.io/api/v1/stemcells/bosh-warden-boshlite-ubuntu-jammy-go_agent" \
+  | jq -r --arg version "$STEMCELL_VERSION" '.[] | select(.version == $version) | .regular.sha1')
 
+echo "Stemcell version: $STEMCELL_VERSION"
+echo "SHA1: $STEMCELL_SHA1"
+```
+
+Example output:
 
 ```bash
-yq e '.stemcells[0].alias = "default" | .stemcells[0].os = "ubuntu-jammy" | .stemcells[0].version = "1.423"' -i cf-deployment.yaml
+Stemcell version: 1.423
+SHA1: 4ad3b7265af38de84d83887bf334193259a59981
+```
+
+Use the version shown in the output to update your cf-deployment.yaml file:
+```bash
+yq e '.stemcells[0].alias = "default" | .stemcells[0].os = "ubuntu-jammy" | .stemcells[0].version = env(STEMCELL_VERSION)' -i cf-deployment.yaml
+```
+
+## Upload cloud config and stemcell
+The **cloud config** tells the BOSH Director how to provision VMs, networks, disks, and other IaaS-specific resources in your environment.
+
+```bash
+bosh -e vbox update-cloud-config ~/cf-deployment/iaas-support/bosh-lite/cloud-config.yml
+```
+Next, upload the stemcell.
+
+```bash
+bosh -e vbox upload-stemcell \
+  --sha1 "$STEMCELL_SHA1" \
+  "https://bosh.io/d/stemcells/bosh-warden-boshlite-ubuntu-jammy-go_agent?v=${STEMCELL_VERSION}"
 ```
 
 ## Deploy Cloud Foundry
@@ -138,9 +200,14 @@ bosh -n -e vbox -d cf deploy \
   -o operations/use-compiled-releases.yml \
   -v system_domain=bosh-lite.com \
   -v stemcell_os=ubuntu-jammy \
-  -v stemcell_version=1.423
+  -v stemcell_version=${STEMCELL_VERSION}
 ```
 This process takes around 30–60 minutes.
+
+Make sure to match the `stemcell_version` with the one you uploaded earlier.
+
+> 💡 Note: The system_domain value `bosh-lite.com` is predefined when deploying the
+BOSH Director for BOSH Lite.
 
 ## Target Cloud Foundry API
 
@@ -221,16 +288,30 @@ Not logged in. Use 'cf login' or 'cf login --sso' to log in.
         ... etc ...
     ```
 1. **Retrieve CF Admin Password and Log In**
+    Set CF API endpoint
     ```bash
-    # Get the admin password from CredHub
-    CF_ADMIN_PASSWORD=$(credhub get -n /bosh-lite/cf/cf_admin_password --output-json | jq -r '.value')
-
-    # Set CF API endpoint
     cf api https://api.bosh-lite.com --skip-ssl-validation
+    ```
+    
+    Expected output:
 
+    ```
+    cf api https://api.bosh-lite.com --skip-ssl-validation
+    Setting API endpoint to https://api.bosh-lite.com...
+    OK
+
+    API endpoint:   https://api.bosh-lite.com
+    API version:    3.193.0
+
+    Not logged in. Use 'cf login' or 'cf login --sso' to log in.
+    ```
+    Get the admin password from CredHub and login
+    ```bash
+    CF_ADMIN_PASSWORD=$(credhub get -n /bosh-lite/cf/cf_admin_password -q)
     cf login -a https://api.bosh-lite.com --skip-ssl-validation -u admin -p "$CF_ADMIN_PASSWORD"
     ```
-    If successful, you'll see output like this:
+
+    If successful, the expected output is:
 
     ```bash
     API endpoint: https://api.bosh-lite.com
