@@ -27,11 +27,15 @@ type Config struct {
 }
 
 type KorifiProvider struct {
-	cfg *Config
+	cfg    *Config
+	logger *log.Logger
 }
 
-func New[T any](cfg *Config) *KorifiProvider {
-	return &KorifiProvider{cfg: cfg}
+func New[T any](cfg *Config, logger *log.Logger) *KorifiProvider {
+	return &KorifiProvider{
+		cfg:    cfg,
+		logger: logger,
+	}
 }
 
 func (c *Config) Type() kTypes.ProviderType {
@@ -132,7 +136,7 @@ func (k *KorifiProvider) Discover() error {
 	kAPI := korifiApi.NewKorifiAPIClient(korifiHttpClient, k.cfg.BaseURL)
 
 	for _, spaceName := range k.cfg.SpaceNames {
-		log.Println("Analyzing space: ", spaceName)
+		k.logger.Println("Analyzing space: ", spaceName)
 
 		// Get space guid
 		spaceObj, err := kAPI.GetSpace(spaceName)
@@ -144,10 +148,10 @@ func (k *KorifiProvider) Discover() error {
 			return fmt.Errorf("error listing CF apps for space %s: %v", spaceName, err)
 		}
 
-		log.Println("Apps discovered: ", apps.PaginationData.TotalResults)
+		k.logger.Println("Apps discovered: ", apps.PaginationData.TotalResults)
 
 		for _, app := range apps.Resources {
-			log.Println("Processing app:", app.GUID)
+			k.logger.Println("Processing app:", app.GUID)
 
 			appEnv, err := kAPI.GetEnv(app.GUID)
 			if err != nil {

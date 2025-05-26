@@ -1,7 +1,9 @@
 package providers
 
-func Discover[T any](cfg Config) (result T, err error) {
-	p, err := NewProvider[T](cfg)
+import "log"
+
+func Discover[T any](cfg Config, logger *log.Logger) (result T, err error) {
+	p, err := NewProvider[T](cfg, logger)
 	if err != nil {
 		return result, err
 	}

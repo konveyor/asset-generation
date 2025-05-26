@@ -5,10 +5,10 @@ import (
 	"regexp"
 	"strings"
 
-	kTModels "github.com/konveyor/asset-generation/pkg/providers/korifi/models"
+	kModels "code.cloudfoundry.org/korifi/api/presenter"
 )
 
-func GetAppName(appEnv kTModels.AppEnvResponse) (string, error) {
+func GetAppName(appEnv kModels.AppEnvResponse) (string, error) {
 	vcap, valid := appEnv.ApplicationEnvJSON["VCAP_APPLICATION"]
 	if !valid {
 		return "", fmt.Errorf("can't find ")
@@ -68,7 +68,7 @@ func NormalizeForMetadataName(metadataName string) (string, error) {
 
 // ConvertMapToPointer converts a map[string]string to map[string]*string
 func ConvertMapToPointer(input map[string]string) map[string]*string {
-	output := make(map[string]*string)
+	output := make(map[string]*string, len(input))
 	for key, value := range input {
 		output[key] = &value
 	}

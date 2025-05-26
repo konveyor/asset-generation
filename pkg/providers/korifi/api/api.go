@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	kModels "github.com/konveyor/asset-generation/pkg/providers/korifi/models"
+	kModel "code.cloudfoundry.org/korifi/api/presenter"
 	"github.com/pkg/errors"
 )
 
@@ -21,17 +21,17 @@ func NewKorifiAPIClient(httpClient *http.Client, baseURL string) *KorifiAPIClien
 	}
 }
 
-func (c *KorifiAPIClient) ListSpaces() (*kModels.ListResponse[kModels.SpaceResponse], error) {
+func (c *KorifiAPIClient) ListSpaces() (*kModel.ListResponse[kModel.SpaceResponse], error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/spaces")
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	var i kModels.ListResponse[kModels.SpaceResponse]
+	var i kModel.ListResponse[kModel.SpaceResponse]
 	err = json.NewDecoder(resp.Body).Decode(&i)
 	if err != nil {
 		return nil, errors.Wrap(err, "Error unmarshalling info")
@@ -39,17 +39,17 @@ func (c *KorifiAPIClient) ListSpaces() (*kModels.ListResponse[kModels.SpaceRespo
 	return &i, nil
 }
 
-func (c *KorifiAPIClient) GetSpace(spaceName string) (*kModels.SpaceResponse, error) {
+func (c *KorifiAPIClient) GetSpace(spaceName string) (*kModel.SpaceResponse, error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/spaces?names=" + spaceName)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	var i kModels.SpaceResponse
+	var i kModel.SpaceResponse
 	err = json.NewDecoder(resp.Body).Decode(&i)
 	if err != nil {
 		return nil, errors.Wrap(err, "Error unmarshalling info")
@@ -57,17 +57,17 @@ func (c *KorifiAPIClient) GetSpace(spaceName string) (*kModels.SpaceResponse, er
 	return &i, nil
 }
 
-func (c *KorifiAPIClient) ListApps(space string) (*kModels.ListResponse[kModels.AppResponse], error) {
+func (c *KorifiAPIClient) ListApps(space string) (*kModel.ListResponse[kModel.AppResponse], error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps?space_guids=\"" + space + "\"")
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	var i kModels.ListResponse[kModels.AppResponse]
+	var i kModel.ListResponse[kModel.AppResponse]
 	err = json.NewDecoder(resp.Body).Decode(&i)
 	if err != nil {
 		return nil, errors.Wrap(err, "Error unmarshalling info")
@@ -75,36 +75,36 @@ func (c *KorifiAPIClient) ListApps(space string) (*kModels.ListResponse[kModels.
 	return &i, nil
 }
 
-func (c *KorifiAPIClient) GetEnv(guid string) (*kModels.AppEnvResponse, error) {
+func (c *KorifiAPIClient) GetEnv(guid string) (*kModel.AppEnvResponse, error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps/" + guid + "/env")
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	var i kModels.AppEnvResponse
+	var i kModel.AppEnvResponse
 	err = json.NewDecoder(resp.Body).Decode(&i)
 	if err != nil {
 		return nil, errors.Wrap(err, "Error unmarshalling info")
 	}
 	return &i, nil
 }
-func (c *KorifiAPIClient) GetProcesses(guid string) (*kModels.ListResponse[kModels.ProcessResponse], error) {
+func (c *KorifiAPIClient) GetProcesses(guid string) (*kModel.ListResponse[kModel.ProcessResponse], error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps/" + guid + "/processes")
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	var i kModels.ListResponse[kModels.ProcessResponse]
+	var i kModel.ListResponse[kModel.ProcessResponse]
 	err = json.NewDecoder(resp.Body).Decode(&i)
 	if err != nil {
 		return nil, errors.Wrap(err, "Error unmarshalling info")
@@ -112,18 +112,18 @@ func (c *KorifiAPIClient) GetProcesses(guid string) (*kModels.ListResponse[kMode
 	return &i, nil
 }
 
-func (c *KorifiAPIClient) GetRoutes(guid string) (*kModels.ListResponse[kModels.RouteResponse], error) {
+func (c *KorifiAPIClient) GetRoutes(guid string) (*kModel.ListResponse[kModel.RouteResponse], error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps/" + guid + "/routes")
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, resp.Status)
 	}
 
-	var i kModels.ListResponse[kModels.RouteResponse]
+	var i kModel.ListResponse[kModel.RouteResponse]
 	err = json.NewDecoder(resp.Body).Decode(&i)
 	if err != nil {
 		return nil, errors.Wrap(err, "Error unmarshalling info")

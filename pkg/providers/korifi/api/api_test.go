@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	korifi "github.com/konveyor/asset-generation/pkg/providers/korifi/models"
+	korifi "code.cloudfoundry.org/korifi/api/presenter"
 )
 
 var _ = Describe("CFAPIClient", func() {
