@@ -1,4 +1,4 @@
-package cf
+package cloud_foundry
 
 import (
 	"os"

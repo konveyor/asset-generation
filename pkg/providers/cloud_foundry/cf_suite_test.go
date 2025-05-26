@@ -1,4 +1,4 @@
-package cf_test
+package cloud_foundry_test
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestCf(t *testing.T) {
+func TestCF(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Cf Suite")
+	RunSpecs(t, "Cloud Foundry Suite")
 }

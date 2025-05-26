@@ -1,4 +1,4 @@
-package cf
+package cloud_foundry
 
 import (
 	"context"
@@ -9,11 +9,11 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
-
+	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/go-playground/validator/v10"
 	helpers "github.com/konveyor/asset-generation/internal/helpers/yaml"
 	cfTypes "github.com/konveyor/asset-generation/pkg/models"
-	p "github.com/konveyor/asset-generation/pkg/providers/helpers"
+	pHelpers "github.com/konveyor/asset-generation/pkg/providers/helpers"
 	dTypes "github.com/konveyor/asset-generation/pkg/providers/types/discover"
 	pTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 	"gopkg.in/yaml.v3"
@@ -21,22 +21,26 @@ import (
 
 type Config struct {
 	ManifestPath      string
-	CFConfigPath      string // usato se esiste
-	Username          string // usato se CFConfigPath è vuoto
+	CFConfigPath      string
+	Username          string
 	Password          string
 	Token             string
 	APIEndpoint       string
-	SkipSslValidation bool
+	SkipSSLValidation bool
 	SpaceNames        []string
 	OutputFolder      string
 }
 
 type CFProvider struct {
-	cfg *Config
+	cfg    *Config
+	logger *log.Logger
 }
 
-func New[T any](cfg *Config) *CFProvider {
-	return &CFProvider{cfg: cfg}
+func New[T any](cfg *Config, logger *log.Logger) *CFProvider {
+	return &CFProvider{
+		cfg:    cfg,
+		logger: logger,
+	}
 }
 
 func (cfg *Config) Type() pTypes.ProviderType {
@@ -62,7 +66,7 @@ func (c *CFProvider) GetClient() (*client.Client, error) {
 
 func (c *CFProvider) Discover() ([]dTypes.Application, error) {
 	if c.cfg.ManifestPath != "" {
-		log.Println("Manifest path provided, using it for local discovery")
+		c.logger.Println("Manifest path provided, using it for local discovery")
 		return c.discoverFromManifestFile()
 	}
 
@@ -70,14 +74,21 @@ func (c *CFProvider) Discover() ([]dTypes.Application, error) {
 	if len(c.cfg.SpaceNames) == 0 {
 		return nil, fmt.Errorf("no spaces provided for live discovery")
 	}
+
+	if c.cfg.APIEndpoint == "" || c.cfg.Username == "" || (c.cfg.Password == "" && c.cfg.CFConfigPath == "") {
+		return nil, fmt.Errorf("missing required configuration: APIEndpoint, Username, and either Password or CFConfigPath must be provided")
+	}
 	return c.discoverFromLiveAPI()
 }
 
-// DiscoverFromManifestFile reads the manifest file and returns a list of
-// applications from the manifest.
-// If the output folder is provided, it writes the manifest to a file in the
-// output folder with the name "manifest_<app_name>.yaml".
-// If the output folder is not provided, it returns a list of applications.
+// discoverFromManifestFile reads a manifest file and returns a list of applications.
+//
+// If an output folder is specified:
+//   - The manifest is written to a file named "manifest_<app_name>.yaml" in that folder.
+//   - An empty application list is returned.
+//
+// If no output folder is specified:
+//   - The function returns the list of applications parsed from the manifest.
 func (c *CFProvider) discoverFromManifestFile() ([]dTypes.Application, error) {
 	data, err := os.ReadFile(c.cfg.ManifestPath)
 	if err != nil {
@@ -88,7 +99,7 @@ func (c *CFProvider) discoverFromManifestFile() ([]dTypes.Application, error) {
 		return nil, fmt.Errorf("failed to unmarshal YAML: %w", err)
 	}
 
-	app, err := createApp(manifest)
+	app, err := parseCFApp(manifest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create application: %w", err)
 	}
@@ -111,13 +122,13 @@ func (c *CFProvider) discoverFromLiveAPI() ([]dTypes.Application, error) {
 	var apps []dTypes.Application
 	writeToFile := c.cfg.OutputFolder != ""
 	for _, spaceName := range c.cfg.SpaceNames {
-		cfManifests, err := c.createCFManifest(spaceName)
+		cfManifests, err := c.generateCFManifestFromLiveAPI(spaceName)
 		if err != nil {
 			return nil, fmt.Errorf("error creating CF manifest for space '%s': %w", spaceName, err)
 		}
 
 		for _, m := range cfManifests {
-			app, err := createApp(m)
+			app, err := parseCFApp(m)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create app from manifest: %w", err)
 			}
@@ -158,26 +169,26 @@ func (c *CFProvider) discoverFromLiveAPI() ([]dTypes.Application, error) {
 // 	return os.WriteFile(output, b, 0644)
 // }
 
-func createApp(cfApp cfTypes.AppManifest) (dTypes.Application, error) {
+func parseCFApp(cfApp cfTypes.AppManifest) (dTypes.Application, error) {
 	timeout := 60
 	if cfApp.Timeout != 0 {
 		timeout = int(cfApp.Timeout)
 	}
-	services, err := p.MarshalUnmarshal[dTypes.Services](cfApp.Services)
+	services, err := pHelpers.MarshalUnmarshal[dTypes.Services](cfApp.Services)
 	if err != nil {
 		return dTypes.Application{}, err
 	}
-	routeSpec := p.ParseRouteSpec(cfApp.Routes, cfApp.RandomRoute, cfApp.NoRoute)
-	docker, err := p.MarshalUnmarshal[dTypes.Docker](cfApp.Docker)
+	routeSpec := pHelpers.ParseRouteSpec(cfApp.Routes, cfApp.RandomRoute, cfApp.NoRoute)
+	docker, err := pHelpers.MarshalUnmarshal[dTypes.Docker](cfApp.Docker)
 
 	if err != nil {
 		return dTypes.Application{}, err
 	}
-	sidecars, err := p.MarshalUnmarshal[dTypes.Sidecars](cfApp.Sidecars)
+	sidecars, err := pHelpers.MarshalUnmarshal[dTypes.Sidecars](cfApp.Sidecars)
 	if err != nil {
 		return dTypes.Application{}, err
 	}
-	processes, err := p.MarshalUnmarshal[dTypes.Processes](cfApp.Processes)
+	processes, err := pHelpers.MarshalUnmarshal[dTypes.Processes](cfApp.Processes)
 	if err != nil {
 		return dTypes.Application{}, err
 	}
@@ -187,7 +198,7 @@ func createApp(cfApp cfTypes.AppManifest) (dTypes.Application, error) {
 		labels = cfApp.Metadata.Labels
 		annotations = cfApp.Metadata.Annotations
 	}
-	appManifestProcess, inlineProcess, err := p.ParseProcessSpecs(cfApp)
+	appManifestProcess, inlineProcess, err := pHelpers.ParseProcessSpecs(cfApp)
 
 	if err != nil {
 		return dTypes.Application{}, err
@@ -221,43 +232,38 @@ func createApp(cfApp cfTypes.AppManifest) (dTypes.Application, error) {
 	}
 	validationErrors := validateApplication(app)
 	if validationErrors != nil {
-		return dTypes.Application{}, errors.Join(validationErrors...)
+		return dTypes.Application{}, validationErrors
 	}
 	return app, nil
 }
 
-func (c *CFProvider) createCFManifest(spaceName string) ([]cfTypes.AppManifest, error) {
+func (c *CFProvider) generateCFManifestFromLiveAPI(spaceName string) ([]cfTypes.AppManifest, error) {
 	ctx := context.Background()
-	log.Println("Analyzing space: ", spaceName)
-	spaceOpts := client.NewSpaceListOptions()
-	spaceOpts.Names.EqualTo(spaceName)
+	c.logger.Println("Analyzing space: ", spaceName)
+
 	cfClient, err := c.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("error creating CF client: %v", err)
 	}
-	remoteSpace, err := cfClient.Spaces.First(ctx, spaceOpts)
-	if err != nil {
-		return nil, fmt.Errorf("error finding CF space for spaceName %s: %v", spaceName, err)
-	}
-	appsOpt := client.NewAppListOptions()
-	appsOpt.SpaceGUIDs.EqualTo(remoteSpace.GUID)
-	apps, err := cfClient.Applications.ListAll(context.Background(), appsOpt)
+	apps, err := listAppsBySpaceName(cfClient, spaceName)
 	if err != nil {
 		return nil, fmt.Errorf("error listing CF apps for space %s: %v", spaceName, err)
 	}
-	log.Println("Apps discovered: ", len(apps))
+	c.logger.Println("Apps discovered: ", len(apps))
 
 	appManifests := []cfTypes.AppManifest{}
 	for _, app := range apps {
-		log.Println("Processing app:", app.Name)
+		c.logger.Println("Processing app:", app.Name)
 		appEnv, err := cfClient.Applications.GetEnvironment(context.Background(), app.GUID)
 		if err != nil {
 			return nil, fmt.Errorf("error getting environment for app %s: %v", app.GUID, err)
 		}
-		log.Printf("App Environment Variables: %s", appEnv)
-		processOpts := client.NewProcessOptions()
-		processOpts.SpaceGUIDs.EqualTo(remoteSpace.GUID)
-		processes, err := cfClient.Processes.ListForAppAll(ctx, app.GUID, processOpts)
+		spaceGUID, err := getSpaceGUIDByName(cfClient, spaceName)
+		if err != nil {
+			return nil, fmt.Errorf("error getting space GUID for space %s: %v", spaceName, err)
+		}
+
+		processes, err := cfClient.Processes.ListForAppAll(ctx, app.GUID, nil)
 		if err != nil {
 			return nil, fmt.Errorf("error getting processes: %v", err)
 		}
@@ -269,35 +275,45 @@ func (c *CFProvider) createCFManifest(spaceName string) ([]cfTypes.AppManifest, 
 
 			appProcesses = append(appProcesses, cfTypes.AppManifestProcess{
 				Type:                         cfTypes.AppProcessType(proc.Type),
-				Command:                      *proc.Command,
+				Command:                      safePtr(proc.Command, ""),
 				DiskQuota:                    fmt.Sprintf("%d", proc.DiskInMB),
 				HealthCheckType:              cfTypes.AppHealthCheckType(proc.HealthCheck.Type),
-				HealthCheckHTTPEndpoint:      *proc.HealthCheck.Data.Endpoint,
-				HealthCheckInvocationTimeout: uint(*proc.HealthCheck.Data.InvocationTimeout),
+				HealthCheckHTTPEndpoint:      safePtr(proc.HealthCheck.Data.Endpoint, ""),
+				HealthCheckInvocationTimeout: uint(safePtr(proc.HealthCheck.Data.InvocationTimeout, 0)),
 				Instances:                    &procInstances,
 				LogRateLimitPerSecond:        fmt.Sprintf("%d", proc.LogRateLimitInBytesPerSecond),
 				Memory:                       fmt.Sprintf("%dMB", proc.MemoryInMB),
 				// Timeout
 				ReadinessHealthCheckType:         cfTypes.AppHealthCheckType(proc.ReadinessCheck.Type),
-				ReadinessHealthCheckHttpEndpoint: *proc.ReadinessCheck.Data.Endpoint,
-				ReadinessHealthInvocationTimeout: uint(*proc.ReadinessCheck.Data.InvocationTimeout),
-				ReadinessHealthCheckInterval:     uint(*proc.ReadinessCheck.Data.Interval),
+				ReadinessHealthCheckHttpEndpoint: safePtr(proc.ReadinessCheck.Data.Endpoint, ""),
+				ReadinessHealthInvocationTimeout: uint(safePtr(proc.ReadinessCheck.Data.InvocationTimeout, 0)),
+				ReadinessHealthCheckInterval:     uint(safePtr(proc.ReadinessCheck.Data.Interval, 0)),
 				Lifecycle:                        string(app.Lifecycle.Type),
 			})
 		}
 		routeOpts := client.NewRouteListOptions()
-		routeOpts.SpaceGUIDs.EqualTo(remoteSpace.GUID)
+		routeOpts.SpaceGUIDs.EqualTo(spaceGUID)
 		routes, err := cfClient.Routes.ListForAppAll(ctx, app.GUID, routeOpts)
 		if err != nil {
 			return nil, fmt.Errorf("error getting processes: %v", err)
 		}
 		appRoutes := cfTypes.AppManifestRoutes{}
 		for _, r := range routes {
+			destinations, err := cfClient.
+				Routes.GetDestinations(ctx, r.GUID)
+			if err != nil {
+				return nil, fmt.Errorf("error getting destinations for route %s: %v", r.GUID, err)
+			}
+			var protocol string
+			if len(destinations.Destinations) > 0 {
+				protocol = *destinations.Destinations[0].Protocol
+			}
 			appRoutes = append(appRoutes, cfTypes.AppManifestRoute{
 				Route:    r.URL,
-				Protocol: cfTypes.AppRouteProtocol(r.Protocol),
+				Protocol: cfTypes.AppRouteProtocol(protocol),
 				// TODO: Options: loadbalancing?
 			})
+
 		}
 
 		// FIXME: uncomment this when we know how to handle them
@@ -337,7 +353,7 @@ func (c *CFProvider) createCFManifest(spaceName string) ([]cfTypes.AppManifest, 
 			// Sidecars
 			// Stack
 		}
-		if helpers.WriteToYAMLFile(appManifest, fmt.Sprintf("manifest_%s_%s.yaml", spaceName, appManifest.Name)) != nil {
+		if err := helpers.WriteToYAMLFile(appManifest, fmt.Sprintf("manifest_%s_%s.yaml", spaceName, appManifest.Name)); err != nil {
 			return nil, fmt.Errorf("error writing manifest to file: %v", err)
 		}
 		appManifests = append(appManifests, appManifest)
@@ -346,18 +362,58 @@ func (c *CFProvider) createCFManifest(spaceName string) ([]cfTypes.AppManifest, 
 
 }
 
-type ValidationErrorList []error
+func getSpaceGUIDByName(cfClient *client.Client, spaceName string) (string, error) {
+	spaceOpts := client.NewSpaceListOptions()
+	spaceOpts.Names.EqualTo(spaceName)
+	remoteSpace, err := cfClient.Spaces.First(context.Background(), spaceOpts)
+	if err != nil {
+		return "", fmt.Errorf("error finding CF space for space %s: %v", spaceName, err)
+	}
+	return remoteSpace.GUID, nil
+}
+func listAppsBySpaceName(cfClient *client.Client, spaceGUID string) ([]*resource.App, error) {
+	appsOpt := client.NewAppListOptions()
+	appsOpt.SpaceGUIDs.EqualTo(spaceGUID)
+	apps, err := cfClient.Applications.ListAll(context.Background(), appsOpt)
+	if err != nil {
+		return nil, fmt.Errorf("error listing CF apps for space %s: %v", spaceGUID, err)
+	}
+	return apps, nil
+}
 
-func validateApplication(app dTypes.Application) ValidationErrorList {
+func validateApplication(app dTypes.Application) error {
 	validate := validator.New(validator.WithRequiredStructEnabled())
 	err := validate.Struct(app)
 	if err != nil {
-		var validationErrors ValidationErrorList
+		var errorList error
 		for _, err := range err.(validator.ValidationErrors) {
-			validationErrors = append(validationErrors,
-				fmt.Errorf("field validation for key '%s' field '%s' failed on the '%s' tag", err.Namespace(), err.Field(), err.Tag()))
+			msg2 := fmt.Sprintf(
+				"\nvalidation failed for field '%s' (namespace: '%s'): actual value '%v' does not satisfy constraint '%s'",
+				err.Field(),
+				err.Namespace(),
+				err.Value(),
+				err.Tag(),
+			)
+			// Include parameter if available (e.g., max=10)
+			if param := err.Param(); param != "" {
+				msg2 += fmt.Sprintf("=%s", param)
+			}
+			errors.Join(errorList,
+				fmt.Errorf(
+					"field validation for key '%s' field '%s' failed on the '%s' tag",
+					err.Namespace(),
+					err.Field(),
+					err.Tag()))
+
 		}
-		return validationErrors
+		return errorList
 	}
 	return nil
+}
+
+func safePtr[T any](ptr *T, defaultVal T) T {
+	if ptr != nil {
+		return *ptr
+	}
+	return defaultVal
 }
