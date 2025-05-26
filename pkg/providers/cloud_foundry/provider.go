@@ -367,7 +367,7 @@ func getSpaceGUIDByName(cfClient *client.Client, spaceName string) (string, erro
 	spaceOpts.Names.EqualTo(spaceName)
 	remoteSpace, err := cfClient.Spaces.First(context.Background(), spaceOpts)
 	if err != nil {
-		return "", fmt.Errorf("error finding CF space for space %s: %v", spaceName, err)
+		return "", fmt.Errorf("error finding CF space for name %s: %v", spaceName, err)
 	}
 	return remoteSpace.GUID, nil
 }
