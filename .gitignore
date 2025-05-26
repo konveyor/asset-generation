@@ -1,1 +1,3 @@
 vendor/
+pkg/providers/korifi/ginkgo.report
+pkg/providers/cf/ginkgo.report
