@@ -1,8 +1,11 @@
 package cloud_foundry
 
 import (
+	"io"
+	"log"
 	"os"
 
+	dTypes "github.com/konveyor/asset-generation/pkg/providers/types/discover"
 	pTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -11,7 +14,7 @@ import (
 var _ = Describe("CFProvider", func() {
 	var cfg *Config
 	var provider *CFProvider
-
+	logger := log.New(io.Discard, "", log.LstdFlags) // No-op logger
 	BeforeEach(func() {
 		cfg = &Config{
 			CFConfigPath: "/some/path/to/config.json",
@@ -19,7 +22,7 @@ var _ = Describe("CFProvider", func() {
 			Password:     "password",
 			APIEndpoint:  "https://api.example.com",
 		}
-		provider = New(cfg)
+		provider = New[[]dTypes.Application](cfg, logger)
 	})
 
 	Context("Type() method", func() {
