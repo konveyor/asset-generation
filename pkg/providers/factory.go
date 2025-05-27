@@ -15,7 +15,7 @@ func NewProvider[T any](cfg Config, logger *log.Logger) (Provider[T], error) {
 		logger = log.New(io.Discard, "", log.LstdFlags) // No-op logger
 	}
 	switch cfg.Type() {
-	case providerTypes.ProviderTypeCF:
+	case providerTypes.ProviderTypeCloudFoundry:
 		logger.Println("Creating new CF provider")
 		cfCfg, ok := cfg.(*cfProvider.Config)
 		if !ok {

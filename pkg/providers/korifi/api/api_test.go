@@ -11,7 +11,7 @@ import (
 	korifi "code.cloudfoundry.org/korifi/api/presenter"
 )
 
-var _ = Describe("CFAPIClient", func() {
+var _ = Describe("Cloud Foundry APIClient", func() {
 	var (
 		server       *httptest.Server
 		client       *KorifiAPIClient

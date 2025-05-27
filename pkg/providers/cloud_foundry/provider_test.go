@@ -13,27 +13,27 @@ import (
 
 var _ = Describe("CFProvider", func() {
 	var cfg *Config
-	var provider *CFProvider
+	var provider *CloudFoundryProvider
 	logger := log.New(io.Discard, "", log.LstdFlags) // No-op logger
 	BeforeEach(func() {
 		cfg = &Config{
-			CFConfigPath: "/some/path/to/config.json",
-			Username:     "admin",
-			Password:     "password",
-			APIEndpoint:  "https://api.example.com",
+			CloudFoundryConfigPath: "/some/path/to/config.json",
+			Username:               "admin",
+			Password:               "password",
+			APIEndpoint:            "https://api.example.com",
 		}
 		provider = New[[]dTypes.Application](cfg, logger)
 	})
 
 	Context("Type() method", func() {
 		It("should return ProviderTypeCF", func() {
-			Expect(cfg.Type()).To(Equal(pTypes.ProviderTypeCF))
+			Expect(cfg.Type()).To(Equal(pTypes.ProviderTypeCloudFoundry))
 		})
 	})
 
 	Context("GetProviderType() method", func() {
 		It("should return ProviderTypeCF", func() {
-			Expect(provider.GetProviderType()).To(Equal(pTypes.ProviderTypeCF))
+			Expect(provider.GetProviderType()).To(Equal(pTypes.ProviderTypeCloudFoundry))
 		})
 	})
 	Context("GetClient", func() {
