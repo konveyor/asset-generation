@@ -2,10 +2,13 @@ package helpers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	cfTypes "github.com/konveyor/asset-generation/pkg/models"
 	dTypes "github.com/konveyor/asset-generation/pkg/providers/types/discover"
+
+	"github.com/go-playground/validator/v10"
 )
 
 // Generic helper for marshaling/unmarshaling between types
@@ -173,4 +176,102 @@ func ParseReadinessHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint str
 		Interval: interval,
 	}
 
+}
+
+func ParseCFApp(cfApp cfTypes.AppManifest) (dTypes.Application, error) {
+	timeout := 60
+	if cfApp.Timeout != 0 {
+		timeout = int(cfApp.Timeout)
+	}
+	services, err := MarshalUnmarshal[dTypes.Services](cfApp.Services)
+	if err != nil {
+		return dTypes.Application{}, err
+	}
+	routeSpec := ParseRouteSpec(cfApp.Routes, cfApp.RandomRoute, cfApp.NoRoute)
+	docker, err := MarshalUnmarshal[dTypes.Docker](cfApp.Docker)
+
+	if err != nil {
+		return dTypes.Application{}, err
+	}
+	sidecars, err := MarshalUnmarshal[dTypes.Sidecars](cfApp.Sidecars)
+	if err != nil {
+		return dTypes.Application{}, err
+	}
+	processes, err := MarshalUnmarshal[dTypes.Processes](cfApp.Processes)
+	if err != nil {
+		return dTypes.Application{}, err
+	}
+	var labels, annotations map[string]*string
+
+	if cfApp.Metadata != nil {
+		labels = cfApp.Metadata.Labels
+		annotations = cfApp.Metadata.Annotations
+	}
+	appManifestProcess, inlineProcess, err := ParseProcessSpecs(cfApp)
+
+	if err != nil {
+		return dTypes.Application{}, err
+	}
+	var appManifestProcessTemplate *dTypes.ProcessSpecTemplate
+
+	if appManifestProcess != nil {
+		appManifestProcessTemplate = appManifestProcess
+	}
+	if inlineProcess != (nil) {
+		processes = append(processes, *inlineProcess)
+	}
+	app := dTypes.Application{
+		Metadata: dTypes.Metadata{
+			Name:        cfApp.Name,
+			Labels:      labels,
+			Annotations: annotations,
+		},
+		Timeout:    timeout,
+		BuildPacks: cfApp.Buildpacks,
+		Env:        cfApp.Env,
+		Stack:      cfApp.Stack,
+		Services:   services,
+		Routes:     routeSpec,
+		Docker:     docker,
+		Sidecars:   sidecars,
+		Processes:  processes,
+	}
+	if appManifestProcessTemplate != nil {
+		app.ProcessSpecTemplate = *appManifestProcessTemplate
+	}
+	validationErrors := validateApplication(app)
+	if validationErrors != nil {
+		return dTypes.Application{}, validationErrors
+	}
+	return app, nil
+}
+
+func validateApplication(app dTypes.Application) error {
+	validate := validator.New(validator.WithRequiredStructEnabled())
+	err := validate.Struct(app)
+	if err != nil {
+		var errorList error
+		for _, err := range err.(validator.ValidationErrors) {
+			msg2 := fmt.Sprintf(
+				"\nvalidation failed for field '%s' (namespace: '%s'): actual value '%v' does not satisfy constraint '%s'",
+				err.Field(),
+				err.Namespace(),
+				err.Value(),
+				err.Tag(),
+			)
+			// Include parameter if available (e.g., max=10)
+			if param := err.Param(); param != "" {
+				msg2 += fmt.Sprintf("=%s", param)
+			}
+			errors.Join(errorList,
+				fmt.Errorf(
+					"field validation for key '%s' field '%s' failed on the '%s' tag",
+					err.Namespace(),
+					err.Field(),
+					err.Tag()))
+
+		}
+		return errorList
+	}
+	return nil
 }

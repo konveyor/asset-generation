@@ -75,6 +75,27 @@ func (c *KorifiAPIClient) ListApps(space string) (*kModel.ListResponse[kModel.Ap
 	return &i, nil
 }
 
+func (c *KorifiAPIClient) GetApp(appGUID string) (*kModel.AppResponse, error) {
+	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps/" + appGUID)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("request failed with status %d: %s", resp.StatusCode, resp.Status)
+	}
+
+	var i kModel.ListResponse[kModel.AppResponse]
+	err = json.NewDecoder(resp.Body).Decode(&i)
+	if err != nil {
+		return nil, errors.Wrap(err, "Error unmarshalling info")
+	}
+	if len(i.Resources) > 1 {
+		return nil, fmt.Errorf("expected one app, got %d", len(i.Resources))
+	}
+	return &i.Resources[0], nil
+}
+
 func (c *KorifiAPIClient) GetEnv(guid string) (*kModel.AppEnvResponse, error) {
 	resp, err := c.httpClient.Get(c.baseURL + "/v3/apps/" + guid + "/env")
 	if err != nil {

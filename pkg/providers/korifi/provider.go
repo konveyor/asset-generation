@@ -9,10 +9,10 @@ import (
 	"strings"
 
 	kHelpers "github.com/konveyor/asset-generation/internal/helpers/korifi"
-	ymlHelpers "github.com/konveyor/asset-generation/internal/helpers/yaml"
 	cfTypes "github.com/konveyor/asset-generation/pkg/models"
+	pHelpers "github.com/konveyor/asset-generation/pkg/providers/helpers"
 	korifiApi "github.com/konveyor/asset-generation/pkg/providers/korifi/api"
-	discoverTypes "github.com/konveyor/asset-generation/pkg/providers/types/discover"
+	dTypes "github.com/konveyor/asset-generation/pkg/providers/types/discover"
 	kTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -23,7 +23,8 @@ type Config struct {
 	Username       string
 	KubeconfigPath string
 	providerType   kTypes.ProviderType
-	SpaceNames     []string
+	SpaceName      string
+	AppGUID        string
 }
 
 type KorifiProvider struct {
@@ -120,118 +121,125 @@ func (t *authHeaderRoundTripper) RoundTrip(req *http.Request) (*http.Response, e
 	return t.base.RoundTrip(reqClone)
 }
 
-func (k *KorifiProvider) OfflineDiscover() ([]discoverTypes.Application, error) {
-	return nil, fmt.Errorf("not implemented")
+func (k *KorifiProvider) ListAppsBySpace() ([]string, error) {
+	k.logger.Println("Analyzing space: ", k.cfg.SpaceName)
+	korifiHttpClient, err := k.GetKorifiHttpClient()
+	if err != nil {
+		return nil, fmt.Errorf("error creating Korifi HTTP client: %v", err)
+	}
+	kAPI := korifiApi.NewKorifiAPIClient(korifiHttpClient, k.cfg.BaseURL)
+	apps, err := kAPI.ListApps(k.cfg.SpaceName)
+	if err != nil {
+		return nil, fmt.Errorf("error listing CF apps for space %s: %v", k.cfg.SpaceName, err)
+	}
+	appsGUIDs := make([]string, len(apps.Resources))
+	for _, p := range apps.Resources {
+		appsGUIDs = append(appsGUIDs, p.GUID)
+	}
+	return appsGUIDs, nil
 }
 
-func (k *KorifiProvider) Discover() error {
-	if len(k.cfg.SpaceNames) == 0 {
-		return fmt.Errorf("no spaces provided for discovery")
+func (k *KorifiProvider) Discover() (*dTypes.Application, error) {
+	if len(k.cfg.SpaceName) == 0 {
+		return nil, fmt.Errorf("no spaces provided for discovery")
 	}
 
 	korifiHttpClient, err := k.GetKorifiHttpClient()
 	if err != nil {
-		return fmt.Errorf("error creating Korifi HTTP client: %v", err)
+		return nil, fmt.Errorf("error creating Korifi HTTP client: %v", err)
 	}
 	kAPI := korifiApi.NewKorifiAPIClient(korifiHttpClient, k.cfg.BaseURL)
 
-	for _, spaceName := range k.cfg.SpaceNames {
-		k.logger.Println("Analyzing space: ", spaceName)
-
-		// Get space guid
-		spaceObj, err := kAPI.GetSpace(spaceName)
-		if err != nil {
-			return fmt.Errorf("can't find space %s: %v", spaceName, err)
-		}
-		apps, err := kAPI.ListApps(spaceObj.GUID)
-		if err != nil {
-			return fmt.Errorf("error listing CF apps for space %s: %v", spaceName, err)
-		}
-
-		k.logger.Println("Apps discovered: ", apps.PaginationData.TotalResults)
-
-		for _, app := range apps.Resources {
-			k.logger.Println("Processing app:", app.GUID)
-
-			appEnv, err := kAPI.GetEnv(app.GUID)
-			if err != nil {
-				return fmt.Errorf("error getting environment for app %s: %v", app.GUID, err)
-			}
-
-			appName, err := kHelpers.GetAppName(*appEnv)
-			if err != nil {
-				return fmt.Errorf("error getting app name: %v", err)
-			}
-
-			normalizedAppName, err := kHelpers.NormalizeForMetadataName(strings.TrimSpace(appName))
-			if err != nil {
-				return fmt.Errorf("error normalizing app name: %v", err)
-			}
-
-			process, err := kAPI.GetProcesses(app.GUID)
-			if err != nil {
-				return fmt.Errorf("error getting processes: %v", err)
-			}
-
-			appProcesses := cfTypes.AppManifestProcesses{}
-			for _, proc := range process.Resources {
-				procInstances := uint(proc.Instances)
-
-				appProcesses = append(appProcesses, cfTypes.AppManifestProcess{
-					Type:                         cfTypes.AppProcessType(proc.Type),
-					Command:                      proc.Command,
-					DiskQuota:                    fmt.Sprintf("%d", proc.DiskQuotaMB),
-					HealthCheckType:              cfTypes.AppHealthCheckType(proc.HealthCheck.Type),
-					HealthCheckHTTPEndpoint:      proc.HealthCheck.Data.HTTPEndpoint,
-					HealthCheckInvocationTimeout: uint(proc.HealthCheck.Data.InvocationTimeout),
-					Instances:                    &procInstances,
-					// LogRateLimitPerSecond
-					Memory: fmt.Sprintf("%dMB", proc.MemoryMB),
-					// Timeout
-					// ReadinessHealthCheckType
-					// ReadinessHealthCheckHttpEndpoint
-					// ReadinessHealthInvocationTimeout
-					// ReadinessHealthCheckInterval
-					Lifecycle: string(app.Lifecycle.Type),
-				})
-			}
-
-			routes, err := kAPI.GetRoutes(app.GUID)
-			if err != nil {
-				return fmt.Errorf("error getting processes: %v", err)
-			}
-			appRoutes := cfTypes.AppManifestRoutes{}
-			for _, r := range routes.Resources {
-				appRoutes = append(appRoutes, cfTypes.AppManifestRoute{
-					Route:    r.URL,
-					Protocol: cfTypes.AppRouteProtocol(r.Protocol),
-					// TODO: Options: loadbalancing?
-				})
-			}
-
-			labels := kHelpers.ConvertMapToPointer(app.Metadata.Labels)
-			annotations := kHelpers.ConvertMapToPointer(app.Metadata.Annotations)
-			appManifest := cfTypes.AppManifest{
-				Name: normalizedAppName,
-				Env:  appEnv.EnvironmentVariables,
-				Metadata: &cfTypes.AppMetadata{
-					Labels:      labels,
-					Annotations: annotations,
-				},
-				Processes: &appProcesses,
-				Routes:    &appRoutes,
-				// AppManifestProcess
-				// Buildpacks
-				// RandomRoute
-				// NoRoute
-				// Services
-				// Sidecars
-				// Stack
-			}
-			if ymlHelpers.WriteToYAMLFile(appManifest, fmt.Sprintf("manifest_%s_%s.yaml", spaceName, appManifest.Name)) != nil {
-				return fmt.Errorf("error writing manifest to file: %v", err)
-			}
-		}
+	// Get space guid
+	// spaceObj, err := kAPI.GetSpace(k.cfg.SpaceName)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("can't find space %s: %v", k.cfg.SpaceName, err)
+	// }
+	app, err := kAPI.GetApp(k.cfg.AppGUID)
+	if err != nil {
+		return nil, fmt.Errorf("error listing CF apps for space %s: %v", k.cfg.SpaceName, err)
 	}
-	return nil
+
+	k.logger.Println("Processing app:", app.GUID)
+
+	appEnv, err := kAPI.GetEnv(app.GUID)
+	if err != nil {
+		return nil, fmt.Errorf("error getting environment for app %s: %v", app.GUID, err)
+	}
+
+	appName, err := kHelpers.GetAppName(*appEnv)
+	if err != nil {
+		return nil, fmt.Errorf("error getting app name: %v", err)
+	}
+
+	normalizedAppName, err := kHelpers.NormalizeForMetadataName(strings.TrimSpace(appName))
+	if err != nil {
+		return nil, fmt.Errorf("error normalizing app name: %v", err)
+	}
+
+	process, err := kAPI.GetProcesses(app.GUID)
+	if err != nil {
+		return nil, fmt.Errorf("error getting processes: %v", err)
+	}
+
+	appProcesses := cfTypes.AppManifestProcesses{}
+	for _, proc := range process.Resources {
+		procInstances := uint(proc.Instances)
+
+		appProcesses = append(appProcesses, cfTypes.AppManifestProcess{
+			Type:                         cfTypes.AppProcessType(proc.Type),
+			Command:                      proc.Command,
+			DiskQuota:                    fmt.Sprintf("%d", proc.DiskQuotaMB),
+			HealthCheckType:              cfTypes.AppHealthCheckType(proc.HealthCheck.Type),
+			HealthCheckHTTPEndpoint:      proc.HealthCheck.Data.HTTPEndpoint,
+			HealthCheckInvocationTimeout: uint(proc.HealthCheck.Data.InvocationTimeout),
+			Instances:                    &procInstances,
+			// LogRateLimitPerSecond
+			Memory: fmt.Sprintf("%dMB", proc.MemoryMB),
+			// Timeout
+			// ReadinessHealthCheckType
+			// ReadinessHealthCheckHttpEndpoint
+			// ReadinessHealthInvocationTimeout
+			// ReadinessHealthCheckInterval
+			Lifecycle: string(app.Lifecycle.Type),
+		})
+	}
+
+	routes, err := kAPI.GetRoutes(app.GUID)
+	if err != nil {
+		return nil, fmt.Errorf("error getting processes: %v", err)
+	}
+	appRoutes := cfTypes.AppManifestRoutes{}
+	for _, r := range routes.Resources {
+		appRoutes = append(appRoutes, cfTypes.AppManifestRoute{
+			Route:    r.URL,
+			Protocol: cfTypes.AppRouteProtocol(r.Protocol),
+			// TODO: Options: loadbalancing?
+		})
+	}
+
+	labels := kHelpers.ConvertMapToPointer(app.Metadata.Labels)
+	annotations := kHelpers.ConvertMapToPointer(app.Metadata.Annotations)
+	appManifest := cfTypes.AppManifest{
+		Name: normalizedAppName,
+		Env:  appEnv.EnvironmentVariables,
+		Metadata: &cfTypes.AppMetadata{
+			Labels:      labels,
+			Annotations: annotations,
+		},
+		Processes: &appProcesses,
+		Routes:    &appRoutes,
+		// AppManifestProcess
+		// Buildpacks
+		// RandomRoute
+		// NoRoute
+		// Services
+		// Sidecars
+		// Stack
+	}
+	discoveryApp, err := pHelpers.ParseCFApp(appManifest)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing CF app: %v", err)
+	}
+	return &discoveryApp, nil
 }

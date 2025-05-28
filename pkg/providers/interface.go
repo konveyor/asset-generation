@@ -6,5 +6,6 @@ import (
 
 type Provider[T any] interface {
 	GetProviderType() pTypes.ProviderType
-	Discover() (result T, err error)
+	Discover(space string, appGUID string) (result T, err error)
+	ListAppsBySpace(space string) ([]string, error)
 }
