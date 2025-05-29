@@ -185,6 +185,7 @@ const (
 type RouteProtocol string
 
 const (
-	HTTPRouteProtocol RouteProtocol = "http"
-	TCPRouteProtocol  RouteProtocol = "tcp"
+	HTTPRouteProtocol  RouteProtocol = "http1"
+	HTTP2RouteProtocol RouteProtocol = "http2"
+	TCPRouteProtocol   RouteProtocol = "tcp"
 )
