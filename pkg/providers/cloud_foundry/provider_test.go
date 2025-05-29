@@ -59,11 +59,7 @@ var _ = Describe("CFProvider", func() {
 
 	})
 
-	It("extracts the sensitive information from an app with docker username and environment values", func() {
-		app := dTypes.Application{
-			Docker: dTypes.Docker{Username: "username"},
-			Env:    map[string]string{"a": "a", "b": "b", "c": "c"},
-		}
+	DescribeTable("extracts the sensitive infromation from an app", func(app dTypes.Application) {
 		By("Copying the application manifest to be able to check against the resulting changes")
 		// copy the app manifest
 		b, err := yaml.Marshal(app)
@@ -73,14 +69,42 @@ var _ = Describe("CFProvider", func() {
 		Expect(err).NotTo(HaveOccurred())
 		By("performing the extraction and modification of the application to use UUID for sensitive information")
 		s := extractSensitiveInformation(&app)
-		Expect(s).To(HaveLen(4))
+		c := 0
+		if app.Docker.Username != "" {
+			c++
+		}
+		By("Validating the results")
+		Expect(s).To(HaveLen(c + len(app.Env)))
 		for k := range app.Env {
 			sid := app.Env[k]
 			sid = sid[2 : len(sid)-1]
 			Expect(s[sid]).To(Equal(appCopy.Env[k]))
 		}
-		suser := app.Docker.Username[2 : len(app.Docker.Username)-1]
-		Expect(s[suser]).To(Equal(appCopy.Docker.Username))
-	})
+		if app.Docker.Username != "" {
+			suser := app.Docker.Username[2 : len(app.Docker.Username)-1]
+			Expect(s[suser]).To(Equal(appCopy.Docker.Username))
+		}
+
+	}, Entry("with docker username and environment values",
+		dTypes.Application{
+			Docker: dTypes.Docker{Username: "username"},
+			Env:    map[string]string{"RAILS_ENV": "production", "mysql": "[{\"name\": \"db-for-my-app\",\"label\": \"mysql\",\"tags\": [\"relational\", \"sql\"],\"plan\": \"xlarge\",\"credentials\": {\"username\": \"user\",\"password\": \"top-secret\"},\"syslog_drain_url\": \"https://syslog.example.org/drain\",\"provider\": null}]"},
+		}),
+		Entry("with docker username and no environment values",
+			dTypes.Application{
+				Docker: dTypes.Docker{Username: "username"},
+				Env:    map[string]string{},
+			}),
+		Entry("with no docker username and no environment values",
+			dTypes.Application{
+				Docker: dTypes.Docker{},
+				Env:    map[string]string{},
+			}),
+		Entry("with no docker username but with environment values",
+			dTypes.Application{
+				Docker: dTypes.Docker{Image: "docker.io/library/golang "},
+				Env:    map[string]string{"RAILS_ENV": "production", "LOG_LEVEL": "debug", "mysql": "[{\"name\": \"db-for-my-app\",\"label\": \"mysql\",\"tags\": [\"relational\", \"sql\"],\"plan\": \"xlarge\",\"credentials\": {\"username\": \"user\",\"password\": \"top-secret\"},\"syslog_drain_url\": \"https://syslog.example.org/drain\",\"provider\": null}]"},
+			}),
+	)
 
 })
