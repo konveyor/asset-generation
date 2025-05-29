@@ -1,2 +1,2 @@
 vendor/
-pkg/providers/cloud_foundry/ginkgo.report
+pkg/providers/***/ginkgo.report
