@@ -6,15 +6,14 @@ import (
 	"log"
 
 	cfProvider "github.com/konveyor/asset-generation/pkg/providers/cloud_foundry"
-	providerTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 )
 
 func NewProvider(cfg Config, logger *log.Logger) (Provider, error) {
 	if logger == nil {
 		logger = log.New(io.Discard, "", log.LstdFlags) // No-op logger
 	}
-	switch cfg.Type() {
-	case providerTypes.ProviderTypeCloudFoundry:
+	switch t := cfg.(type) {
+	case *cfProvider.Config:
 		logger.Println("Creating new CF provider")
 		cfCfg, ok := cfg.(*cfProvider.Config)
 		if !ok {
@@ -22,6 +21,6 @@ func NewProvider(cfg Config, logger *log.Logger) (Provider, error) {
 		}
 		return cfProvider.New(cfCfg, logger), nil
 	default:
-		return nil, fmt.Errorf("unsupported provider type: %s", cfg.Type())
+		return nil, fmt.Errorf("unsupported provider type: %s", t)
 	}
 }

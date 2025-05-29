@@ -42,10 +42,6 @@ func New(cfg *Config, logger *log.Logger) *CloudFoundryProvider {
 	}
 }
 
-func (cfg *Config) Type() pTypes.ProviderType {
-	return pTypes.ProviderTypeCloudFoundry
-}
-
 func (c *CloudFoundryProvider) GetClient() (*client.Client, error) {
 	cfg, err := config.NewFromCFHome()
 	if err != nil {

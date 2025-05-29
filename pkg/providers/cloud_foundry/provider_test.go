@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 
-	pTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -24,11 +23,6 @@ var _ = Describe("CFProvider", func() {
 		provider = New(cfg, logger)
 	})
 
-	Context("Type() method", func() {
-		It("should return ProviderTypeCF", func() {
-			Expect(cfg.Type()).To(Equal(pTypes.ProviderTypeCloudFoundry))
-		})
-	})
 	Context("GetClient", func() {
 		It("should fail if CF_HOME config is invalid", func() {
 			CFHomeOrig, had := os.LookupEnv("CF_HOME")
