@@ -2,8 +2,6 @@ module github.com/konveyor/asset-generation
 
 go 1.23.6
 
-toolchain go1.23.9
-
 require (
 	github.com/cloudfoundry/go-cfclient/v3 v3.0.0-alpha.12
 	github.com/go-playground/validator/v10 v10.26.0
