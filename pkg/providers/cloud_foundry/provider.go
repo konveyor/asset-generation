@@ -79,45 +79,44 @@ func (c *CloudFoundryProvider) ListApps() ([]string, error) {
 }
 
 func (c *CloudFoundryProvider) Discover() (pTypes.DiscoverResult, error) {
+	var discoverResult pTypes.DiscoverResult
 	if c.cfg.ManifestPath != "" {
-		var resultLocalDiscovery pTypes.DiscoverResult
 
-		c.logger.Println("Manifest path provided, using it for local discovery")
+		c.logger.Println("Manifest path provided, using it for local Cloud Foundry discover")
 		d, err := c.discoverFromManifestFile()
 		if err != nil {
-			return resultLocalDiscovery, fmt.Errorf("error discovering from manifest file: %w", err)
+			return discoverResult, fmt.Errorf("error discovering from Cloud Foundry manifest file: %w", err)
 		}
 
-		resultLocalDiscovery.Content, err = pHelpers.StructToMap(d)
+		discoverResult.Content, err = pHelpers.StructToMap(d)
 		if err != nil {
-			return resultLocalDiscovery, fmt.Errorf("error converting discovered application to map: %w", err)
+			return discoverResult, fmt.Errorf("error converting discovered Cloud Foundry application to map: %w", err)
 		}
-		return resultLocalDiscovery, nil
+		return discoverResult, nil
 	}
-	var resultLiveDiscovery pTypes.DiscoverResult
 
-	// Live discovery
+	// Live discover
 	if c.cfg.SpaceName == "" {
-		return resultLiveDiscovery, fmt.Errorf("no spaces provided for live discovery")
+		return discoverResult, fmt.Errorf("no spaces provided for Cloud Foundry live discover")
 	}
 
 	if c.cfg.AppGUID == "" {
-		return resultLiveDiscovery, fmt.Errorf("no app GUID provided for live discovery")
+		return discoverResult, fmt.Errorf("no app GUID provided for Cloud Foundry live discover")
 	}
 
 	if c.cfg.APIEndpoint == "" || c.cfg.Username == "" || (c.cfg.Password == "" && c.cfg.CloudFoundryConfigPath == "") {
-		return resultLiveDiscovery, fmt.Errorf("missing required configuration: APIEndpoint, Username, and either Password or CloudFoundryConfigPath must be provided")
+		return discoverResult, fmt.Errorf("missing required configuration: APIEndpoint, Username, and either Password or CloudFoundryConfigPath must be provided for Cloud Foundry live discover")
 	}
 
 	d, err := c.discoverFromLiveAPI(c.cfg.SpaceName, c.cfg.AppGUID)
 	if err != nil {
-		return resultLiveDiscovery, fmt.Errorf("error discovering from manifest file: %w", err)
+		return discoverResult, fmt.Errorf("error for Cloud Foundry live discover from manifest file: %w", err)
 	}
-	resultLiveDiscovery.Content, err = pHelpers.StructToMap(d)
+	discoverResult.Content, err = pHelpers.StructToMap(d)
 	if err != nil {
-		return resultLiveDiscovery, fmt.Errorf("error converting discovered application to map: %w", err)
+		return discoverResult, fmt.Errorf("error for for Cloud Foundry live discover converting discovered application to map: %w", err)
 	}
-	return resultLiveDiscovery, nil
+	return discoverResult, nil
 }
 
 // discoverFromManifestFile reads a manifest file and returns a list of applications.
