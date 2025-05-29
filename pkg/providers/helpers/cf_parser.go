@@ -263,7 +263,7 @@ func validateApplication(app dTypes.Application) error {
 			if param := err.Param(); param != "" {
 				msg2 += fmt.Sprintf("=%s", param)
 			}
-			errors.Join(errorList,
+			errorList = errors.Join(errorList,
 				fmt.Errorf(
 					"field validation for key '%s' field '%s' failed on the '%s' tag",
 					err.Namespace(),
