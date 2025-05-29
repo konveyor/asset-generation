@@ -4,7 +4,6 @@ type ProviderType string
 
 const (
 	ProviderTypeCloudFoundry ProviderType = "cloud foundry"
-	ProviderTypeKorifi       ProviderType = "korifi"
 )
 
 type DiscoverResult struct {

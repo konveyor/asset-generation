@@ -1,3 +1,2 @@
 vendor/
-pkg/providers/korifi/ginkgo.report
 pkg/providers/cloud_foundry/ginkgo.report
