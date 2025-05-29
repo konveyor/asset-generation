@@ -217,7 +217,7 @@ func ParseCFApp(cfApp cfTypes.AppManifest) (dTypes.Application, error) {
 	if appManifestProcess != nil {
 		appManifestProcessTemplate = appManifestProcess
 	}
-	if inlineProcess != (nil) {
+	if inlineProcess != nil {
 		processes = append(processes, *inlineProcess)
 	}
 	app := dTypes.Application{
