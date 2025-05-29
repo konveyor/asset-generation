@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
@@ -61,22 +63,119 @@ func (c *CloudFoundryProvider) GetClient() (*client.Client, error) {
 // ListApps retrieves a list of application GUIDs from the specified Cloud
 // Foundry space.
 // It returns a slice of application GUIDs or an error in case of failure.
+
 func (c *CloudFoundryProvider) ListApps() ([]string, error) {
-	c.logger.Println("Analyzing space: ", c.cfg.SpaceName)
+	if !isLiveDiscover(c.cfg) {
+		return c.listAppsFromLocalManifests()
+	}
+	return c.listAppsFromCloudFoundry()
+}
+
+func (c *CloudFoundryProvider) Discover() (pTypes.DiscoverResult, error) {
+
+	if c.cfg.ManifestPath != "" {
+		return c.discoverFromManifest()
+	}
+
+	return c.discoverFromLive()
+}
+
+// listAppsFromLocalManifests handles discovery of apps by reading local manifest files.
+func (c *CloudFoundryProvider) listAppsFromLocalManifests() ([]string, error) {
+	c.logger.Println("Using manifest path for Cloud Foundry local discover:", c.cfg.ManifestPath)
+
+	isDirResult, err := isDir(c.cfg.ManifestPath)
+	if err != nil {
+		return nil, fmt.Errorf("error checking if path is directory %s: %v", c.cfg.ManifestPath, err)
+	}
+
+	if isDirResult {
+		files, err := os.ReadDir(c.cfg.ManifestPath)
+		if err != nil {
+			return nil, fmt.Errorf("error reading directory %s: %v", c.cfg.ManifestPath, err)
+		}
+
+		var apps []string
+		for _, file := range files {
+			filePath := filepath.Join(c.cfg.ManifestPath, file.Name())
+
+			appName, err := c.getAppNameFromManifest(filePath)
+			if err != nil {
+				c.logger.Printf("error processing manifest file %s: %v", file.Name(), err)
+				continue
+			}
+			if appName != "" {
+				apps = append(apps, appName)
+			}
+		}
+		return apps, nil
+	} else {
+		appName, err := c.getAppNameFromManifest(c.cfg.ManifestPath)
+		if err != nil {
+			return nil, fmt.Errorf("error processing manifest file %s: %v", c.cfg.ManifestPath, err)
+		}
+		if appName == "" {
+			return nil, fmt.Errorf("no app name found in manifest file %s", c.cfg.ManifestPath)
+		}
+		return []string{appName}, nil
+	}
+}
+
+func (c *CloudFoundryProvider) getAppNameFromManifest(filePath string) (string, error) {
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to stat file %q: %v", filePath, err)
+	}
+	if info.IsDir() {
+		c.logger.Printf("Skipping directory: %s\n", filePath)
+		return "", nil
+	}
+
+	// Check file extension for YAML
+	if !hasYAMLExtension(filePath) {
+		c.logger.Printf("Skipping non-YAML file: %s\n", filePath)
+		return "", nil
+	}
+
+	c.logger.Printf("Processing file: %s\n", filePath)
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read manifest file %q: %v", filePath, err)
+	}
+
+	var manifest cfTypes.AppManifest
+	if err := yaml.Unmarshal(data, &manifest); err != nil {
+		return "", fmt.Errorf("failed to unmarshal YAML from %q: %v", filePath, err)
+	}
+
+	if manifest.Name == "" {
+		c.logger.Printf("Warning: manifest file %q does not contain a name\n", filePath)
+		return "", nil
+	}
+
+	return manifest.Name, nil
+}
+
+// listAppsFromCloudFoundry handles discovery of apps by querying the Cloud Foundry API.
+func (c *CloudFoundryProvider) listAppsFromCloudFoundry() ([]string, error) {
+	c.logger.Println("Analyzing space:", c.cfg.SpaceName)
 
 	cfClient, err := c.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("error creating Cloud Foundry client: %v", err)
 	}
+
 	apps, err := listAppsBySpaceName(cfClient, c.cfg.SpaceName)
 	if err != nil {
 		return nil, fmt.Errorf("error listing Cloud Foundry apps for space %s: %v", c.cfg.SpaceName, err)
 	}
-	c.logger.Println("Apps discovered: ", len(apps))
 
-	appsGUIDs := make([]string, len(apps))
-	for _, p := range apps {
-		appsGUIDs = append(appsGUIDs, p.GUID)
+	c.logger.Printf("Apps discovered: %d\n", len(apps))
+
+	appsGUIDs := make([]string, 0, len(apps))
+	for _, app := range apps {
+		appsGUIDs = append(appsGUIDs, app.GUID)
 	}
 	return appsGUIDs, nil
 }
@@ -102,52 +201,71 @@ func extractSensitiveInformation(app *dTypes.Application) map[string]any {
 	return m
 }
 
-func (c *CloudFoundryProvider) Discover() (pTypes.DiscoverResult, error) {
-	var discoverResult pTypes.DiscoverResult
-	if c.cfg.ManifestPath != "" {
+func isLiveDiscover(cfg *Config) bool {
+	return cfg.ManifestPath == ""
+}
 
-		c.logger.Println("Manifest path provided, using it for local Cloud Foundry discover")
-		d, err := c.discoverFromManifestFile()
-		if err != nil {
-			return discoverResult, fmt.Errorf("error discovering from Cloud Foundry manifest file: %w", err)
-		}
-		// Extract sensitive information and use UUID as references to the map[string]any structure that contains
-		// the original values
-		s := extractSensitiveInformation(d)
-		discoverResult.Secret = s
-		discoverResult.Content, err = pHelpers.StructToMap(d)
-		if err != nil {
-			return discoverResult, fmt.Errorf("error converting discovered Cloud Foundry application to map: %w", err)
-		}
-		return discoverResult, nil
-	}
-
-	// Live discover
-	if c.cfg.SpaceName == "" {
-		return discoverResult, fmt.Errorf("no spaces provided for Cloud Foundry live discover")
-	}
-
-	if c.cfg.AppGUID == "" {
-		return discoverResult, fmt.Errorf("no app GUID provided for Cloud Foundry live discover")
-	}
-
-	if c.cfg.APIEndpoint == "" || c.cfg.Username == "" || (c.cfg.Password == "" && c.cfg.CloudFoundryConfigPath == "") {
-		return discoverResult, fmt.Errorf("missing required configuration: APIEndpoint, Username, and either Password or CloudFoundryConfigPath must be provided for Cloud Foundry live discover")
-	}
-
-	d, err := c.discoverFromLiveAPI(c.cfg.SpaceName, c.cfg.AppGUID)
+func isDir(path string) (bool, error) {
+	info, err := os.Stat(path)
 	if err != nil {
-		return discoverResult, fmt.Errorf("error for Cloud Foundry live discover from manifest file: %w", err)
+		return false, err
 	}
+	return info.IsDir(), nil
+}
+func hasYAMLExtension(filename string) bool {
+	ext := strings.ToLower(filepath.Ext(filename))
+	return ext == ".yaml" || ext == ".yml"
+}
 
+func (c *CloudFoundryProvider) discoverFromManifest() (pTypes.DiscoverResult, error) {
+	var discoverResult pTypes.DiscoverResult
+
+	c.logger.Println("Manifest path provided, using it for local Cloud Foundry discover")
+
+	d, err := c.discoverFromManifestFile()
+	if err != nil {
+		return discoverResult, fmt.Errorf("error discovering from Cloud Foundry manifest file: %v", err)
+	}
 	// Extract sensitive information and use UUID as references to the map[string]any structure that contains
 	// the original values
 	s := extractSensitiveInformation(d)
 	discoverResult.Secret = s
 	discoverResult.Content, err = pHelpers.StructToMap(d)
 	if err != nil {
-		return discoverResult, fmt.Errorf("error for for Cloud Foundry live discover converting discovered application to map: %w", err)
+		return discoverResult, fmt.Errorf("error converting discovered Cloud Foundry application to map: %v", err)
 	}
+
+	return discoverResult, nil
+}
+
+func (c *CloudFoundryProvider) discoverFromLive() (pTypes.DiscoverResult, error) {
+	var discoverResult pTypes.DiscoverResult
+
+	if c.cfg.SpaceName == "" {
+		return discoverResult, fmt.Errorf("no spaces provided for Cloud Foundry live discover")
+	}
+	if c.cfg.AppGUID == "" {
+		return discoverResult, fmt.Errorf("no app GUID provided for Cloud Foundry live discover")
+	}
+	if c.cfg.APIEndpoint == "" || c.cfg.Username == "" || (c.cfg.Password == "" && c.cfg.CloudFoundryConfigPath == "") {
+		return discoverResult, fmt.Errorf("missing required configuration: APIEndpoint, Username, and either Password or CloudFoundryConfigPath must be provided for Cloud Foundry live discover")
+	}
+
+	c.logger.Println("Starting live Cloud Foundry discovery for space:", c.cfg.SpaceName)
+
+	d, err := c.discoverFromLiveAPI(c.cfg.SpaceName, c.cfg.AppGUID)
+	if err != nil {
+		return discoverResult, fmt.Errorf("error during Cloud Foundry live discover: %v", err)
+	}
+	// Extract sensitive information and use UUID as references to the map[string]any structure that contains
+	// the original values
+	s := extractSensitiveInformation(d)
+	discoverResult.Secret = s
+	discoverResult.Content, err = pHelpers.StructToMap(d)
+	if err != nil {
+		return discoverResult, fmt.Errorf("error converting discovered application to map: %v", err)
+	}
+
 	return discoverResult, nil
 }
 
@@ -162,16 +280,16 @@ func (c *CloudFoundryProvider) Discover() (pTypes.DiscoverResult, error) {
 func (c *CloudFoundryProvider) discoverFromManifestFile() (*dTypes.Application, error) {
 	data, err := os.ReadFile(c.cfg.ManifestPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read manifest file: %w", err)
+		return nil, fmt.Errorf("failed to read manifest file: %v", err)
 	}
 	var manifest cfTypes.AppManifest
 	if err := yaml.Unmarshal(data, &manifest); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal YAML: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal YAML: %v", err)
 	}
 
 	app, err := pHelpers.ParseCFApp(manifest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create application: %w", err)
+		return nil, fmt.Errorf("failed to create application: %v", err)
 	}
 	// extract sensitive information into a secret's structure
 	return &app, nil
@@ -185,12 +303,12 @@ func (c *CloudFoundryProvider) discoverFromManifestFile() (*dTypes.Application, 
 func (c *CloudFoundryProvider) discoverFromLiveAPI(space string, appGUID string) (*dTypes.Application, error) {
 	cfManifests, err := c.generateCFManifestFromLiveAPI(space, appGUID)
 	if err != nil {
-		return nil, fmt.Errorf("error creating Cloud Foundry manifest for space '%s': %w", space, err)
+		return nil, fmt.Errorf("error creating Cloud Foundry manifest for space '%s': %v", space, err)
 	}
 
 	app, err := pHelpers.ParseCFApp(*cfManifests)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create app from manifest: %w", err)
+		return nil, fmt.Errorf("failed to create app from manifest: %v", err)
 	}
 
 	return &app, nil
