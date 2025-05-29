@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 
-	dTypes "github.com/konveyor/asset-generation/pkg/providers/types/discover"
 	pTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -22,18 +21,12 @@ var _ = Describe("CFProvider", func() {
 			Password:               "password",
 			APIEndpoint:            "https://api.example.com",
 		}
-		provider = New[[]dTypes.Application](cfg, logger)
+		provider = New(cfg, logger)
 	})
 
 	Context("Type() method", func() {
 		It("should return ProviderTypeCF", func() {
 			Expect(cfg.Type()).To(Equal(pTypes.ProviderTypeCloudFoundry))
-		})
-	})
-
-	Context("GetProviderType() method", func() {
-		It("should return ProviderTypeCF", func() {
-			Expect(provider.GetProviderType()).To(Equal(pTypes.ProviderTypeCloudFoundry))
 		})
 	})
 	Context("GetClient", func() {

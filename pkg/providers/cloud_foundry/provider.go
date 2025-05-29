@@ -25,8 +25,8 @@ type Config struct {
 	Token                  string
 	APIEndpoint            string
 	SkipSSLValidation      bool
-	// SpaceName              string
-	// AppGUID                string
+	SpaceName              string
+	AppGUID                string
 }
 
 type CloudFoundryProvider struct {
@@ -34,7 +34,7 @@ type CloudFoundryProvider struct {
 	logger *log.Logger
 }
 
-func New[T any](cfg *Config, logger *log.Logger) *CloudFoundryProvider {
+func New(cfg *Config, logger *log.Logger) *CloudFoundryProvider {
 	return &CloudFoundryProvider{
 		cfg:    cfg,
 		logger: logger,
@@ -42,10 +42,6 @@ func New[T any](cfg *Config, logger *log.Logger) *CloudFoundryProvider {
 }
 
 func (cfg *Config) Type() pTypes.ProviderType {
-	return pTypes.ProviderTypeCloudFoundry
-}
-
-func (c *CloudFoundryProvider) GetProviderType() pTypes.ProviderType {
 	return pTypes.ProviderTypeCloudFoundry
 }
 
@@ -61,16 +57,20 @@ func (c *CloudFoundryProvider) GetClient() (*client.Client, error) {
 	fmt.Println("Cloud Foundry client created successfully")
 	return cf, nil
 }
-func (c *CloudFoundryProvider) ListAppsBySpace(space string) ([]string, error) {
-	c.logger.Println("Analyzing space: ", space)
+
+// ListApps retrieves a list of application GUIDs from the specified Cloud
+// Foundry space.
+// It returns a slice of application GUIDs or an error in case of failure.
+func (c *CloudFoundryProvider) ListApps() ([]string, error) {
+	c.logger.Println("Analyzing space: ", c.cfg.SpaceName)
 
 	cfClient, err := c.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("error creating Cloud Foundry client: %v", err)
 	}
-	apps, err := listAppsBySpaceName(cfClient, space)
+	apps, err := listAppsBySpaceName(cfClient, c.cfg.SpaceName)
 	if err != nil {
-		return nil, fmt.Errorf("error listing Cloud Foundry apps for space %s: %v", space, err)
+		return nil, fmt.Errorf("error listing Cloud Foundry apps for space %s: %v", c.cfg.SpaceName, err)
 	}
 	c.logger.Println("Apps discovered: ", len(apps))
 
@@ -81,25 +81,46 @@ func (c *CloudFoundryProvider) ListAppsBySpace(space string) ([]string, error) {
 	return appsGUIDs, nil
 }
 
-func (c *CloudFoundryProvider) Discover(space string, appGUID string) (*dTypes.Application, error) {
+func (c *CloudFoundryProvider) Discover() (pTypes.DiscoverResult, error) {
 	if c.cfg.ManifestPath != "" {
+		var resultLocalDiscovery pTypes.DiscoverResult
+
 		c.logger.Println("Manifest path provided, using it for local discovery")
-		return c.discoverFromManifestFile()
+		d, err := c.discoverFromManifestFile()
+		if err != nil {
+			return resultLocalDiscovery, fmt.Errorf("error discovering from manifest file: %w", err)
+		}
+
+		resultLocalDiscovery.Content, err = pHelpers.StructToMap(d)
+		if err != nil {
+			return resultLocalDiscovery, fmt.Errorf("error converting discovered application to map: %w", err)
+		}
+		return resultLocalDiscovery, nil
 	}
+	var resultLiveDiscovery pTypes.DiscoverResult
 
 	// Live discovery
-	if space == "" {
-		return nil, fmt.Errorf("no spaces provided for live discovery")
+	if c.cfg.SpaceName == "" {
+		return resultLiveDiscovery, fmt.Errorf("no spaces provided for live discovery")
 	}
 
-	if appGUID == "" {
-		return nil, fmt.Errorf("no app GUID provided for live discovery")
+	if c.cfg.AppGUID == "" {
+		return resultLiveDiscovery, fmt.Errorf("no app GUID provided for live discovery")
 	}
 
 	if c.cfg.APIEndpoint == "" || c.cfg.Username == "" || (c.cfg.Password == "" && c.cfg.CloudFoundryConfigPath == "") {
-		return nil, fmt.Errorf("missing required configuration: APIEndpoint, Username, and either Password or CloudFoundryConfigPath must be provided")
+		return resultLiveDiscovery, fmt.Errorf("missing required configuration: APIEndpoint, Username, and either Password or CloudFoundryConfigPath must be provided")
 	}
-	return c.discoverFromLiveAPI(space, appGUID)
+
+	d, err := c.discoverFromLiveAPI(c.cfg.SpaceName, c.cfg.AppGUID)
+	if err != nil {
+		return resultLiveDiscovery, fmt.Errorf("error discovering from manifest file: %w", err)
+	}
+	resultLiveDiscovery.Content, err = pHelpers.StructToMap(d)
+	if err != nil {
+		return resultLiveDiscovery, fmt.Errorf("error converting discovered application to map: %w", err)
+	}
+	return resultLiveDiscovery, nil
 }
 
 // discoverFromManifestFile reads a manifest file and returns a list of applications.

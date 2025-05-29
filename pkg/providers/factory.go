@@ -10,7 +10,7 @@ import (
 	providerTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 )
 
-func NewProvider[T any](cfg Config, logger *log.Logger) (Provider[T], error) {
+func NewProvider(cfg Config, logger *log.Logger) (Provider, error) {
 	if logger == nil {
 		logger = log.New(io.Discard, "", log.LstdFlags) // No-op logger
 	}
@@ -21,14 +21,14 @@ func NewProvider[T any](cfg Config, logger *log.Logger) (Provider[T], error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid config type for cf")
 		}
-		return any(cfProvider.New[T](cfCfg, logger)).(Provider[T]), nil
+		return cfProvider.New(cfCfg, logger), nil
 	case providerTypes.ProviderTypeKorifi:
 		logger.Println("Creating new Korifi provider")
 		korifiCfg, ok := cfg.(*korifiProvider.Config)
 		if !ok {
 			return nil, fmt.Errorf("invalid config type for korifi")
 		}
-		return any(korifiProvider.New[T](korifiCfg, logger)).(Provider[T]), nil
+		return korifiProvider.New(korifiCfg, logger), nil
 	default:
 		return nil, fmt.Errorf("unsupported provider type: %s", cfg.Type())
 	}

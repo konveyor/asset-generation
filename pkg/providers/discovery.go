@@ -1,19 +1,15 @@
 package providers
 
-import "log"
+import (
+	"log"
 
-func Discover[T any](cfg Config, logger *log.Logger, space string, appGUID string) (result T, err error) {
-	p, err := NewProvider[T](cfg, logger)
+	pTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
+)
+
+func Discover(cfg Config, logger *log.Logger) (result pTypes.DiscoverResult, err error) {
+	p, err := NewProvider(cfg, logger)
 	if err != nil {
 		return result, err
 	}
-	return p.Discover(space, appGUID)
+	return p.Discover()
 }
-
-// func ListAppsBySpace[T any](cfg Config, logger *log.Logger) ([]string, error) {
-// 	p, err := NewProvider[T](cfg, logger)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return p.ListAppsBySpace(cfg.)
-// }

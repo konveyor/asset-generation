@@ -275,3 +275,13 @@ func validateApplication(app dTypes.Application) error {
 	}
 	return nil
 }
+
+func StructToMap(obj *dTypes.Application) (map[string]any, error) {
+	var m map[string]any
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(b, &m)
+	return m, err
+}
