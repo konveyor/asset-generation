@@ -12,8 +12,7 @@ import (
 	cfTypes "github.com/konveyor/asset-generation/pkg/models"
 	pHelpers "github.com/konveyor/asset-generation/pkg/providers/helpers"
 	korifiApi "github.com/konveyor/asset-generation/pkg/providers/korifi/api"
-	dTypes "github.com/konveyor/asset-generation/pkg/providers/types/discover"
-	kTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
+	pTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 )
@@ -22,7 +21,7 @@ type Config struct {
 	BaseURL        string
 	Username       string
 	KubeconfigPath string
-	providerType   kTypes.ProviderType
+	providerType   pTypes.ProviderType
 	SpaceName      string
 	AppGUID        string
 }
@@ -32,19 +31,19 @@ type KorifiProvider struct {
 	logger *log.Logger
 }
 
-func New[T any](cfg *Config, logger *log.Logger) *KorifiProvider {
+func New(cfg *Config, logger *log.Logger) *KorifiProvider {
 	return &KorifiProvider{
 		cfg:    cfg,
 		logger: logger,
 	}
 }
 
-func (c *Config) Type() kTypes.ProviderType {
+func (c *Config) Type() pTypes.ProviderType {
 	return c.providerType
 }
 
-func (k *KorifiProvider) GetProviderType() kTypes.ProviderType {
-	return kTypes.ProviderTypeKorifi
+func (k *KorifiProvider) GetProviderType() pTypes.ProviderType {
+	return pTypes.ProviderTypeKorifi
 }
 
 func (k *KorifiProvider) GetKubeConfig() (*api.Config, error) {
@@ -71,6 +70,7 @@ func (k *KorifiProvider) GetClientCertificate(config *api.Config) (string, error
 	}
 
 	if len(dataCert) == 0 || len(keyCert) == 0 {
+
 		return "", fmt.Errorf("could not find certificate data for kind-korifi")
 	}
 
@@ -121,7 +121,9 @@ func (t *authHeaderRoundTripper) RoundTrip(req *http.Request) (*http.Response, e
 	return t.base.RoundTrip(reqClone)
 }
 
-func (k *KorifiProvider) ListAppsBySpace() ([]string, error) {
+// ListApps lists all applications in the specified space.
+// It returns a slice of application GUIDs or an error in case of failure.
+func (k *KorifiProvider) ListApps() ([]string, error) {
 	k.logger.Println("Analyzing space: ", k.cfg.SpaceName)
 	korifiHttpClient, err := k.GetKorifiHttpClient()
 	if err != nil {
@@ -139,47 +141,48 @@ func (k *KorifiProvider) ListAppsBySpace() ([]string, error) {
 	return appsGUIDs, nil
 }
 
-func (k *KorifiProvider) Discover() (*dTypes.Application, error) {
+func (k *KorifiProvider) Discover() (pTypes.DiscoverResult, error) {
+	var response pTypes.DiscoverResult
 	if len(k.cfg.SpaceName) == 0 {
-		return nil, fmt.Errorf("no spaces provided for discovery")
+		return response, fmt.Errorf("no spaces provided for discovery")
 	}
 
 	korifiHttpClient, err := k.GetKorifiHttpClient()
 	if err != nil {
-		return nil, fmt.Errorf("error creating Korifi HTTP client: %v", err)
+		return response, fmt.Errorf("error creating Korifi HTTP client: %v", err)
 	}
 	kAPI := korifiApi.NewKorifiAPIClient(korifiHttpClient, k.cfg.BaseURL)
 
 	// Get space guid
 	// spaceObj, err := kAPI.GetSpace(k.cfg.SpaceName)
 	// if err != nil {
-	// 	return nil, fmt.Errorf("can't find space %s: %v", k.cfg.SpaceName, err)
+	// 	return response, fmt.Errorf("can't find space %s: %v", k.cfg.SpaceName, err)
 	// }
 	app, err := kAPI.GetApp(k.cfg.AppGUID)
 	if err != nil {
-		return nil, fmt.Errorf("error listing CF apps for space %s: %v", k.cfg.SpaceName, err)
+		return response, fmt.Errorf("error listing CF apps for space %s: %v", k.cfg.SpaceName, err)
 	}
 
 	k.logger.Println("Processing app:", app.GUID)
 
 	appEnv, err := kAPI.GetEnv(app.GUID)
 	if err != nil {
-		return nil, fmt.Errorf("error getting environment for app %s: %v", app.GUID, err)
+		return response, fmt.Errorf("error getting environment for app %s: %v", app.GUID, err)
 	}
 
 	appName, err := kHelpers.GetAppName(*appEnv)
 	if err != nil {
-		return nil, fmt.Errorf("error getting app name: %v", err)
+		return response, fmt.Errorf("error getting app name: %v", err)
 	}
 
 	normalizedAppName, err := kHelpers.NormalizeForMetadataName(strings.TrimSpace(appName))
 	if err != nil {
-		return nil, fmt.Errorf("error normalizing app name: %v", err)
+		return response, fmt.Errorf("error normalizing app name: %v", err)
 	}
 
 	process, err := kAPI.GetProcesses(app.GUID)
 	if err != nil {
-		return nil, fmt.Errorf("error getting processes: %v", err)
+		return response, fmt.Errorf("error getting processes: %v", err)
 	}
 
 	appProcesses := cfTypes.AppManifestProcesses{}
@@ -207,7 +210,7 @@ func (k *KorifiProvider) Discover() (*dTypes.Application, error) {
 
 	routes, err := kAPI.GetRoutes(app.GUID)
 	if err != nil {
-		return nil, fmt.Errorf("error getting processes: %v", err)
+		return response, fmt.Errorf("error getting processes: %v", err)
 	}
 	appRoutes := cfTypes.AppManifestRoutes{}
 	for _, r := range routes.Resources {
@@ -239,7 +242,12 @@ func (k *KorifiProvider) Discover() (*dTypes.Application, error) {
 	}
 	discoveryApp, err := pHelpers.ParseCFApp(appManifest)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing CF app: %v", err)
+		return response, fmt.Errorf("error parsing CF app: %v", err)
 	}
-	return &discoveryApp, nil
+
+	response.Content, err = pHelpers.StructToMap(&discoveryApp)
+	if err != nil {
+		return response, fmt.Errorf("error converting discovery app to map: %v", err)
+	}
+	return response, nil
 }

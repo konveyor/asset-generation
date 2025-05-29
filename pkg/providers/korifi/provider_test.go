@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 
-	dTypes "github.com/konveyor/asset-generation/pkg/providers/types/discover"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -18,7 +17,7 @@ var _ = Describe("KubeConfig Utilities", func() {
 
 	Describe("getKubeConfig", func() {
 		It("returns error when file does not exist", func() {
-			provider := New[[]dTypes.Application](
+			provider := New(
 				&Config{}, logger)
 
 			config, err := provider.GetKubeConfig()
@@ -27,7 +26,7 @@ var _ = Describe("KubeConfig Utilities", func() {
 		})
 
 		It("returns config when file is valid", func() {
-			provider := New[[]dTypes.Application](
+			provider := New(
 				&Config{
 					KubeconfigPath: "./test_data/test_config.yaml",
 				},
@@ -53,7 +52,7 @@ var _ = Describe("KubeConfig Utilities", func() {
 		})
 
 		It("returns base64 encoded cert+key for existing user", func() {
-			provider := New[[]dTypes.Application](
+			provider := New(
 				&Config{
 					KubeconfigPath: "./test_data/test_config.yaml",
 					Username:       "kind-korifi",
@@ -67,7 +66,7 @@ var _ = Describe("KubeConfig Utilities", func() {
 		})
 
 		It("returns error if user does not exist", func() {
-			provider := New[[]dTypes.Application](
+			provider := New(
 				&Config{
 					KubeconfigPath: "./test_data/test_config.yaml",
 					Username:       "non-existent-user",
@@ -80,7 +79,7 @@ var _ = Describe("KubeConfig Utilities", func() {
 		})
 
 		It("returns error if cert or key data missing", func() {
-			provider := New[[]dTypes.Application](
+			provider := New(
 				&Config{
 					KubeconfigPath: "./test_data/test_config.yaml",
 					Username:       "kind-korifi",
@@ -96,7 +95,7 @@ var _ = Describe("KubeConfig Utilities", func() {
 
 	Describe("getKorifiHttpClient", func() {
 		It("returns error if kubeconfig is invalid", func() {
-			provider := New[[]dTypes.Application](
+			provider := New(
 				&Config{
 					KubeconfigPath: "./test_data/non-existing-config.yaml",
 				},
@@ -108,7 +107,7 @@ var _ = Describe("KubeConfig Utilities", func() {
 		})
 
 		It("returns error if user not found in kubeconfig", func() {
-			provider := New[[]dTypes.Application](
+			provider := New(
 				&Config{
 					KubeconfigPath: "./test_data/test_config.yaml",
 					Username:       "non-existent-user",
@@ -121,7 +120,7 @@ var _ = Describe("KubeConfig Utilities", func() {
 		})
 
 		It("returns http.Client when everything is valid", func() {
-			provider := New[[]dTypes.Application](
+			provider := New(
 				&Config{
 					KubeconfigPath: "./test_data/test_config.yaml",
 					Username:       "kind-korifi",
