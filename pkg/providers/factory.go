@@ -15,11 +15,7 @@ func NewProvider(cfg Config, logger *log.Logger) (Provider, error) {
 	switch t := cfg.(type) {
 	case *cfProvider.Config:
 		logger.Println("Creating new CF provider")
-		cfCfg, ok := cfg.(*cfProvider.Config)
-		if !ok {
-			return nil, fmt.Errorf("invalid config type for cf")
-		}
-		return cfProvider.New(cfCfg, logger), nil
+		return cfProvider.New(t, logger), nil
 	default:
 		return nil, fmt.Errorf("unsupported provider type: %s", t)
 	}
