@@ -5,8 +5,10 @@ import (
 	"log"
 	"os"
 
+	dTypes "github.com/konveyor/asset-generation/pkg/providers/types/discover"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"gopkg.in/yaml.v3"
 )
 
 var _ = Describe("CFProvider", func() {
@@ -55,6 +57,30 @@ var _ = Describe("CFProvider", func() {
 			Expect(client).NotTo(BeNil())
 		})
 
+	})
+
+	It("extracts the sensitive information from an app with docker username and environment values", func() {
+		app := dTypes.Application{
+			Docker: dTypes.Docker{Username: "username"},
+			Env:    map[string]string{"a": "a", "b": "b", "c": "c"},
+		}
+		By("Copying the application manifest to be able to check against the resulting changes")
+		// copy the app manifest
+		b, err := yaml.Marshal(app)
+		Expect(err).NotTo(HaveOccurred())
+		appCopy := dTypes.Application{}
+		err = yaml.Unmarshal(b, &appCopy)
+		Expect(err).NotTo(HaveOccurred())
+		By("performing the extraction and modification of the application to use UUID for sensitive information")
+		s := extractSensitiveInformation(&app)
+		Expect(s).To(HaveLen(4))
+		for k := range app.Env {
+			sid := app.Env[k]
+			sid = sid[2 : len(sid)-1]
+			Expect(s[sid]).To(Equal(appCopy.Env[k]))
+		}
+		suser := app.Docker.Username[2 : len(app.Docker.Username)-1]
+		Expect(s[suser]).To(Equal(appCopy.Docker.Username))
 	})
 
 })

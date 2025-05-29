@@ -10,6 +10,7 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	"github.com/google/uuid"
 
 	cfTypes "github.com/konveyor/asset-generation/pkg/models"
 	pHelpers "github.com/konveyor/asset-generation/pkg/providers/helpers"
@@ -28,6 +29,8 @@ type Config struct {
 	SkipSSLValidation      bool
 	SpaceName              string
 	AppGUID                string
+	// Helm Generator specific fields
+	HelmChartPath string
 }
 
 type CloudFoundryProvider struct {
@@ -78,6 +81,27 @@ func (c *CloudFoundryProvider) ListApps() ([]string, error) {
 	return appsGUIDs, nil
 }
 
+// extractSensitiveInformation captures the sensitive information (e.g. credentials) found in the application's
+// manifest, including the environment values and the docker username if found,
+// and stores it in a map[string]any structure to be appended to the discover structure returned to the caller.
+// The contents of the environment are replaced with a UUID value that is the reference key to the map that
+// contains the values in the newly created structure
+func extractSensitiveInformation(app *dTypes.Application) map[string]any {
+	uuid.EnableRandPool() // Increases UUID generation speed by pregenerating a pool with this flag enabled
+	m := map[string]any{}
+	if app.Docker.Username != "" {
+		id := uuid.NewString()
+		m[id] = app.Docker.Username
+		app.Docker.Username = fmt.Sprintf("$(%s)", id)
+	}
+	for k, v := range app.Env {
+		id := uuid.NewString()
+		m[id] = v
+		app.Env[k] = fmt.Sprintf("$(%s)", id)
+	}
+	return m
+}
+
 func (c *CloudFoundryProvider) Discover() (pTypes.DiscoverResult, error) {
 	var discoverResult pTypes.DiscoverResult
 	if c.cfg.ManifestPath != "" {
@@ -87,7 +111,10 @@ func (c *CloudFoundryProvider) Discover() (pTypes.DiscoverResult, error) {
 		if err != nil {
 			return discoverResult, fmt.Errorf("error discovering from Cloud Foundry manifest file: %w", err)
 		}
-
+		// Extract sensitive information and use UUID as references to the map[string]any structure that contains
+		// the original values
+		s := extractSensitiveInformation(d)
+		discoverResult.Secret = s
 		discoverResult.Content, err = pHelpers.StructToMap(d)
 		if err != nil {
 			return discoverResult, fmt.Errorf("error converting discovered Cloud Foundry application to map: %w", err)
@@ -112,6 +139,11 @@ func (c *CloudFoundryProvider) Discover() (pTypes.DiscoverResult, error) {
 	if err != nil {
 		return discoverResult, fmt.Errorf("error for Cloud Foundry live discover from manifest file: %w", err)
 	}
+
+	// Extract sensitive information and use UUID as references to the map[string]any structure that contains
+	// the original values
+	s := extractSensitiveInformation(d)
+	discoverResult.Secret = s
 	discoverResult.Content, err = pHelpers.StructToMap(d)
 	if err != nil {
 		return discoverResult, fmt.Errorf("error for for Cloud Foundry live discover converting discovered application to map: %w", err)
@@ -141,7 +173,7 @@ func (c *CloudFoundryProvider) discoverFromManifestFile() (*dTypes.Application, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create application: %w", err)
 	}
-
+	// extract sensitive information into a secret's structure
 	return &app, nil
 }
 
