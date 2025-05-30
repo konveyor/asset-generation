@@ -232,31 +232,6 @@ var _ = Describe("CloudFoundry Provider", func() {
 				Expect(apps).To(HaveLen(0))
 			})
 		})
-
-		// 	Context("when the CF API returns an error", func() {
-		// 		BeforeEach(func() {
-		// 			testServer.ForceAPIErrors()
-		// 		})
-
-		// 		It("returns a wrapped error", func() {
-		// 			_, err := provider.listAppsFromCloudFoundry()
-		// 			Expect(err).To(MatchError(ContainSubstring("error listing Cloud Foundry apps")))
-		// 		})
-		// 	})
-
-		// 	Context("when filtering by space name", func() {
-		// 		It("returns only apps in the configured space", func() {
-		// 			// Create apps in different spaces
-		// 			testServer.Resources().Applications().Create(
-		// 				testutil.ApplicationResource().WithName("app-in-test-space").WithGUID("guid-test").WithSpace("test-space"),
-		// 				testutil.ApplicationResource().WithName("app-in-other-space").WithGUID("guid-other").WithSpace("other-space"),
-		// 			)
-
-		// 			guids, err := provider.listAppsFromCloudFoundry()
-		// 			Expect(err).NotTo(HaveOccurred())
-		// 			Expect(guids).To(ConsistOf("guid-test"))
-		// 		})
-		// 	})
 	})
 
 	DescribeTable("extracts the sensitive infromation from an app", func(app dTypes.Application) {
