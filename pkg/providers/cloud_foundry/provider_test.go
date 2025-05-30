@@ -1,62 +1,262 @@
 package cloud_foundry
 
 import (
+	"context"
+	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 
+	"github.com/cloudfoundry/go-cfclient/v3/client"
+	"github.com/cloudfoundry/go-cfclient/v3/config"
+	"github.com/cloudfoundry/go-cfclient/v3/testutil"
+	getter "github.com/hashicorp/go-getter"
 	dTypes "github.com/konveyor/asset-generation/pkg/providers/types/discover"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
 )
 
-var _ = Describe("CFProvider", func() {
-	var cfg *Config
-	var provider *CloudFoundryProvider
-	logger := log.New(io.Discard, "", log.LstdFlags) // No-op logger
+const (
+	goCFClientTemplateURL = "git::https://github.com/cloudfoundry/go-cfclient.git//testutil/template"
+)
+
+var _ = Describe("CloudFoundry Provider", func() {
+	var (
+		// provider *CloudFoundryProvider
+		logger *log.Logger
+		// testServer *testutil.SetupFakeAPIServer
+		// mockClient *client.Client
+
+	)
+
 	BeforeEach(func() {
-		cfg = &Config{
-			CloudFoundryConfigPath: "/some/path/to/config.json",
-			Username:               "admin",
-			Password:               "password",
-			APIEndpoint:            "https://api.example.com",
-		}
-		provider = New(cfg, logger)
+		logger = log.New(io.Discard, "", log.LstdFlags) // no-op logger
 	})
 
-	Context("GetClient", func() {
-		It("should fail if CF_HOME config is invalid", func() {
-			CFHomeOrig, had := os.LookupEnv("CF_HOME")
-			os.Setenv("CF_HOME", "/non/existent/dir")
-			defer func() {
-				if had {
-					os.Setenv("CF_HOME", CFHomeOrig)
-				} else {
-					os.Unsetenv("CF_HOME")
-				}
-			}()
+	Describe("GetClient", func() {
+		var (
+			origCFHome string
+			hadCFHome  bool
+			provider   *CloudFoundryProvider
+		)
+
+		BeforeEach(func() {
+			origCFHome, hadCFHome = os.LookupEnv("CF_HOME")
+			provider = New(&Config{}, logger)
+		})
+
+		AfterEach(func() {
+			if hadCFHome {
+				os.Setenv("CF_HOME", origCFHome)
+			} else {
+				os.Unsetenv("CF_HOME")
+			}
+		})
+
+		It("returns error if CF_HOME points to invalid directory", func() {
+			err := os.Setenv("CF_HOME", "/non/existent/dir")
+			Expect(err).NotTo(HaveOccurred())
 
 			client, err := provider.GetClient()
 			Expect(client).To(BeNil())
 			Expect(err).To(HaveOccurred())
 		})
-		It("should create client successfully", func() {
-			CFHomeOrig, had := os.LookupEnv("CF_HOME")
-			os.Setenv("CF_HOME", "./test_data")
-			defer func() {
-				if had {
-					os.Setenv("CF_HOME", CFHomeOrig)
-				} else {
-					os.Unsetenv("CF_HOME")
-				}
-			}()
+
+		It("creates client successfully with valid CF_HOME", func() {
+			err := os.Setenv("CF_HOME", "./test_data")
+			Expect(err).NotTo(HaveOccurred())
 
 			client, err := provider.GetClient()
-			Expect(err).ToNot(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
 			Expect(client).NotTo(BeNil())
 		})
+	})
 
+	Describe("listAppsFromCloudFoundry", Ordered, func() {
+		var (
+			g            *testutil.ObjectJSONGenerator
+			app1         *testutil.JSONResource
+			app2         *testutil.JSONResource
+			space        *testutil.JSONResource
+			serverURL    string
+			logger       = log.New(io.Discard, "", 0)
+			templatePath string
+		)
+
+		AfterAll(func() {
+			os.RemoveAll(templatePath)
+			testutil.Teardown()
+		})
+
+		BeforeAll(func() {
+			repoBasePath := getModuleRoot()
+			templatePath = filepath.Join(repoBasePath,
+				"vendor", "github.com", "cloudfoundry", "go-cfclient", "v3", "testutil", "template")
+
+			err := downloadTemplateFolder(goCFClientTemplateURL, templatePath)
+			if err != nil {
+				log.Fatalf("Failed to download template folder: %v", err)
+			}
+
+			g = testutil.NewObjectJSONGenerator()
+			space = g.Space()
+			app1 = g.Application()
+			app2 = g.Application()
+		})
+		Context("when space name doens't exist", func() {
+			BeforeEach(func() {
+				pagingQueryString := "page=1&per_page=50"
+				serverURL = testutil.SetupMultiple([]testutil.MockRoute{
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/spaces",
+						Output:      g.Paged([]string{}),
+						Status:      http.StatusOK,
+						QueryString: "names=" + space.Name + "&" + pagingQueryString,
+					},
+				}, GlobalT)
+			})
+			AfterEach(func() {
+				testutil.Teardown()
+			})
+			It("returns	an error", func() {
+				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+				Expect(err).NotTo(HaveOccurred())
+
+				client, err := client.New(cfg)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfConfig := &Config{
+					Client:    client,
+					Username:  "username",
+					SpaceName: space.Name,
+				}
+
+				p := New(cfConfig, logger)
+				apps, err := p.listAppsFromCloudFoundry()
+				Expect(err).To(HaveOccurred())
+				Expect(apps).To(BeNil())
+
+			})
+		})
+		Context("when apps exist in the space", func() {
+			BeforeEach(func() {
+				pagingQueryString := "page=1&per_page=50"
+				serverURL = testutil.SetupMultiple([]testutil.MockRoute{
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/apps",
+						Output:      g.Paged([]string{app1.JSON, app2.JSON}),
+						Status:      http.StatusOK,
+						QueryString: pagingQueryString + "&space_guids=" + space.GUID,
+					},
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/spaces",
+						Output:      g.Paged([]string{space.JSON}),
+						Status:      http.StatusOK,
+						QueryString: "names=" + space.Name + "&" + pagingQueryString,
+					},
+				}, GlobalT)
+			})
+			AfterEach(func() {
+				testutil.Teardown()
+			})
+
+			It("returns the GUIDs of the apps", func() {
+				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+				Expect(err).NotTo(HaveOccurred())
+
+				client, err := client.New(cfg)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfConfig := &Config{
+					Client:    client,
+					Username:  "username",
+					SpaceName: space.Name,
+				}
+
+				p := New(cfConfig, logger)
+				apps, err := p.listAppsFromCloudFoundry()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(apps).To(HaveLen(2))
+				Expect(apps).To(ConsistOf(app1.GUID, app2.GUID))
+			})
+		})
+		Context("when apps don't exist in the space", func() {
+			BeforeEach(func() {
+				// Create two mock apps in the test server
+				pagingQueryString := "page=1&per_page=50"
+				serverURL = testutil.SetupMultiple([]testutil.MockRoute{
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/apps",
+						Output:      g.Paged([]string{}),
+						Status:      http.StatusOK,
+						QueryString: pagingQueryString + "&space_guids=" + space.GUID,
+					},
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/spaces",
+						Output:      g.Paged([]string{space.JSON}),
+						Status:      http.StatusOK,
+						QueryString: "names=" + space.Name + "&" + pagingQueryString,
+					},
+				}, GlobalT)
+			})
+			AfterEach(func() {
+				testutil.Teardown()
+			})
+
+			It("returns no apps", func() {
+				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+				Expect(err).NotTo(HaveOccurred())
+
+				client, err := client.New(cfg)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfConfig := &Config{
+					Client:    client,
+					Username:  "username",
+					SpaceName: space.Name,
+				}
+
+				p := New(cfConfig, logger)
+				apps, err := p.listAppsFromCloudFoundry()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(apps).To(HaveLen(0))
+			})
+		})
+
+		// 	Context("when the CF API returns an error", func() {
+		// 		BeforeEach(func() {
+		// 			testServer.ForceAPIErrors()
+		// 		})
+
+		// 		It("returns a wrapped error", func() {
+		// 			_, err := provider.listAppsFromCloudFoundry()
+		// 			Expect(err).To(MatchError(ContainSubstring("error listing Cloud Foundry apps")))
+		// 		})
+		// 	})
+
+		// 	Context("when filtering by space name", func() {
+		// 		It("returns only apps in the configured space", func() {
+		// 			// Create apps in different spaces
+		// 			testServer.Resources().Applications().Create(
+		// 				testutil.ApplicationResource().WithName("app-in-test-space").WithGUID("guid-test").WithSpace("test-space"),
+		// 				testutil.ApplicationResource().WithName("app-in-other-space").WithGUID("guid-other").WithSpace("other-space"),
+		// 			)
+
+		// 			guids, err := provider.listAppsFromCloudFoundry()
+		// 			Expect(err).NotTo(HaveOccurred())
+		// 			Expect(guids).To(ConsistOf("guid-test"))
+		// 		})
+		// 	})
 	})
 
 	DescribeTable("extracts the sensitive infromation from an app", func(app dTypes.Application) {
@@ -108,3 +308,35 @@ var _ = Describe("CFProvider", func() {
 	)
 
 })
+
+func downloadTemplateFolder(src string, dst string) error {
+	client := &getter.Client{
+		Ctx:      context.Background(),
+		Src:      src,
+		Dst:      dst,
+		Dir:      true,
+		Mode:     getter.ClientModeDir,
+		Insecure: true,
+	}
+
+	if err := client.Get(); err != nil {
+		return fmt.Errorf("failed to download from %q to %q: %w", src, dst, err)
+	}
+	return nil
+}
+
+func getModuleRoot() string {
+	// gomodPath := os.Getenv("GOMOD")
+	// if gomodPath == "" {
+	// 	log.Fatal("GOMOD environment variable is not set; make sure to run with Go modules enabled")
+	// }
+	out, err := exec.Command("go", "env", "GOMOD").Output()
+	if err != nil {
+		log.Fatalf("Failed to get GOMOD via 'go env': %v", err)
+	}
+	gomodPath := strings.TrimSpace(string(out))
+	if gomodPath == "" {
+		log.Fatal("GOMOD is empty")
+	}
+	return filepath.Dir(gomodPath)
+}

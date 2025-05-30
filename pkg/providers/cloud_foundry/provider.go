@@ -33,11 +33,17 @@ type Config struct {
 	AppGUID                string
 	// Helm Generator specific fields
 	HelmChartPath string
+	Client        *client.Client
 }
 
 type CloudFoundryProvider struct {
 	cfg    *Config
 	logger *log.Logger
+}
+
+// ClientProvider defines the interface for GetClient, only for testing.
+type ClientProvider interface {
+	GetClient() (*client.Client, error)
 }
 
 func New(cfg *Config, logger *log.Logger) *CloudFoundryProvider {
@@ -48,6 +54,9 @@ func New(cfg *Config, logger *log.Logger) *CloudFoundryProvider {
 }
 
 func (c *CloudFoundryProvider) GetClient() (*client.Client, error) {
+	if c.cfg.Client != nil {
+		return c.cfg.Client, nil
+	}
 	cfg, err := config.NewFromCFHome()
 	if err != nil {
 		return nil, err
@@ -57,13 +66,13 @@ func (c *CloudFoundryProvider) GetClient() (*client.Client, error) {
 		return nil, err
 	}
 	fmt.Println("Cloud Foundry client created successfully")
+	c.cfg.Client = cf
 	return cf, nil
 }
 
 // ListApps retrieves a list of application GUIDs from the specified Cloud
 // Foundry space.
 // It returns a slice of application GUIDs or an error in case of failure.
-
 func (c *CloudFoundryProvider) ListApps() ([]string, error) {
 	if !isLiveDiscover(c.cfg) {
 		return c.listAppsFromLocalManifests()
@@ -476,7 +485,11 @@ func getSpaceGUIDByName(cfClient *client.Client, spaceName string) (string, erro
 	return remoteSpace.GUID, nil
 }
 
-func listAppsBySpaceName(cfClient *client.Client, spaceGUID string) ([]*resource.App, error) {
+func listAppsBySpaceName(cfClient *client.Client, spaceName string) ([]*resource.App, error) {
+	spaceGUID, err := getSpaceGUIDByName(cfClient, spaceName)
+	if err != nil {
+		return nil, fmt.Errorf("error getting space GUID for space %s: %v", spaceName, err)
+	}
 	appsOpt := client.NewAppListOptions()
 	appsOpt.SpaceGUIDs.EqualTo(spaceGUID)
 	apps, err := cfClient.Applications.ListAll(context.Background(), appsOpt)

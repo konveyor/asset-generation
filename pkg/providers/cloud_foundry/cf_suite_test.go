@@ -1,4 +1,4 @@
-package cloud_foundry_test
+package cloud_foundry
 
 import (
 	"testing"
@@ -7,7 +7,10 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+var GlobalT *testing.T
+
 func TestCF(t *testing.T) {
+	GlobalT = t // save the *testing.T pointer globally
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Cloud Foundry Suite")
 }
