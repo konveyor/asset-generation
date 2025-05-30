@@ -31,9 +31,7 @@ type Config struct {
 	SkipSSLValidation      bool
 	SpaceName              string
 	AppGUID                string
-	// Helm Generator specific fields
-	HelmChartPath string
-	Client        *client.Client
+	Client                 *client.Client
 }
 
 type CloudFoundryProvider struct {
