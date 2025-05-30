@@ -1,4 +1,4 @@
-package cloud_foundry
+package discover
 
 // Application represents an interpretation of a runtime Cloud Foundry application. This structure differs in that
 // the information it contains has been processed to simplify its transformation to a Kubernetes manifest using MTA
@@ -165,7 +165,7 @@ type Route struct {
 	Route string `yaml:"route" validate:"required"`
 	// Protocol captures the protocol type: http, http2 or tcp. Note that the CF `protocol` field is only available
 	// for CF deployments that use HTTP/2 routing.
-	Protocol RouteProtocol `yaml:"protocol,omitempty" validate:"required,oneof=http1 http2 tcp"`
+	Protocol RouteProtocol `yaml:"protocol,omitempty" validate:"oneof=http1 http2 tcp"`
 	// Options captures the options for the Route. Only load balancing is supported at the moment.
 	Options RouteOptions `yaml:"options,omitempty" validate:"omitempty"`
 }
