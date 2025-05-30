@@ -20,7 +20,7 @@ jobs:
           go-version-file: "go.mod"
           cache: true
 
-      - run: go mod tidy && git diff --exit-code go.mod go.sum
+      - run: go mod tidy -go=1.23.6 && git diff --exit-code go.mod go.sum
       - run: go vet ./...
 
       - name: Run Ginkgo tests with coverage
