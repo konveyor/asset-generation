@@ -249,7 +249,12 @@ var _ = Describe("CloudFoundry Provider", func() {
 			c++
 		}
 		By("Validating the results")
-		Expect(s).To(HaveLen(c + len(app.Env)))
+		for _, s := range app.Services {
+			if _, ok := s.Parameters["credentials"]; ok {
+				c++
+			}
+		}
+		Expect(s).To(HaveLen(c))
 		for k := range app.Env {
 			sid := app.Env[k]
 			sid = sid[2 : len(sid)-1]
@@ -260,25 +265,44 @@ var _ = Describe("CloudFoundry Provider", func() {
 			Expect(s[suser]).To(Equal(appCopy.Docker.Username))
 		}
 
-	}, Entry("with docker username and environment values",
+	}, Entry("with docker username and one service with a secret stored in the parameter's map",
 		dTypes.Application{
 			Docker: dTypes.Docker{Username: "username"},
-			Env:    map[string]string{"RAILS_ENV": "production", "mysql": "[{\"name\": \"db-for-my-app\",\"label\": \"mysql\",\"tags\": [\"relational\", \"sql\"],\"plan\": \"xlarge\",\"credentials\": {\"username\": \"user\",\"password\": \"top-secret\"},\"syslog_drain_url\": \"https://syslog.example.org/drain\",\"provider\": null}]"},
-		}),
-		Entry("with docker username and no environment values",
+			Services: dTypes.Services{
+				{
+					Name:        "elephantsql",
+					BindingName: "elephantsql-binding-c6c60",
+					Parameters: map[string]interface{}{
+						"credentials": `"uri": "postgres://exampleuser:examplepass@babar.elephantsql.com:5432/exampleuser"`,
+					},
+				},
+			}}),
+		Entry("with docker username and one secret with no credentials stored in the parameter's map",
 			dTypes.Application{
 				Docker: dTypes.Docker{Username: "username"},
-				Env:    map[string]string{},
-			}),
+				Services: dTypes.Services{
+					{
+						Name:        "elephantsql",
+						BindingName: "elephantsql-binding-c6c60",
+					},
+				}}),
 		Entry("with no docker username and no environment values",
 			dTypes.Application{
-				Docker: dTypes.Docker{},
-				Env:    map[string]string{},
+				Docker:   dTypes.Docker{},
+				Services: dTypes.Services{},
 			}),
-		Entry("with no docker username but with environment values",
+		Entry("with no docker username but with a service containing a credentials as paramter",
 			dTypes.Application{
 				Docker: dTypes.Docker{Image: "docker.io/library/golang "},
-				Env:    map[string]string{"RAILS_ENV": "production", "LOG_LEVEL": "debug", "mysql": "[{\"name\": \"db-for-my-app\",\"label\": \"mysql\",\"tags\": [\"relational\", \"sql\"],\"plan\": \"xlarge\",\"credentials\": {\"username\": \"user\",\"password\": \"top-secret\"},\"syslog_drain_url\": \"https://syslog.example.org/drain\",\"provider\": null}]"},
+				Services: dTypes.Services{
+					{
+						Name:        "sendgrid",
+						BindingName: "mysendgrid",
+						Parameters: map[string]interface{}{
+							"credentials": `{"hostname": "smtp.sendgrid.net","username": "QvsXMbJ3rK","password": "HCHMOYluTv"}`,
+						},
+					},
+				},
 			}),
 	)
 

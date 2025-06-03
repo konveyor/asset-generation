@@ -2,6 +2,7 @@ package cloud_foundry
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -19,6 +20,11 @@ import (
 	dTypes "github.com/konveyor/asset-generation/pkg/providers/types/discover"
 	pTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 	"gopkg.in/yaml.v3"
+)
+
+const (
+	vcapServices string = "VCAP_SERVICES"
+	credentials  string = "credentials"
 )
 
 type Config struct {
@@ -187,11 +193,10 @@ func (c *CloudFoundryProvider) listAppsFromCloudFoundry() ([]string, error) {
 	return appsGUIDs, nil
 }
 
-// extractSensitiveInformation captures the sensitive information (e.g. credentials) found in the application's
-// manifest, including the environment values and the docker username if found,
-// and stores it in a map[string]any structure to be appended to the discover structure returned to the caller.
-// The contents of the environment are replaced with a UUID value that is the reference key to the map that
-// contains the values in the newly created structure
+// extractSensitiveInformation captures the sensitive information (e.g. credentials) found in the service's credentials,
+// including the environment values and the docker username if found,
+// and stores it in a map[string]any structure to be appended to the discover structure returned to the caller using
+// a UUID as reference.
 func extractSensitiveInformation(app *dTypes.Application) map[string]any {
 	uuid.EnableRandPool() // Increases UUID generation speed by pregenerating a pool with this flag enabled
 	m := map[string]any{}
@@ -200,10 +205,12 @@ func extractSensitiveInformation(app *dTypes.Application) map[string]any {
 		m[id] = app.Docker.Username
 		app.Docker.Username = fmt.Sprintf("$(%s)", id)
 	}
-	for k, v := range app.Env {
-		id := uuid.NewString()
-		m[id] = v
-		app.Env[k] = fmt.Sprintf("$(%s)", id)
+	for _, v := range app.Services {
+		if c, ok := v.Parameters[credentials]; ok {
+			id := uuid.NewString()
+			m[id] = c
+			v.Parameters[credentials] = fmt.Sprintf("$(%s)", id)
+		}
 	}
 	return m
 }
@@ -270,7 +277,7 @@ func (c *CloudFoundryProvider) discoverFromLive() (pTypes.DiscoverResult, error)
 	discoverResult.Secret = s
 	discoverResult.Content, err = pHelpers.StructToMap(d)
 	if err != nil {
-		return discoverResult, fmt.Errorf("error converting discovered application to map: %v", err)
+		return pTypes.DiscoverResult{}, fmt.Errorf("error converting discovered application to map: %s", err)
 	}
 
 	return discoverResult, nil
@@ -401,7 +408,7 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(spaceName string, a
 	// There is the buildpack list but not per app
 	allBuildpacks, err := cfClient.Buildpacks.ListAll(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("error getting buildpacks: %v", err)
+		return nil, fmt.Errorf("error listing all buildpacks: %s", err)
 	}
 	appBuildpacks := []string{}
 	if app.Lifecycle.Type == "buildpack" {
@@ -416,16 +423,14 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(spaceName string, a
 	// FIXME: uncomment this when we know how to handle them
 	appStack, err := getStack(ctx, cfClient, app)
 	if err != nil {
-		return nil, fmt.Errorf("error getting stack for app %s: %v", app.Name, err)
+		return nil, fmt.Errorf("error getting stack for app %s: %s", app.Name, err)
 	}
 
-	// FIXME: uncomment this when we know how to handle them
-	// serviceOfferingOpts := client.NewServiceOfferingListOptions()
-	// serviceOfferingOpts.SpaceGUIDs.EqualTo(remoteSpace.GUID)
-	// serviceOfferings, err := c.cfClient.ServiceOfferings.ListAll(ctx, serviceOfferingOpts)
-	// if err != nil {
-	// 	return fmt.Errorf("error getting service offerings: %v", err)
-	// }
+	// Retrieve services required by application
+	appServices, err := getServicesFromApplicationEnvironment(appEnv.SystemEnvVars)
+	if err != nil {
+		return nil, fmt.Errorf("error getting services for app %s: %s", app.Name, err)
+	}
 
 	appManifest = cfTypes.AppManifest{
 		Name: app.Name,
@@ -440,13 +445,40 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(spaceName string, a
 		Buildpacks: appBuildpacks,
 		// RandomRoute
 		// NoRoute
-		// Services
+		Services: appServices,
 		// Sidecars
 		Stack: appStack,
 	}
 
 	return &appManifest, nil
 
+}
+
+// appVCAPServiceAttributes is a structure that maps the relevant JSON fields from a runtime service structure as
+// defined in an application's VCAP_SERVICES environment variable.
+// For more information follow this link:
+// https://docs.cloudfoundry.org/devguide/deploy-apps/environment-variable.html#VCAP-SERVICES
+type appVCAPServiceAttributes struct {
+	Name        string          `json:"name"`
+	Credentials json.RawMessage `json:"credentials,omitempty"`
+}
+
+func getServicesFromApplicationEnvironment(env map[string]json.RawMessage) (*cfTypes.AppManifestServices, error) {
+	vcap, ok := env[vcapServices]
+	if !ok {
+		return nil, fmt.Errorf("unable to find VCAP_SERVICES in Cloud Foundry environment")
+	}
+	appServices := cfTypes.AppManifestServices{}
+	instanceServices := map[string]appVCAPServiceAttributes{}
+	err := json.Unmarshal(vcap, &instanceServices)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal VCAP_SERVICES: %s", err)
+	}
+	for name, svc := range instanceServices {
+		s := cfTypes.AppManifestService{Name: name, BindingName: svc.Name, Parameters: map[string]any{credentials: svc.Credentials}}
+		appServices = append(appServices, s)
+	}
+	return &appServices, nil
 }
 
 func getStack(ctx context.Context, cfClient *client.Client, app *resource.App) (string, error) {
