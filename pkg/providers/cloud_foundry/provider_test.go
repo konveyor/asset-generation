@@ -83,6 +83,7 @@ var _ = Describe("CloudFoundry Provider", func() {
 			app1         *testutil.JSONResource
 			app2         *testutil.JSONResource
 			space        *testutil.JSONResource
+			emptySpace   *testutil.JSONResource
 			serverURL    string
 			logger       = log.New(io.Discard, "", 0)
 			templatePath string
@@ -105,6 +106,7 @@ var _ = Describe("CloudFoundry Provider", func() {
 
 			g = testutil.NewObjectJSONGenerator()
 			space = g.Space()
+			emptySpace = g.Space()
 			app1 = g.Application()
 			app2 = g.Application()
 		})
@@ -132,9 +134,8 @@ var _ = Describe("CloudFoundry Provider", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				cfConfig := &Config{
-					Client:    client,
-					Username:  "username",
-					SpaceName: space.Name,
+					Client:     client,
+					SpaceNames: []string{space.Name},
 				}
 
 				p := New(cfConfig, logger)
@@ -157,6 +158,13 @@ var _ = Describe("CloudFoundry Provider", func() {
 					},
 					{
 						Method:      "GET",
+						Endpoint:    "/v3/apps",
+						Output:      g.Paged([]string{}),
+						Status:      http.StatusOK,
+						QueryString: pagingQueryString + "&space_guids=" + emptySpace.GUID,
+					},
+					{
+						Method:      "GET",
 						Endpoint:    "/v3/spaces",
 						Output:      g.Paged([]string{space.JSON}),
 						Status:      http.StatusOK,
@@ -168,7 +176,7 @@ var _ = Describe("CloudFoundry Provider", func() {
 				testutil.Teardown()
 			})
 
-			It("returns the GUIDs of the apps", func() {
+			It("returns app namea per space", func() {
 				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
 				Expect(err).NotTo(HaveOccurred())
 
@@ -176,16 +184,16 @@ var _ = Describe("CloudFoundry Provider", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				cfConfig := &Config{
-					Client:    client,
-					Username:  "username",
-					SpaceName: space.Name,
+					Client:     client,
+					SpaceNames: []string{space.Name},
 				}
 
 				p := New(cfConfig, logger)
 				apps, err := p.listAppsFromCloudFoundry()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(apps).To(HaveLen(2))
-				Expect(apps).To(ConsistOf(app1.GUID, app2.GUID))
+				Expect(apps).To(HaveLen(1))
+				Expect(apps).To(HaveKey(space.Name))
+				Expect(apps[space.Name]).To(ConsistOf(app1.Name, app2.Name))
 			})
 		})
 		Context("when apps don't exist in the space", func() {
@@ -198,14 +206,14 @@ var _ = Describe("CloudFoundry Provider", func() {
 						Endpoint:    "/v3/apps",
 						Output:      g.Paged([]string{}),
 						Status:      http.StatusOK,
-						QueryString: pagingQueryString + "&space_guids=" + space.GUID,
+						QueryString: pagingQueryString + "&space_guids=" + emptySpace.GUID,
 					},
 					{
 						Method:      "GET",
 						Endpoint:    "/v3/spaces",
-						Output:      g.Paged([]string{space.JSON}),
+						Output:      g.Paged([]string{emptySpace.JSON}),
 						Status:      http.StatusOK,
-						QueryString: "names=" + space.Name + "&" + pagingQueryString,
+						QueryString: "names=" + emptySpace.Name + "&" + pagingQueryString,
 					},
 				}, GlobalT)
 			})
@@ -221,15 +229,15 @@ var _ = Describe("CloudFoundry Provider", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				cfConfig := &Config{
-					Client:    client,
-					Username:  "username",
-					SpaceName: space.Name,
+					Client:     client,
+					SpaceNames: []string{emptySpace.Name},
 				}
 
 				p := New(cfConfig, logger)
 				apps, err := p.listAppsFromCloudFoundry()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(apps).To(HaveLen(0))
+				Expect(apps).To(HaveLen(1))
+				Expect(apps[emptySpace.Name]).To(BeEmpty())
 			})
 		})
 	})
