@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -16,8 +17,6 @@ import (
 	"github.com/google/uuid"
 
 	cfTypes "github.com/konveyor/asset-generation/pkg/models"
-	pHelpers "github.com/konveyor/asset-generation/pkg/providers/helpers"
-	dTypes "github.com/konveyor/asset-generation/pkg/providers/types/discover"
 	pTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 	"gopkg.in/yaml.v3"
 )
@@ -26,6 +25,11 @@ const (
 	vcapServices string = "VCAP_SERVICES"
 	credentials  string = "credentials"
 )
+
+type AppDiscoveryConfig struct {
+	SpaceName       string
+	ApplicationName string
+}
 
 type Config struct {
 	ManifestPath           string         `json:"manifest_path" yaml:"manifest_path"`
@@ -84,13 +88,16 @@ func (c *CloudFoundryProvider) ListApps() (map[string]any, error) {
 	return c.listAppsFromCloudFoundry()
 }
 
-func (c *CloudFoundryProvider) Discover(spaceName string, appName string) (pTypes.DiscoverResult, error) {
+func (c *CloudFoundryProvider) Discover(discoverConfig any) (pTypes.DiscoverResult, error) {
 
+	dc, ok := discoverConfig.(AppDiscoveryConfig)
+	if !ok {
+		return pTypes.DiscoverResult{}, fmt.Errorf("invalid application discovery configuration type %s", reflect.TypeOf(discoverConfig))
+	}
 	if c.cfg.ManifestPath != "" {
 		return c.discoverFromManifest()
 	}
-
-	return c.discoverFromLive(spaceName, appName)
+	return c.discoverFromLive(dc.SpaceName, dc.ApplicationName)
 }
 
 // listAppsFromLocalManifests handles discovery of apps by reading local manifest files.
@@ -201,7 +208,7 @@ func (c *CloudFoundryProvider) listAppsFromCloudFoundry() (map[string]any, error
 // including the environment values and the docker username if found,
 // and stores it in a map[string]any structure to be appended to the discover structure returned to the caller using
 // a UUID as reference.
-func extractSensitiveInformation(app *dTypes.Application) map[string]any {
+func extractSensitiveInformation(app *Application) map[string]any {
 	uuid.EnableRandPool() // Increases UUID generation speed by pregenerating a pool with this flag enabled
 	m := map[string]any{}
 	if app.Docker.Username != "" {
@@ -248,7 +255,7 @@ func (c *CloudFoundryProvider) discoverFromManifest() (pTypes.DiscoverResult, er
 	// the original values
 	s := extractSensitiveInformation(d)
 	discoverResult.Secret = s
-	discoverResult.Content, err = pHelpers.StructToMap(d)
+	discoverResult.Content, err = StructToMap(d)
 	if err != nil {
 		return discoverResult, fmt.Errorf("error converting discovered Cloud Foundry application to map: %v", err)
 	}
@@ -279,7 +286,7 @@ func (c *CloudFoundryProvider) discoverFromLive(spaceName string, appName string
 	// the original values
 	s := extractSensitiveInformation(d)
 	discoverResult.Secret = s
-	discoverResult.Content, err = pHelpers.StructToMap(d)
+	discoverResult.Content, err = StructToMap(d)
 	if err != nil {
 		return pTypes.DiscoverResult{}, fmt.Errorf("error converting discovered application to map: %s", err)
 	}
@@ -295,7 +302,7 @@ func (c *CloudFoundryProvider) discoverFromLive(spaceName string, appName string
 //
 // If no output folder is specified:
 //   - The function returns the list of applications parsed from the manifest.
-func (c *CloudFoundryProvider) discoverFromManifestFile() (*dTypes.Application, error) {
+func (c *CloudFoundryProvider) discoverFromManifestFile() (*Application, error) {
 	data, err := os.ReadFile(c.cfg.ManifestPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read manifest file: %v", err)
@@ -305,7 +312,7 @@ func (c *CloudFoundryProvider) discoverFromManifestFile() (*dTypes.Application, 
 		return nil, fmt.Errorf("failed to unmarshal YAML: %v", err)
 	}
 
-	app, err := pHelpers.ParseCFApp(manifest)
+	app, err := ParseCFApp(manifest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create application: %v", err)
 	}
@@ -318,19 +325,21 @@ func (c *CloudFoundryProvider) discoverFromManifestFile() (*dTypes.Application, 
 // If the output folder is provided, it writes the manifest to a file in the
 // output folder with the name "manifest_<space_name>_<app_name>.yaml".
 // If the output folder is not provided, it returns a list of applications.
-func (c *CloudFoundryProvider) discoverFromLiveAPI(spaceName string, appName string) (*dTypes.Application, error) {
+func (c *CloudFoundryProvider) discoverFromLiveAPI(spaceName string, appName string) (*Application, error) {
 	space, err := getSpaceByName(c.cfg.Client, spaceName)
 	if err != nil {
 		return nil, fmt.Errorf("error getting space for space name %s", spaceName)
 	}
 	app, err := c.getAppByName(space.GUID, appName)
-
+	if err != nil {
+		return nil, fmt.Errorf("error while retrieving the application %s/%s", spaceName, appName)
+	}
 	cfManifests, err := c.generateCFManifestFromLiveAPI(space, app.GUID)
 	if err != nil {
 		return nil, fmt.Errorf("error creating Cloud Foundry manifest for space '%s': %v", spaceName, err)
 	}
 
-	discoveredApp, err := pHelpers.ParseCFApp(*cfManifests)
+	discoveredApp, err := ParseCFApp(*cfManifests)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create app from manifest: %v", err)
 	}

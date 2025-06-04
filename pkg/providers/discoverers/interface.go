@@ -5,6 +5,6 @@ import (
 )
 
 type Provider interface {
-	Discover(space string, app string) (result pTypes.DiscoverResult, err error)
+	Discover(AppDiscoveryConfig any) (pTypes.DiscoverResult, error)
 	ListApps() (map[string]any, error)
 }

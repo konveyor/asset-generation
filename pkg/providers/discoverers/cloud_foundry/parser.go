@@ -1,4 +1,4 @@
-package helpers
+package cloud_foundry
 
 import (
 	"encoding/json"
@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	cfTypes "github.com/konveyor/asset-generation/pkg/models"
-	dTypes "github.com/konveyor/asset-generation/pkg/providers/types/discover"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -23,9 +22,9 @@ func MarshalUnmarshal[T any](input interface{}) (T, error) {
 	return result, err
 }
 
-func ParseProcessSpecs(cfApp cfTypes.AppManifest) (*dTypes.ProcessSpecTemplate, *dTypes.ProcessSpec, error) {
-	var template dTypes.ProcessSpecTemplate
-	var processSpec dTypes.ProcessSpec
+func ParseProcessSpecs(cfApp cfTypes.AppManifest) (*ProcessSpecTemplate, *ProcessSpec, error) {
+	var template ProcessSpecTemplate
+	var processSpec ProcessSpec
 	var err error
 	// dafault values
 	memory := "1G"
@@ -34,7 +33,7 @@ func ParseProcessSpecs(cfApp cfTypes.AppManifest) (*dTypes.ProcessSpecTemplate, 
 
 	if cfApp.Type == "" {
 		// Handle template process
-		template, err = MarshalUnmarshal[dTypes.ProcessSpecTemplate](cfApp)
+		template, err = MarshalUnmarshal[ProcessSpecTemplate](cfApp)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to parse template spec: %w", err)
 		}
@@ -54,14 +53,14 @@ func ParseProcessSpecs(cfApp cfTypes.AppManifest) (*dTypes.ProcessSpecTemplate, 
 			template.LogRateLimit = cfApp.LogRateLimitPerSecond
 		}
 
-		if (template == dTypes.ProcessSpecTemplate{}) {
+		if (template == ProcessSpecTemplate{}) {
 			return nil, nil, nil
 		}
 		return &template, nil, nil
 	}
 	// Handle inline process
 
-	processSpec, err = MarshalUnmarshal[dTypes.ProcessSpec](cfApp)
+	processSpec, err = MarshalUnmarshal[ProcessSpec](cfApp)
 
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse inline spec: %w", err)
@@ -82,13 +81,13 @@ func ParseProcessSpecs(cfApp cfTypes.AppManifest) (*dTypes.ProcessSpecTemplate, 
 
 }
 
-func ParseRouteSpec(cfRoutes *cfTypes.AppManifestRoutes, randomRoute, noRoute bool) dTypes.RouteSpec {
+func ParseRouteSpec(cfRoutes *cfTypes.AppManifestRoutes, randomRoute, noRoute bool) RouteSpec {
 	if noRoute {
-		return dTypes.RouteSpec{
+		return RouteSpec{
 			NoRoute: noRoute,
 		}
 	}
-	routeSpec := dTypes.RouteSpec{
+	routeSpec := RouteSpec{
 		RandomRoute: randomRoute}
 	if cfRoutes == nil {
 		return routeSpec
@@ -97,19 +96,19 @@ func ParseRouteSpec(cfRoutes *cfTypes.AppManifestRoutes, randomRoute, noRoute bo
 	return routeSpec
 }
 
-func ParseRoutes(cfRoutes cfTypes.AppManifestRoutes) dTypes.Routes {
+func ParseRoutes(cfRoutes cfTypes.AppManifestRoutes) Routes {
 	if cfRoutes == nil {
 		return nil
 	}
-	routes := dTypes.Routes{}
+	routes := Routes{}
 	for _, cfRoute := range cfRoutes {
-		options := dTypes.RouteOptions{}
+		options := RouteOptions{}
 		if cfRoute.Options != nil {
-			options.LoadBalancing = dTypes.LoadBalancingType(cfRoute.Options.LoadBalancing)
+			options.LoadBalancing = LoadBalancingType(cfRoute.Options.LoadBalancing)
 		}
-		r := dTypes.Route{
+		r := Route{
 			Route:    cfRoute.Route,
-			Protocol: dTypes.RouteProtocol(cfRoute.Protocol),
+			Protocol: RouteProtocol(cfRoute.Protocol),
 			Options:  options,
 		}
 		routes = append(routes, r)
@@ -118,11 +117,11 @@ func ParseRoutes(cfRoutes cfTypes.AppManifestRoutes) dTypes.Routes {
 	return routes
 }
 
-func ParseHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfInterval, cfTimeout uint) dTypes.ProbeSpec {
+func ParseHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfInterval, cfTimeout uint) ProbeSpec {
 
-	t := dTypes.PortProbeType
+	t := PortProbeType
 	if len(cfType) > 0 {
-		t = dTypes.ProbeType(cfType)
+		t = ProbeType(cfType)
 	}
 
 	endpoint := "/"
@@ -140,7 +139,7 @@ func ParseHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfIn
 		interval = int(cfInterval)
 	}
 
-	return dTypes.ProbeSpec{
+	return ProbeSpec{
 		Type:     t,
 		Endpoint: endpoint,
 		Timeout:  timeout,
@@ -148,10 +147,10 @@ func ParseHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfIn
 	}
 }
 
-func ParseReadinessHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfInterval, cfTimeout uint) dTypes.ProbeSpec {
-	t := dTypes.ProcessProbeType
+func ParseReadinessHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfInterval, cfTimeout uint) ProbeSpec {
+	t := ProcessProbeType
 	if len(cfType) > 0 {
-		t = dTypes.ProbeType(cfType)
+		t = ProbeType(cfType)
 	}
 
 	endpoint := "/"
@@ -169,7 +168,7 @@ func ParseReadinessHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint str
 		interval = int(cfInterval)
 	}
 
-	return dTypes.ProbeSpec{
+	return ProbeSpec{
 		Type:     t,
 		Endpoint: endpoint,
 		Timeout:  timeout,
@@ -178,28 +177,28 @@ func ParseReadinessHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint str
 
 }
 
-func ParseCFApp(cfApp cfTypes.AppManifest) (dTypes.Application, error) {
+func ParseCFApp(cfApp cfTypes.AppManifest) (Application, error) {
 	timeout := 60
 	if cfApp.Timeout != 0 {
 		timeout = int(cfApp.Timeout)
 	}
-	services, err := MarshalUnmarshal[dTypes.Services](cfApp.Services)
+	services, err := MarshalUnmarshal[Services](cfApp.Services)
 	if err != nil {
-		return dTypes.Application{}, err
+		return Application{}, err
 	}
 	routeSpec := ParseRouteSpec(cfApp.Routes, cfApp.RandomRoute, cfApp.NoRoute)
-	docker, err := MarshalUnmarshal[dTypes.Docker](cfApp.Docker)
+	docker, err := MarshalUnmarshal[Docker](cfApp.Docker)
 
 	if err != nil {
-		return dTypes.Application{}, err
+		return Application{}, err
 	}
-	sidecars, err := MarshalUnmarshal[dTypes.Sidecars](cfApp.Sidecars)
+	sidecars, err := MarshalUnmarshal[Sidecars](cfApp.Sidecars)
 	if err != nil {
-		return dTypes.Application{}, err
+		return Application{}, err
 	}
-	processes, err := MarshalUnmarshal[dTypes.Processes](cfApp.Processes)
+	processes, err := MarshalUnmarshal[Processes](cfApp.Processes)
 	if err != nil {
-		return dTypes.Application{}, err
+		return Application{}, err
 	}
 	var labels, annotations map[string]*string
 
@@ -210,9 +209,9 @@ func ParseCFApp(cfApp cfTypes.AppManifest) (dTypes.Application, error) {
 	appManifestProcess, inlineProcess, err := ParseProcessSpecs(cfApp)
 
 	if err != nil {
-		return dTypes.Application{}, err
+		return Application{}, err
 	}
-	var appManifestProcessTemplate *dTypes.ProcessSpecTemplate
+	var appManifestProcessTemplate *ProcessSpecTemplate
 
 	if appManifestProcess != nil {
 		appManifestProcessTemplate = appManifestProcess
@@ -220,8 +219,8 @@ func ParseCFApp(cfApp cfTypes.AppManifest) (dTypes.Application, error) {
 	if inlineProcess != nil {
 		processes = append(processes, *inlineProcess)
 	}
-	app := dTypes.Application{
-		Metadata: dTypes.Metadata{
+	app := Application{
+		Metadata: Metadata{
 			Name:        cfApp.Name,
 			Labels:      labels,
 			Annotations: annotations,
@@ -241,12 +240,12 @@ func ParseCFApp(cfApp cfTypes.AppManifest) (dTypes.Application, error) {
 	}
 	validationErrors := validateApplication(app)
 	if validationErrors != nil {
-		return dTypes.Application{}, validationErrors
+		return Application{}, validationErrors
 	}
 	return app, nil
 }
 
-func validateApplication(app dTypes.Application) error {
+func validateApplication(app Application) error {
 	validate := validator.New(validator.WithRequiredStructEnabled())
 	err := validate.Struct(app)
 	if err != nil {

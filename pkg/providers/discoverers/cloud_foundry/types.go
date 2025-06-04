@@ -1,4 +1,4 @@
-package discover
+package cloud_foundry
 
 // Application represents an interpretation of a runtime Cloud Foundry application. This structure differs in that
 // the information it contains has been processed to simplify its transformation to a Kubernetes manifest using MTA

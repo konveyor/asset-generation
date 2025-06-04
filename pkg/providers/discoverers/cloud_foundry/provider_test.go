@@ -15,7 +15,6 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/testutil"
 	getter "github.com/hashicorp/go-getter"
-	dTypes "github.com/konveyor/asset-generation/pkg/providers/types/discover"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
@@ -242,12 +241,12 @@ var _ = Describe("CloudFoundry Provider", func() {
 		})
 	})
 
-	DescribeTable("extracts the sensitive infromation from an app", func(app dTypes.Application) {
+	DescribeTable("extracts the sensitive infromation from an app", func(app Application) {
 		By("Copying the application manifest to be able to check against the resulting changes")
 		// copy the app manifest
 		b, err := yaml.Marshal(app)
 		Expect(err).NotTo(HaveOccurred())
-		appCopy := dTypes.Application{}
+		appCopy := Application{}
 		err = yaml.Unmarshal(b, &appCopy)
 		Expect(err).NotTo(HaveOccurred())
 		By("performing the extraction and modification of the application to use UUID for sensitive information")
@@ -274,9 +273,9 @@ var _ = Describe("CloudFoundry Provider", func() {
 		}
 
 	}, Entry("with docker username and one service with a secret stored in the parameter's map",
-		dTypes.Application{
-			Docker: dTypes.Docker{Username: "username"},
-			Services: dTypes.Services{
+		Application{
+			Docker: Docker{Username: "username"},
+			Services: Services{
 				{
 					Name:        "elephantsql",
 					BindingName: "elephantsql-binding-c6c60",
@@ -286,23 +285,23 @@ var _ = Describe("CloudFoundry Provider", func() {
 				},
 			}}),
 		Entry("with docker username and one secret with no credentials stored in the parameter's map",
-			dTypes.Application{
-				Docker: dTypes.Docker{Username: "username"},
-				Services: dTypes.Services{
+			Application{
+				Docker: Docker{Username: "username"},
+				Services: Services{
 					{
 						Name:        "elephantsql",
 						BindingName: "elephantsql-binding-c6c60",
 					},
 				}}),
 		Entry("with no docker username and no environment values",
-			dTypes.Application{
-				Docker:   dTypes.Docker{},
-				Services: dTypes.Services{},
+			Application{
+				Docker:   Docker{},
+				Services: Services{},
 			}),
 		Entry("with no docker username but with a service containing a credentials as paramter",
-			dTypes.Application{
-				Docker: dTypes.Docker{Image: "docker.io/library/golang "},
-				Services: dTypes.Services{
+			Application{
+				Docker: Docker{Image: "docker.io/library/golang "},
+				Services: Services{
 					{
 						Name:        "sendgrid",
 						BindingName: "mysendgrid",

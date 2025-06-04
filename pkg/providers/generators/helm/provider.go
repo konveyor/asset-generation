@@ -5,7 +5,7 @@ import (
 	"maps"
 	"strings"
 
-	"github.com/konveyor/asset-generation/pkg/providers"
+	"github.com/konveyor/asset-generation/pkg/providers/generators"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/chartutil"
@@ -27,7 +27,7 @@ type helmProvider struct {
 	cfg Config
 }
 
-func New(cfg Config) providers.Generator {
+func New(cfg Config) generators.Provider {
 	return &helmProvider{cfg: cfg}
 }
 
