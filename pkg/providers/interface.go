@@ -5,8 +5,8 @@ import (
 )
 
 type Provider interface {
-	Discover() (result pTypes.DiscoverResult, err error)
-	ListApps() ([]string, error)
+	Discover(space string, app string) (result pTypes.DiscoverResult, err error)
+	ListApps() (map[string]any, error)
 }
 
 type Generator interface {
