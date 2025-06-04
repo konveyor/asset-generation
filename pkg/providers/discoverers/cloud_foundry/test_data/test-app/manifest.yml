@@ -1,22 +1,12 @@
----
-version: 1
-
+name: my-app
+memory: 512M
+disk_quota: 1G
+instances: 1
+buildpacks:
+  - python_buildpack
+path: ./app
+routes:
+  - route: my-app.example.com
 services:
-  - name: my-db
-    type: managed
-    plan: spark
-    broker: cleardb
-
-applications:
-  - name: my-app
-    memory: 512M
-    disk_quota: 1G
-    instances: 1
-    buildpacks:
-      - python_buildpack
-    path: ./app
-    routes:
-      - route: my-app.example.com
-    services:
-      - my-db
-    health-check-type: port
+  - my-db
+health-check-type: port
