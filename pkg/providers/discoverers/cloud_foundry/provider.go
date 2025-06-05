@@ -91,20 +91,20 @@ func (c *CloudFoundryProvider) ListApps() (map[string]any, error) {
 	return c.listAppsFromCloudFoundry()
 }
 
-type DiscoverInputParam struct {
-	SpaceName string
-	AppName   string
+type discoverInputParam struct {
+	spaceName string
+	appName   string
 }
 
-func (c *CloudFoundryProvider) Discover(rawData any) (pTypes.DiscoverResult, error) {
-	input, ok := rawData.(DiscoverInputParam)
+func (c *CloudFoundryProvider) Discover(RawData any) (pTypes.DiscoverResult, error) {
+	input, ok := RawData.(discoverInputParam)
 	if !ok {
-		return pTypes.DiscoverResult{}, fmt.Errorf("invalid type %s", reflect.TypeOf(rawData))
+		return pTypes.DiscoverResult{}, fmt.Errorf("invalid type %s", reflect.TypeOf(RawData))
 	}
 	if c.cfg.ManifestPath != "" {
 		return c.discoverFromManifest()
 	}
-	return c.discoverFromLive(input.SpaceName, input.AppName)
+	return c.discoverFromLive(input.spaceName, input.appName)
 }
 
 // listAppsFromLocalManifests handles discovery of apps by reading local manifest files.
@@ -198,9 +198,9 @@ func (c *CloudFoundryProvider) listAppsFromCloudFoundry() (map[string]any, error
 		}
 		c.logger.Printf("Apps discovered: %d\n", len(apps))
 
-		appsInSpace := make([]string, 0, len(apps))
+		appsInSpace := make([]discoverInputParam, 0, len(apps))
 		for _, app := range apps {
-			appsInSpace = append(appsInSpace, app.GUID)
+			appsInSpace = append(appsInSpace, discoverInputParam{spaceName: spaceName, appName: app.Name})
 		}
 		appList[spaceName] = appsInSpace
 	}

@@ -69,7 +69,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						Endpoint:    "/v3/spaces",
 						Output:      g.Single(""),
 						Status:      http.StatusOK,
-						QueryString: "names=" + space.Name,
+						QueryString: "names=" + space.Name + "&" + pagingQueryString,
 					},
 				}, GlobalT)
 			})
@@ -138,7 +138,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(apps).To(HaveLen(1))
 				Expect(apps).To(HaveKey(space.Name))
-				Expect(apps[space.Name]).To(BeEquivalentTo([]string{app1.GUID, app2.GUID}))
+				Expect(apps[space.Name]).To(BeEquivalentTo([]discoverInputParam{{spaceName: space.Name, appName: app1.Name}, {spaceName: space.Name, appName: app2.Name}}))
 			})
 		})
 		Context("when apps don't exist in the space", func() {
