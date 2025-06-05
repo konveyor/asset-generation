@@ -123,12 +123,15 @@ func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string]any, err
 
 			appName, err := c.getAppNameFromManifest(filePath)
 			if err != nil {
-				c.logger.Printf("error processing manifest file %s: %v", file.Name(), err)
+				c.logger.Printf("error processing manifest file '%s': %v", filePath, err)
 				continue
 			}
-			if appName != "" {
-				apps = append(apps, appName)
+			if appName == "" {
+				c.logger.Printf("manifest file '%s' does not contain an app name", filePath)
+				continue
 			}
+			c.logger.Printf("found app name '%s' in manifest file '%s'", appName, filePath)
+			apps = append(apps, appName)
 		}
 		return map[string]any{"local": apps}, nil
 	} else {

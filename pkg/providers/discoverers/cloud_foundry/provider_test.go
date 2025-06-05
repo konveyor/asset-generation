@@ -1,6 +1,7 @@
 package cloud_foundry
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -180,6 +181,102 @@ var _ = Describe("CloudFoundry Provider", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(apps).To(HaveLen(1))
 				Expect(apps[emptySpace.Name]).To(BeEmpty())
+			})
+		})
+	})
+
+	Describe("listAppsFromLocalManifests", func() {
+		var (
+			provider  *CloudFoundryProvider
+			nopLogger = log.New(io.Discard, "", 0)
+		)
+
+		BeforeEach(func() {
+		})
+
+		Context("when manifest path is a directory with multiple manifests", func() {
+			BeforeEach(func() {
+				provider = &CloudFoundryProvider{
+					cfg: &Config{
+						ManifestPath: filepath.Join("./test_data", "multiple_manifests"),
+					},
+					logger: nopLogger,
+				}
+			})
+
+			It("returns app names from manifests in the directory (ignoring subfolders and non-yaml files)", func() {
+				apps, err := provider.listAppsFromLocalManifests()
+				Expect(err).NotTo(HaveOccurred())
+
+				localApps, ok := apps["local"]
+				Expect(ok).To(BeTrue())
+
+				appSlice, ok := localApps.([]string)
+				Expect(ok).To(BeTrue())
+
+				Expect(appSlice).To(ContainElements("app1", "app2"))
+				Expect(appSlice).NotTo(ContainElement("app-in-subfolder"))
+				Expect(appSlice).NotTo(ContainElement("text-file"))
+			})
+
+			It("logs an error and continues when manifest files contain invalid YAML", func() {
+				logBuf := new(bytes.Buffer)
+				logger := log.New(logBuf, "", 0)
+				provider = &CloudFoundryProvider{
+					cfg: &Config{
+						ManifestPath: filepath.Join("./test_data", "invalid_manifest"),
+					},
+					logger: logger,
+				}
+				apps, err := provider.listAppsFromLocalManifests()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(apps).ToNot(BeNil())
+				Expect(apps).To(HaveLen(1))
+				Expect(apps).To(HaveKey("local"))
+				Expect(apps["local"]).To(HaveLen(0))
+				logOutput := logBuf.String()
+				Expect(logOutput).To(ContainSubstring("error processing manifest file"))
+			})
+			It("logs a warning and skips manifests missing app name", func() {
+				logBuf := new(bytes.Buffer)
+				logger := log.New(logBuf, "", 0)
+				provider = &CloudFoundryProvider{
+					cfg: &Config{
+						ManifestPath: filepath.Join("./test_data", "no_app_name_manifest"),
+					},
+					logger: logger,
+				}
+				apps, err := provider.listAppsFromLocalManifests()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(apps).ToNot(BeNil())
+				Expect(apps).To(HaveLen(1))
+				Expect(apps).To(HaveKey("local"))
+				Expect(apps["local"]).To(HaveLen(0))
+				logOutput := logBuf.String()
+				Expect(logOutput).To(ContainSubstring(" does not contain an app name"))
+			})
+		})
+
+		Context("when manifest path is a single manifest file", func() {
+			BeforeEach(func() {
+				provider = &CloudFoundryProvider{
+					cfg: &Config{
+						ManifestPath: filepath.Join("./test_data", "test-app", "manifest.yml"),
+					},
+					logger: nopLogger,
+				}
+			})
+
+			It("returns the app name from the single manifest file", func() {
+				apps, err := provider.listAppsFromLocalManifests()
+				Expect(err).NotTo(HaveOccurred())
+
+				localApp, ok := apps["local"]
+				Expect(ok).To(BeTrue())
+
+				appName, ok := localApp.(string)
+				Expect(ok).To(BeTrue())
+				Expect(appName).To(Equal("my-app"))
 			})
 		})
 	})
