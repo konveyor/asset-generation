@@ -91,15 +91,20 @@ func (c *CloudFoundryProvider) ListApps() (map[string]any, error) {
 	return c.listAppsFromCloudFoundry()
 }
 
+type DiscoverInputParam struct {
+	SpaceName string
+	AppName   string
+}
+
 func (c *CloudFoundryProvider) Discover(rawData any) (pTypes.DiscoverResult, error) {
-	appName, ok := rawData.(string)
+	input, ok := rawData.(DiscoverInputParam)
 	if !ok {
 		return pTypes.DiscoverResult{}, fmt.Errorf("invalid type %s", reflect.TypeOf(rawData))
 	}
 	if c.cfg.ManifestPath != "" {
 		return c.discoverFromManifest()
 	}
-	return c.discoverFromLive(appName)
+	return c.discoverFromLive(input.SpaceName, input.AppName)
 }
 
 // listAppsFromLocalManifests handles discovery of apps by reading local manifest files.
@@ -261,7 +266,7 @@ func (c *CloudFoundryProvider) discoverFromManifest() (pTypes.DiscoverResult, er
 	return discoverResult, nil
 }
 
-func (c *CloudFoundryProvider) discoverFromLive(appGUID string) (pTypes.DiscoverResult, error) {
+func (c *CloudFoundryProvider) discoverFromLive(spaceGUID string, appGUID string) (pTypes.DiscoverResult, error) {
 	var discoverResult pTypes.DiscoverResult
 
 	if appGUID == "" {
@@ -273,7 +278,7 @@ func (c *CloudFoundryProvider) discoverFromLive(appGUID string) (pTypes.Discover
 
 	c.logger.Println("Starting live Cloud Foundry discovery for app with GUID:", appGUID)
 
-	d, err := c.discoverFromLiveAPI(appGUID)
+	d, err := c.discoverFromLiveAPI(spaceGUID, appGUID)
 	if err != nil {
 		return discoverResult, fmt.Errorf("error during Cloud Foundry live discover: %v", err)
 	}
@@ -320,8 +325,8 @@ func (c *CloudFoundryProvider) discoverFromManifestFile() (*Application, error) 
 // If the output folder is provided, it writes the manifest to a file in the
 // output folder with the name "manifest_<space_name>_<app_name>.yaml".
 // If the output folder is not provided, it returns a list of applications.
-func (c *CloudFoundryProvider) discoverFromLiveAPI(appGUID string) (*Application, error) {
-	cfManifests, err := c.generateCFManifestFromLiveAPI(appGUID)
+func (c *CloudFoundryProvider) discoverFromLiveAPI(spaceGUID string, appGUID string) (*Application, error) {
+	cfManifests, err := c.generateCFManifestFromLiveAPI(spaceGUID, appGUID)
 	if err != nil {
 		return nil, err
 	}
@@ -334,12 +339,12 @@ func (c *CloudFoundryProvider) discoverFromLiveAPI(appGUID string) (*Application
 	return &discoveredApp, nil
 }
 
-func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(appGUID string) (*cfTypes.AppManifest, error) {
+func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(spaceGUID string, appGUID string) (*cfTypes.AppManifest, error) {
 	ctx := context.Background()
 	c.logger.Printf("Analyzing application %s", appGUID)
 
 	// Retrieve app in Space and with app GUID
-	app, err := c.getAppBySpaceAndAppGUID(appGUID)
+	app, err := c.getAppBySpaceAndAppGUID(spaceGUID, appGUID)
 	if err != nil {
 		return nil, fmt.Errorf("error getting app GUID %s: %v", appGUID, err)
 	}
@@ -556,9 +561,10 @@ func (c *CloudFoundryProvider) listAppsBySpaceName(spaceName string) ([]*resourc
 	return apps, nil
 }
 
-func (c *CloudFoundryProvider) getAppBySpaceAndAppGUID(appGUID string) (*resource.App, error) {
+func (c *CloudFoundryProvider) getAppBySpaceAndAppGUID(spaceGUID string, appGUID string) (*resource.App, error) {
 	appsOpt := client.NewAppListOptions()
 	appsOpt.GUIDs.EqualTo(appGUID)
+	appsOpt.SpaceGUIDs.EqualTo(spaceGUID)
 	app, err := c.cli.Applications.ListAll(context.Background(), appsOpt)
 	if err != nil {
 		return nil, fmt.Errorf("error listing Cloud Foundry apps: %s", err)
