@@ -494,30 +494,6 @@ func getServicesFromApplicationEnvironment(env map[string]json.RawMessage) (cfTy
 	return appServices, nil
 }
 
-// func (c *CloudFoundryProvider) getStack(ctx context.Context, app *resource.App) (string, error) {
-// 	var appStack string
-// 	allStacks, err := c.cli.Stacks.ListAll(ctx, nil)
-// 	if err != nil {
-// 		return "", fmt.Errorf("error getting stacks: %v", err)
-// 	}
-// 	for _, stack := range allStacks {
-// 		appsOnStack, err := c.cli.Stacks.ListAppsOnStackAll(ctx, stack.GUID, nil)
-// 		if err != nil {
-// 			return "", fmt.Errorf("error getting buildpacks: %v", err)
-// 		}
-// 		for _, appOnStack := range appsOnStack {
-// 			if appOnStack.GUID == app.GUID {
-// 				appStack = stack.Name
-// 				break
-// 			}
-// 		}
-// 		if appStack != "" {
-// 			break
-// 		}
-// 	}
-// 	return appStack, nil
-// }
-
 func (c *CloudFoundryProvider) getSpaceByName(spaceName string) (*resource.Space, error) {
 	spaceOpts := client.NewSpaceListOptions()
 	spaceOpts.Names.EqualTo(spaceName)
