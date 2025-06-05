@@ -5,7 +5,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/konveyor/asset-generation/pkg/providers/helm"
+	"github.com/konveyor/asset-generation/pkg/providers/generators/helm"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v2"
