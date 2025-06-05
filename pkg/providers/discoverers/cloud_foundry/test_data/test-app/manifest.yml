@@ -7,6 +7,7 @@ buildpacks:
 path: ./app
 routes:
   - route: my-app.example.com
+    protocol: http2
 services:
   - my-db
 health-check-type: port

@@ -15,6 +15,7 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/testutil"
 	getter "github.com/hashicorp/go-getter"
+	cfTypes "github.com/konveyor/asset-generation/pkg/models"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
@@ -278,6 +279,74 @@ var _ = Describe("CloudFoundry Provider", func() {
 				Expect(ok).To(BeTrue())
 				Expect(appName).To(Equal("my-app"))
 			})
+		})
+	})
+
+	Describe("discoverFromManifestFile", func() {
+		var (
+			provider     *CloudFoundryProvider
+			manifestPath string
+			nopLogger    = log.New(io.Discard, "", 0)
+		)
+
+		BeforeEach(func() {
+			manifestPath = filepath.Join("test_data", "test-app", "manifest.yml")
+			provider = &CloudFoundryProvider{
+				cfg: &Config{
+					ManifestPath: manifestPath,
+				},
+				logger: nopLogger,
+			}
+		})
+
+		It("successfully parses a valid manifest and returns an Application", func() {
+
+			app, err := provider.discoverFromManifestFile()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(app).ToNot(BeNil())
+			Expect(app.Metadata).ToNot(BeNil())
+			Expect(app.Metadata.Name).To(Equal("my-app"))
+		})
+
+		It("returns an error if the manifest file does not exist", func() {
+			provider = &CloudFoundryProvider{
+				cfg: &Config{
+					ManifestPath: "/not/exist/manifest",
+				},
+				logger: nopLogger,
+			}
+			app, err := provider.discoverFromManifestFile()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to read manifest file"))
+			Expect(app).To(BeNil())
+		})
+
+		It("returns an error if the manifest YAML is invalid", func() {
+			invalidManifestPath := filepath.Join("test_data", "invalid_manifest", "manifest.yml")
+
+			provider = &CloudFoundryProvider{
+				cfg: &Config{
+					ManifestPath: invalidManifestPath,
+				},
+				logger: nopLogger,
+			}
+
+			app, err := provider.discoverFromManifestFile()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to unmarshal YAML"))
+			Expect(app).To(BeNil())
+		})
+
+		It("returns an error if parseCFApp fails", func() {
+			mockParseCF := func(manifest cfTypes.AppManifest) (Application, error) {
+				return Application{}, fmt.Errorf("mock parse error")
+			}
+			parseCFApp = mockParseCF
+
+			app, err := provider.discoverFromManifestFile()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to create application"))
+			Expect(app).To(BeNil())
 		})
 	})
 
