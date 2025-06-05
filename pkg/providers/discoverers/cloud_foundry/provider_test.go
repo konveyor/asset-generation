@@ -16,6 +16,7 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/testutil"
 	getter "github.com/hashicorp/go-getter"
 	cfTypes "github.com/konveyor/asset-generation/pkg/models"
+	pTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
@@ -43,311 +44,463 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 			log.Fatalf("Failed to download template folder: %v", err)
 		}
 	})
-	Describe("listAppsFromCloudFoundry", func() {
-		var (
-			g          *testutil.ObjectJSONGenerator
-			app1       *testutil.JSONResource
-			app2       *testutil.JSONResource
-			space      *testutil.JSONResource
-			emptySpace *testutil.JSONResource
-			serverURL  string
-			logger     = log.New(io.Discard, "", 0)
-		)
+	When("performing live connnection", func() {
 
-		BeforeAll(func() {
-			g = testutil.NewObjectJSONGenerator()
-			space = g.Space()
-			emptySpace = g.Space()
-			app1 = g.Application()
-			app2 = g.Application()
+		Describe("listing apps from Cloud Foundry", func() {
+			var (
+				g          *testutil.ObjectJSONGenerator
+				app1       *testutil.JSONResource
+				app2       *testutil.JSONResource
+				space      *testutil.JSONResource
+				emptySpace *testutil.JSONResource
+				serverURL  string
+				logger     = log.New(io.Discard, "", 0)
+			)
+
+			BeforeAll(func() {
+				g = testutil.NewObjectJSONGenerator()
+				space = g.Space()
+				emptySpace = g.Space()
+				app1 = g.Application()
+				app2 = g.Application()
+			})
+			Context("when space name doesn't exist", func() {
+				BeforeEach(func() {
+					serverURL = testutil.SetupMultiple([]testutil.MockRoute{
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/spaces",
+							Output:      g.Single(""),
+							Status:      http.StatusOK,
+							QueryString: "names=" + space.Name + "&" + pagingQueryString,
+						},
+					}, GlobalT)
+				})
+				AfterEach(func() {
+					testutil.Teardown()
+				})
+				It("returns	an error", func() {
+					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+					Expect(err).NotTo(HaveOccurred())
+
+					cfConfig := &Config{
+						SpaceNames:         []string{space.Name},
+						CloudFoundryConfig: cfg,
+					}
+
+					p, err := New(cfConfig, logger)
+					Expect(err).NotTo(HaveOccurred())
+					apps, err := p.ListApps()
+					Expect(err).To(HaveOccurred())
+					Expect(apps).To(BeNil())
+
+				})
+			})
+			Context("when apps exist in the space", func() {
+				BeforeEach(func() {
+					serverURL = testutil.SetupMultiple([]testutil.MockRoute{
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/apps",
+							Output:      g.Paged([]string{app1.JSON, app2.JSON}),
+							Status:      http.StatusOK,
+							QueryString: pagingQueryString + "&space_guids=" + space.GUID,
+						},
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/apps",
+							Output:      g.Paged([]string{}),
+							Status:      http.StatusOK,
+							QueryString: pagingQueryString + "&space_guids=" + emptySpace.GUID,
+						},
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/spaces",
+							Output:      g.Paged([]string{space.JSON}),
+							Status:      http.StatusOK,
+							QueryString: "names=" + space.Name + "&" + pagingQueryString,
+						},
+					}, GlobalT)
+				})
+				AfterEach(func() {
+					testutil.Teardown()
+				})
+
+				It("returns all the apps in the given space", func() {
+					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+					Expect(err).NotTo(HaveOccurred())
+
+					cfConfig := &Config{
+						CloudFoundryConfig: cfg,
+						SpaceNames:         []string{space.Name},
+					}
+
+					p, err := New(cfConfig, logger)
+					Expect(err).NotTo(HaveOccurred())
+					apps, err := p.ListApps()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(apps).To(HaveLen(1))
+					Expect(apps).To(HaveKey(space.Name))
+					Expect(apps[space.Name]).To(BeEquivalentTo([]discoverInputParam{{spaceName: space.Name, appName: app1.Name}, {spaceName: space.Name, appName: app2.Name}}))
+				})
+			})
+			Context("when apps don't exist in the space", func() {
+				BeforeEach(func() {
+					// Create two mock apps in the test server
+					serverURL = testutil.SetupMultiple([]testutil.MockRoute{
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/apps",
+							Output:      g.Paged([]string{}),
+							Status:      http.StatusOK,
+							QueryString: pagingQueryString + "&space_guids=" + emptySpace.GUID,
+						},
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/spaces",
+							Output:      g.Paged([]string{emptySpace.JSON}),
+							Status:      http.StatusOK,
+							QueryString: "names=" + emptySpace.Name + "&" + pagingQueryString,
+						},
+					}, GlobalT)
+				})
+				AfterEach(func() {
+					testutil.Teardown()
+				})
+
+				It("returns no apps", func() {
+					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+					Expect(err).NotTo(HaveOccurred())
+
+					cfConfig := &Config{
+						CloudFoundryConfig: cfg,
+						SpaceNames:         []string{emptySpace.Name},
+					}
+
+					p, err := New(cfConfig, logger)
+					Expect(err).NotTo(HaveOccurred())
+					apps, err := p.listAppsFromCloudFoundry()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(apps).To(HaveLen(1))
+					Expect(apps[emptySpace.Name]).To(BeEmpty())
+				})
+			})
 		})
-		Context("when space name doesn't exist", func() {
+
+		Context("discovering apps from Cloud Foundry", func() {
+			var (
+				g    *testutil.ObjectJSONGenerator
+				app1 *testutil.JSONResource
+				// app2       *testutil.JSONResource
+				space      *testutil.JSONResource
+				emptySpace *testutil.JSONResource
+				serverURL  string
+				logger     = log.New(io.Discard, "", 0)
+			)
+
+			BeforeAll(func() {
+				g = testutil.NewObjectJSONGenerator()
+				space = g.Space()
+				emptySpace = g.Space()
+				app1 = g.Application()
+				// app2 = g.Application()
+			})
+			Context("when space name doesn't exist", func() {
+				BeforeEach(func() {
+					serverURL = testutil.SetupMultiple([]testutil.MockRoute{
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/apps",
+							Output:      g.Single(""),
+							Status:      http.StatusOK,
+							QueryString: "guids=" + app1.Name + "&" + pagingQueryString + "&space_guids=not+here",
+						},
+					}, GlobalT)
+				})
+				AfterEach(func() {
+					testutil.Teardown()
+				})
+				It("returns an error", func() {
+					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+					Expect(err).NotTo(HaveOccurred())
+
+					cfConfig := &Config{
+						CloudFoundryConfig: cfg,
+					}
+
+					p, err := New(cfConfig, logger)
+					Expect(err).NotTo(HaveOccurred())
+					params := discoverInputParam{spaceName: "not here", appName: app1.Name}
+					apps, err := p.Discover(params)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(Equal("no application found with GUID " + app1.Name))
+					Expect(apps).To(BeNil())
+
+				})
+			})
+			Context("when apps exist in the space", func() {
+				BeforeEach(func() {
+					serverURL = testutil.SetupMultiple([]testutil.MockRoute{
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/apps",
+							Output:      g.Paged([]string{app1.JSON}),
+							Status:      http.StatusOK,
+							QueryString: pagingQueryString + "&space_guids=" + space.GUID,
+						},
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/apps/" + app1.GUID + "/env",
+							Output:      g.Paged([]string{}),
+							Status:      http.StatusOK,
+							QueryString: pagingQueryString,
+						},
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/apps/" + app1.GUID + "/processes",
+							Output:      g.Paged([]string{}),
+							Status:      http.StatusOK,
+							QueryString: pagingQueryString,
+						},
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/apps/" + app1.GUID + "/routes",
+							Output:      g.Paged([]string{}),
+							Status:      http.StatusOK,
+							QueryString: pagingQueryString,
+						},
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/apps/" + app1.GUID + "/sidecars",
+							Output:      g.Paged([]string{}),
+							Status:      http.StatusOK,
+							QueryString: pagingQueryString,
+						},
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/spaces",
+							Output:      g.Paged([]string{space.JSON}),
+							Status:      http.StatusOK,
+							QueryString: "names=" + space.Name + "&" + pagingQueryString,
+						},
+					}, GlobalT)
+				})
+				AfterEach(func() {
+					testutil.Teardown()
+				})
+
+				FIt("discovers an app with empty spec and only its name and GUID defined", func() {
+					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+					Expect(err).NotTo(HaveOccurred())
+
+					cfConfig := &Config{
+						CloudFoundryConfig: cfg,
+						SpaceNames:         []string{space.Name},
+					}
+
+					p, err := New(cfConfig, logger)
+					Expect(err).NotTo(HaveOccurred())
+					apps, err := p.Discover(discoverInputParam{spaceName: space.Name, appName: app1.Name})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(apps).NotTo(Equal(&pTypes.DiscoverResult{}))
+				})
+			})
+			Context("when apps don't exist in the space", func() {
+				BeforeEach(func() {
+					// Create two mock apps in the test server
+					serverURL = testutil.SetupMultiple([]testutil.MockRoute{
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/apps",
+							Output:      g.Paged([]string{}),
+							Status:      http.StatusOK,
+							QueryString: pagingQueryString + "&space_guids=" + emptySpace.GUID,
+						},
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/spaces",
+							Output:      g.Paged([]string{emptySpace.JSON}),
+							Status:      http.StatusOK,
+							QueryString: "names=" + emptySpace.Name + "&" + pagingQueryString,
+						},
+					}, GlobalT)
+				})
+				AfterEach(func() {
+					testutil.Teardown()
+				})
+
+				It("returns no apps", func() {
+					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+					Expect(err).NotTo(HaveOccurred())
+
+					cfConfig := &Config{
+						CloudFoundryConfig: cfg,
+						SpaceNames:         []string{emptySpace.Name},
+					}
+
+					p, err := New(cfConfig, logger)
+					Expect(err).NotTo(HaveOccurred())
+					apps, err := p.listAppsFromCloudFoundry()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(apps).To(HaveLen(1))
+					Expect(apps[emptySpace.Name]).To(BeEmpty())
+				})
+			})
+		})
+
+	})
+
+	When("performing local discovery", func() {
+
+		Describe("listAppsFromLocalManifests", func() {
+			var (
+				provider  *CloudFoundryProvider
+				nopLogger = log.New(io.Discard, "", 0)
+			)
+
 			BeforeEach(func() {
-				serverURL = testutil.SetupMultiple([]testutil.MockRoute{
-					{
-						Method:      "GET",
-						Endpoint:    "/v3/spaces",
-						Output:      g.Single(""),
-						Status:      http.StatusOK,
-						QueryString: "names=" + space.Name + "&" + pagingQueryString,
-					},
-				}, GlobalT)
 			})
-			AfterEach(func() {
-				testutil.Teardown()
+
+			Context("when manifest path is a directory with multiple manifests", func() {
+				BeforeEach(func() {
+					provider = &CloudFoundryProvider{
+						cfg: &Config{
+							ManifestPath: filepath.Join("./test_data", "multiple_manifests"),
+						},
+						logger: nopLogger,
+					}
+				})
+
+				It("returns app names from manifests in the directory (ignoring subfolders and non-yaml files)", func() {
+					apps, err := provider.listAppsFromLocalManifests()
+					Expect(err).NotTo(HaveOccurred())
+
+					localApps, ok := apps["local"]
+					Expect(ok).To(BeTrue())
+
+					appSlice, ok := localApps.([]string)
+					Expect(ok).To(BeTrue())
+
+					Expect(appSlice).To(ContainElements("app1", "app2"))
+					Expect(appSlice).NotTo(ContainElement("app-in-subfolder"))
+					Expect(appSlice).NotTo(ContainElement("text-file"))
+				})
+
+				It("logs an error and continues when manifest files contain invalid YAML", func() {
+					logBuf := new(bytes.Buffer)
+					logger := log.New(logBuf, "", 0)
+					provider = &CloudFoundryProvider{
+						cfg: &Config{
+							ManifestPath: filepath.Join("./test_data", "invalid_manifest"),
+						},
+						logger: logger,
+					}
+					apps, err := provider.listAppsFromLocalManifests()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(apps).ToNot(BeNil())
+					Expect(apps).To(HaveLen(1))
+					Expect(apps).To(HaveKey("local"))
+					Expect(apps["local"]).To(HaveLen(0))
+					logOutput := logBuf.String()
+					Expect(logOutput).To(ContainSubstring("error processing manifest file"))
+				})
+				It("logs a warning and skips manifests missing app name", func() {
+					logBuf := new(bytes.Buffer)
+					logger := log.New(logBuf, "", 0)
+					provider = &CloudFoundryProvider{
+						cfg: &Config{
+							ManifestPath: filepath.Join("./test_data", "no_app_name_manifest"),
+						},
+						logger: logger,
+					}
+					apps, err := provider.listAppsFromLocalManifests()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(apps).ToNot(BeNil())
+					Expect(apps).To(HaveLen(1))
+					Expect(apps).To(HaveKey("local"))
+					Expect(apps["local"]).To(HaveLen(0))
+					logOutput := logBuf.String()
+					Expect(logOutput).To(ContainSubstring(" does not contain an app name"))
+				})
 			})
-			It("returns	an error", func() {
-				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
-				Expect(err).NotTo(HaveOccurred())
 
-				cfConfig := &Config{
-					SpaceNames:         []string{space.Name},
-					CloudFoundryConfig: cfg,
-				}
+			Context("when manifest path is a single manifest file", func() {
+				BeforeEach(func() {
+					provider = &CloudFoundryProvider{
+						cfg: &Config{
+							ManifestPath: filepath.Join("./test_data", "test-app", "manifest.yml"),
+						},
+						logger: nopLogger,
+					}
+				})
 
-				p, err := New(cfConfig, logger)
+				It("returns the app name from the single manifest file", func() {
+					apps, err := provider.listAppsFromLocalManifests()
+					Expect(err).NotTo(HaveOccurred())
+
+					localApp, ok := apps["local"]
+					Expect(ok).To(BeTrue())
+
+					appName, ok := localApp.(string)
+					Expect(ok).To(BeTrue())
+					Expect(appName).To(Equal("my-app"))
+				})
+			})
+		})
+
+		Describe("discoverFromManifestFile", func() {
+			var (
+				provider     *CloudFoundryProvider
+				manifestPath string
+				nopLogger    = log.New(io.Discard, "", 0)
+				err          error
+			)
+
+			BeforeEach(func() {
+				manifestPath = filepath.Join("test_data", "test-app", "manifest.yml")
+				provider, err = New(&Config{}, nopLogger)
 				Expect(err).NotTo(HaveOccurred())
-				apps, err := p.ListApps()
+			})
+
+			It("successfully parses a valid manifest and returns an Application", func() {
+
+				app, err := provider.discoverFromManifestFile(manifestPath)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(app).ToNot(BeNil())
+				Expect(app.Metadata).ToNot(BeNil())
+				Expect(app.Metadata.Name).To(Equal("my-app"))
+			})
+
+			It("returns an error if the manifest file does not exist", func() {
+				app, err := provider.discoverFromManifestFile("/not/exist/manifest")
 				Expect(err).To(HaveOccurred())
-				Expect(apps).To(BeNil())
-
-			})
-		})
-		Context("when apps exist in the space", func() {
-			BeforeEach(func() {
-				serverURL = testutil.SetupMultiple([]testutil.MockRoute{
-					{
-						Method:      "GET",
-						Endpoint:    "/v3/apps",
-						Output:      g.Paged([]string{app1.JSON, app2.JSON}),
-						Status:      http.StatusOK,
-						QueryString: pagingQueryString + "&space_guids=" + space.GUID,
-					},
-					{
-						Method:      "GET",
-						Endpoint:    "/v3/apps",
-						Output:      g.Paged([]string{}),
-						Status:      http.StatusOK,
-						QueryString: pagingQueryString + "&space_guids=" + emptySpace.GUID,
-					},
-					{
-						Method:      "GET",
-						Endpoint:    "/v3/spaces",
-						Output:      g.Paged([]string{space.JSON}),
-						Status:      http.StatusOK,
-						QueryString: "names=" + space.Name + "&" + pagingQueryString,
-					},
-				}, GlobalT)
-			})
-			AfterEach(func() {
-				testutil.Teardown()
+				Expect(err.Error()).To(ContainSubstring("failed to read manifest file"))
+				Expect(app).To(BeNil())
 			})
 
-			It("returns all the apps in the given space", func() {
-				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
-				Expect(err).NotTo(HaveOccurred())
+			It("returns an error if the manifest YAML is invalid", func() {
+				invalidManifestPath := filepath.Join("test_data", "invalid_manifest", "manifest.yml")
 
-				cfConfig := &Config{
-					CloudFoundryConfig: cfg,
-					SpaceNames:         []string{space.Name},
+				app, err := provider.discoverFromManifestFile(invalidManifestPath)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to unmarshal YAML"))
+				Expect(app).To(BeNil())
+			})
+
+			It("returns an error if parseCFApp fails", func() {
+				mockParseCF := func(manifest cfTypes.AppManifest) (Application, error) {
+					return Application{}, fmt.Errorf("mock parse error")
 				}
+				parseCFApp = mockParseCF
 
-				p, err := New(cfConfig, logger)
-				Expect(err).NotTo(HaveOccurred())
-				apps, err := p.ListApps()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(apps).To(HaveLen(1))
-				Expect(apps).To(HaveKey(space.Name))
-				Expect(apps[space.Name]).To(BeEquivalentTo([]discoverInputParam{{spaceName: space.Name, appName: app1.Name}, {spaceName: space.Name, appName: app2.Name}}))
+				app, err := provider.discoverFromManifestFile(manifestPath)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to create application"))
+				Expect(app).To(BeNil())
 			})
 		})
-		Context("when apps don't exist in the space", func() {
-			BeforeEach(func() {
-				// Create two mock apps in the test server
-				serverURL = testutil.SetupMultiple([]testutil.MockRoute{
-					{
-						Method:      "GET",
-						Endpoint:    "/v3/apps",
-						Output:      g.Paged([]string{}),
-						Status:      http.StatusOK,
-						QueryString: pagingQueryString + "&space_guids=" + emptySpace.GUID,
-					},
-					{
-						Method:      "GET",
-						Endpoint:    "/v3/spaces",
-						Output:      g.Paged([]string{emptySpace.JSON}),
-						Status:      http.StatusOK,
-						QueryString: "names=" + emptySpace.Name + "&" + pagingQueryString,
-					},
-				}, GlobalT)
-			})
-			AfterEach(func() {
-				testutil.Teardown()
-			})
 
-			It("returns no apps", func() {
-				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
-				Expect(err).NotTo(HaveOccurred())
-
-				cfConfig := &Config{
-					CloudFoundryConfig: cfg,
-					SpaceNames:         []string{emptySpace.Name},
-				}
-
-				p, err := New(cfConfig, logger)
-				Expect(err).NotTo(HaveOccurred())
-				apps, err := p.listAppsFromCloudFoundry()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(apps).To(HaveLen(1))
-				Expect(apps[emptySpace.Name]).To(BeEmpty())
-			})
-		})
 	})
-
-	Describe("listAppsFromLocalManifests", func() {
-		var (
-			provider  *CloudFoundryProvider
-			nopLogger = log.New(io.Discard, "", 0)
-		)
-
-		BeforeEach(func() {
-		})
-
-		Context("when manifest path is a directory with multiple manifests", func() {
-			BeforeEach(func() {
-				provider = &CloudFoundryProvider{
-					cfg: &Config{
-						ManifestPath: filepath.Join("./test_data", "multiple_manifests"),
-					},
-					logger: nopLogger,
-				}
-			})
-
-			It("returns app names from manifests in the directory (ignoring subfolders and non-yaml files)", func() {
-				apps, err := provider.listAppsFromLocalManifests()
-				Expect(err).NotTo(HaveOccurred())
-
-				localApps, ok := apps["local"]
-				Expect(ok).To(BeTrue())
-
-				appSlice, ok := localApps.([]string)
-				Expect(ok).To(BeTrue())
-
-				Expect(appSlice).To(ContainElements("app1", "app2"))
-				Expect(appSlice).NotTo(ContainElement("app-in-subfolder"))
-				Expect(appSlice).NotTo(ContainElement("text-file"))
-			})
-
-			It("logs an error and continues when manifest files contain invalid YAML", func() {
-				logBuf := new(bytes.Buffer)
-				logger := log.New(logBuf, "", 0)
-				provider = &CloudFoundryProvider{
-					cfg: &Config{
-						ManifestPath: filepath.Join("./test_data", "invalid_manifest"),
-					},
-					logger: logger,
-				}
-				apps, err := provider.listAppsFromLocalManifests()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(apps).ToNot(BeNil())
-				Expect(apps).To(HaveLen(1))
-				Expect(apps).To(HaveKey("local"))
-				Expect(apps["local"]).To(HaveLen(0))
-				logOutput := logBuf.String()
-				Expect(logOutput).To(ContainSubstring("error processing manifest file"))
-			})
-			It("logs a warning and skips manifests missing app name", func() {
-				logBuf := new(bytes.Buffer)
-				logger := log.New(logBuf, "", 0)
-				provider = &CloudFoundryProvider{
-					cfg: &Config{
-						ManifestPath: filepath.Join("./test_data", "no_app_name_manifest"),
-					},
-					logger: logger,
-				}
-				apps, err := provider.listAppsFromLocalManifests()
-				Expect(err).ToNot(HaveOccurred())
-				Expect(apps).ToNot(BeNil())
-				Expect(apps).To(HaveLen(1))
-				Expect(apps).To(HaveKey("local"))
-				Expect(apps["local"]).To(HaveLen(0))
-				logOutput := logBuf.String()
-				Expect(logOutput).To(ContainSubstring(" does not contain an app name"))
-			})
-		})
-
-		Context("when manifest path is a single manifest file", func() {
-			BeforeEach(func() {
-				provider = &CloudFoundryProvider{
-					cfg: &Config{
-						ManifestPath: filepath.Join("./test_data", "test-app", "manifest.yml"),
-					},
-					logger: nopLogger,
-				}
-			})
-
-			It("returns the app name from the single manifest file", func() {
-				apps, err := provider.listAppsFromLocalManifests()
-				Expect(err).NotTo(HaveOccurred())
-
-				localApp, ok := apps["local"]
-				Expect(ok).To(BeTrue())
-
-				appName, ok := localApp.(string)
-				Expect(ok).To(BeTrue())
-				Expect(appName).To(Equal("my-app"))
-			})
-		})
-	})
-
-	Describe("discoverFromManifestFile", func() {
-		var (
-			provider     *CloudFoundryProvider
-			manifestPath string
-			nopLogger    = log.New(io.Discard, "", 0)
-		)
-
-		BeforeEach(func() {
-			manifestPath = filepath.Join("test_data", "test-app", "manifest.yml")
-			provider = &CloudFoundryProvider{
-				cfg: &Config{
-					ManifestPath: manifestPath,
-				},
-				logger: nopLogger,
-			}
-		})
-
-		It("successfully parses a valid manifest and returns an Application", func() {
-
-			app, err := provider.discoverFromManifestFile()
-			Expect(err).ToNot(HaveOccurred())
-			Expect(app).ToNot(BeNil())
-			Expect(app.Metadata).ToNot(BeNil())
-			Expect(app.Metadata.Name).To(Equal("my-app"))
-		})
-
-		It("returns an error if the manifest file does not exist", func() {
-			provider = &CloudFoundryProvider{
-				cfg: &Config{
-					ManifestPath: "/not/exist/manifest",
-				},
-				logger: nopLogger,
-			}
-			app, err := provider.discoverFromManifestFile()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to read manifest file"))
-			Expect(app).To(BeNil())
-		})
-
-		It("returns an error if the manifest YAML is invalid", func() {
-			invalidManifestPath := filepath.Join("test_data", "invalid_manifest", "manifest.yml")
-
-			provider = &CloudFoundryProvider{
-				cfg: &Config{
-					ManifestPath: invalidManifestPath,
-				},
-				logger: nopLogger,
-			}
-
-			app, err := provider.discoverFromManifestFile()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to unmarshal YAML"))
-			Expect(app).To(BeNil())
-		})
-
-		It("returns an error if parseCFApp fails", func() {
-			mockParseCF := func(manifest cfTypes.AppManifest) (Application, error) {
-				return Application{}, fmt.Errorf("mock parse error")
-			}
-			parseCFApp = mockParseCF
-
-			app, err := provider.discoverFromManifestFile()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to create application"))
-			Expect(app).To(BeNil())
-		})
-	})
-
 	// Describe("getAppBySpaceAndAppGUID", func() {
 	// 	var (
 	// 		serverURL string

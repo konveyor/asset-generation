@@ -37,6 +37,9 @@ func ParseProcessSpecs(cfApp cfTypes.AppManifest) (*ProcessSpecTemplate, *Proces
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to parse template spec: %w", err)
 		}
+		if (template == ProcessSpecTemplate{}) {
+			return nil, nil, nil
+		}
 
 		template.HealthCheck = ParseHealthCheck(
 			cfApp.HealthCheckType,
@@ -53,9 +56,6 @@ func ParseProcessSpecs(cfApp cfTypes.AppManifest) (*ProcessSpecTemplate, *Proces
 			template.LogRateLimit = cfApp.LogRateLimitPerSecond
 		}
 
-		if (template == ProcessSpecTemplate{}) {
-			return nil, nil, nil
-		}
 		return &template, nil, nil
 	}
 	// Handle inline process
