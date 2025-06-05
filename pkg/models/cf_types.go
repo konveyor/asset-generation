@@ -148,7 +148,6 @@ type AppManifestSideCar struct {
 	ProcessTypes []AppProcessType `yaml:"process_types,omitempty"`
 	Command      string           `yaml:"command,omitempty"`
 	Memory       int              `yaml:"memory,omitempty"`
-	Origin       string           `yaml:"origin,omitempty"`
 }
 
 func NewCloudFoundryManifest(space string, applications ...*AppManifest) *CloudFoundryManifest {

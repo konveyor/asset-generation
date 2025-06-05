@@ -473,7 +473,6 @@ func (c *CloudFoundryProvider) getSidecars(appGUID string) (cfTypes.AppManifestS
 			ProcessTypes: pt,
 			Command:      sc.Command,
 			Memory:       sc.MemoryInMB,
-			Origin:       sc.Origin,
 		})
 	}
 	return sidecars, nil
