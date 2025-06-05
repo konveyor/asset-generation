@@ -25,35 +25,36 @@ const (
 	goCFClientTemplateURL = "git::https://github.com/cloudfoundry/go-cfclient.git//testutil/template"
 )
 
-var _ = Describe("CloudFoundry Provider", func() {
+var (
+	repoBasePath      = getModuleRoot()
+	templatePath      = filepath.Join(repoBasePath, "vendor", "github.com", "cloudfoundry", "go-cfclient", "v3", "testutil", "template")
+	pagingQueryString = "page=1&per_page=50"
+)
 
-	Describe("listAppsFromCloudFoundry", Ordered, func() {
+var _ = Describe("CloudFoundry Provider", Ordered, func() {
+	AfterAll(func() {
+		os.RemoveAll(templatePath)
+		testutil.Teardown()
+	})
+
+	BeforeAll(func() {
+		err := downloadTemplateFolder()
+		if err != nil {
+			log.Fatalf("Failed to download template folder: %v", err)
+		}
+	})
+	Describe("listAppsFromCloudFoundry", func() {
 		var (
-			g            *testutil.ObjectJSONGenerator
-			app1         *testutil.JSONResource
-			app2         *testutil.JSONResource
-			space        *testutil.JSONResource
-			emptySpace   *testutil.JSONResource
-			serverURL    string
-			logger       = log.New(io.Discard, "", 0)
-			templatePath string
+			g          *testutil.ObjectJSONGenerator
+			app1       *testutil.JSONResource
+			app2       *testutil.JSONResource
+			space      *testutil.JSONResource
+			emptySpace *testutil.JSONResource
+			serverURL  string
+			logger     = log.New(io.Discard, "", 0)
 		)
 
-		AfterAll(func() {
-			os.RemoveAll(templatePath)
-			testutil.Teardown()
-		})
-
 		BeforeAll(func() {
-			repoBasePath := getModuleRoot()
-			templatePath = filepath.Join(repoBasePath,
-				"vendor", "github.com", "cloudfoundry", "go-cfclient", "v3", "testutil", "template")
-
-			err := downloadTemplateFolder(goCFClientTemplateURL, templatePath)
-			if err != nil {
-				log.Fatalf("Failed to download template folder: %v", err)
-			}
-
 			g = testutil.NewObjectJSONGenerator()
 			space = g.Space()
 			emptySpace = g.Space()
@@ -62,14 +63,13 @@ var _ = Describe("CloudFoundry Provider", func() {
 		})
 		Context("when space name doesn't exist", func() {
 			BeforeEach(func() {
-				pagingQueryString := "page=1&per_page=50"
 				serverURL = testutil.SetupMultiple([]testutil.MockRoute{
 					{
 						Method:      "GET",
 						Endpoint:    "/v3/spaces",
-						Output:      g.Paged([]string{}),
+						Output:      g.Single(""),
 						Status:      http.StatusOK,
-						QueryString: "names=" + space.Name + "&" + pagingQueryString,
+						QueryString: "names=" + space.Name,
 					},
 				}, GlobalT)
 			})
@@ -95,7 +95,6 @@ var _ = Describe("CloudFoundry Provider", func() {
 		})
 		Context("when apps exist in the space", func() {
 			BeforeEach(func() {
-				pagingQueryString := "page=1&per_page=50"
 				serverURL = testutil.SetupMultiple([]testutil.MockRoute{
 					{
 						Method:      "GET",
@@ -145,7 +144,6 @@ var _ = Describe("CloudFoundry Provider", func() {
 		Context("when apps don't exist in the space", func() {
 			BeforeEach(func() {
 				// Create two mock apps in the test server
-				pagingQueryString := "page=1&per_page=50"
 				serverURL = testutil.SetupMultiple([]testutil.MockRoute{
 					{
 						Method:      "GET",
@@ -350,6 +348,90 @@ var _ = Describe("CloudFoundry Provider", func() {
 		})
 	})
 
+	// Describe("getAppBySpaceAndAppGUID", func() {
+	// 	var (
+	// 		serverURL string
+	// 		nopLogger = log.New(io.Discard, "", 0)
+
+	// 		// client   *client.Client
+	// 		provider *CloudFoundryProvider
+	// 		g        = testutil.NewObjectJSONGenerator()
+	// 		space    *testutil.JSONResource
+	// 		app1     *testutil.JSONResource
+	// 	)
+
+	// 	BeforeEach(func() {
+	// 		space = g.Space()
+	// 		app1 = g.Application()
+	// 		fmt.Println("CREATED APP GUID", app1.GUID)
+	// 		serverURL = testutil.SetupMultiple([]testutil.MockRoute{
+	// 			{
+	// 				Method:      "GET",
+	// 				Endpoint:    "/v3/apps/" + app1.GUID,
+	// 				Output:      g.Single(app1.JSON),
+	// 				Status:      http.StatusOK,
+	// 				QueryString: pagingQueryString + "&space_guids=" + space.GUID,
+	// 			},
+	// 			// {
+	// 			// 	Method:      "GET",
+	// 			// 	Endpoint:    "/v3/apps",
+	// 			// 	Output:      g.SinglePaged(""),
+	// 			// 	Status:      http.StatusOK,
+	// 			// 	QueryString: "guids=non-existent-guid",
+	// 			// },
+	// 			// {
+	// 			// 	Method:      "GET",
+	// 			// 	Endpoint:    "/v3/apps",
+	// 			// 	Output:      g.SinglePaged(`{"errors":[{"detail":"API failure"}]}`),
+	// 			// 	Status:      http.StatusInternalServerError,
+	// 			// 	QueryString: "guids=error-guid",
+	// 			// },
+	// 		}, GlobalT)
+
+	// 		cfConfig, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+	// 		Expect(err).NotTo(HaveOccurred())
+
+	// 		cfg := &Config{
+	// 			CloudFoundryConfig: cfConfig,
+	// 			ManifestPath:       filepath.Join("test_data", "test-app", "manifest.yml"),
+	// 			SpaceNames:         []string{space.Name},
+	// 		}
+	// 		provider, err = New(cfg, nopLogger)
+	// 		Expect(err).ToNot(HaveOccurred())
+
+	// 	})
+
+	// 	AfterEach(func() {
+	// 		testutil.Teardown()
+	// 	})
+
+	// 	It("returns the app when exactly one app is found", func() {
+	// 		app, err := provider.getAppBySpaceAndAppGUID(space.GUID, app1.GUID)
+	// 		Expect(err).ToNot(HaveOccurred())
+	// 		Expect(app).ToNot(BeNil())
+	// 		// Expect(app.GUID).To(Equal(app1.GUID))
+	// 		// Expect(app.Name).To(Equal(app1.Name))
+	// 	})
+
+	// It("returns error when no app is found", func() {
+	// 	app, err := provider.getAppBySpaceAndAppGUID("non-existent-guid")
+	// 	Expect(err).To(MatchError("no application found with GUID non-existent-guid"))
+	// 	Expect(app).To(BeNil())
+	// })
+
+	// It("returns error when multiple apps are found", func() {
+	// 	app, err := provider.getAppBySpaceAndAppGUID("ambiguous-guid")
+	// 	Expect(err).To(MatchError("multiple applications found with GUID ambiguous-guid"))
+	// 	Expect(app).To(BeNil())
+	// })
+
+	// It("returns error when API call fails", func() {
+	// 	app, err := provider.getAppBySpaceAndAppGUID("error-guid")
+	// 	Expect(err).To(MatchError(ContainSubstring("error listing Cloud Foundry apps")))
+	// 	Expect(app).To(BeNil())
+	// })
+	// })
+
 	DescribeTable("extracts the sensitive information from an app", func(app Application) {
 		By("Copying the application manifest to be able to check against the resulting changes")
 		// copy the app manifest
@@ -424,18 +506,18 @@ var _ = Describe("CloudFoundry Provider", func() {
 
 })
 
-func downloadTemplateFolder(src string, dst string) error {
+func downloadTemplateFolder() error {
 	client := &getter.Client{
 		Ctx:      context.Background(),
-		Src:      src,
-		Dst:      dst,
+		Src:      goCFClientTemplateURL,
+		Dst:      templatePath,
 		Dir:      true,
 		Mode:     getter.ClientModeDir,
 		Insecure: true,
 	}
 
 	if err := client.Get(); err != nil {
-		return fmt.Errorf("failed to download from %q to %q: %w", src, dst, err)
+		return fmt.Errorf("failed to download from %q to %q: %w", goCFClientTemplateURL, templatePath, err)
 	}
 	return nil
 }
