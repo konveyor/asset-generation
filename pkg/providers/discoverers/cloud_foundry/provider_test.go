@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/testutil"
 	getter "github.com/hashicorp/go-getter"
@@ -25,56 +24,6 @@ const (
 )
 
 var _ = Describe("CloudFoundry Provider", func() {
-	var (
-		// provider *CloudFoundryProvider
-		logger *log.Logger
-		// testServer *testutil.SetupFakeAPIServer
-		// mockClient *client.Client
-
-	)
-
-	BeforeEach(func() {
-		logger = log.New(io.Discard, "", log.LstdFlags) // no-op logger
-	})
-
-	Describe("GetClient", func() {
-		var (
-			origCFHome string
-			hadCFHome  bool
-			provider   *CloudFoundryProvider
-		)
-
-		BeforeEach(func() {
-			origCFHome, hadCFHome = os.LookupEnv("CF_HOME")
-			provider = New(&Config{}, logger)
-		})
-
-		AfterEach(func() {
-			if hadCFHome {
-				os.Setenv("CF_HOME", origCFHome)
-			} else {
-				os.Unsetenv("CF_HOME")
-			}
-		})
-
-		It("returns error if CF_HOME points to invalid directory", func() {
-			err := os.Setenv("CF_HOME", "/non/existent/dir")
-			Expect(err).NotTo(HaveOccurred())
-
-			client, err := provider.GetClient()
-			Expect(client).To(BeNil())
-			Expect(err).To(HaveOccurred())
-		})
-
-		It("creates client successfully with valid CF_HOME", func() {
-			err := os.Setenv("CF_HOME", "./test_data")
-			Expect(err).NotTo(HaveOccurred())
-
-			client, err := provider.GetClient()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(client).NotTo(BeNil())
-		})
-	})
 
 	Describe("listAppsFromCloudFoundry", Ordered, func() {
 		var (
@@ -109,7 +58,7 @@ var _ = Describe("CloudFoundry Provider", func() {
 			app1 = g.Application()
 			app2 = g.Application()
 		})
-		Context("when space name doens't exist", func() {
+		Context("when space name doesn't exist", func() {
 			BeforeEach(func() {
 				pagingQueryString := "page=1&per_page=50"
 				serverURL = testutil.SetupMultiple([]testutil.MockRoute{
@@ -129,16 +78,14 @@ var _ = Describe("CloudFoundry Provider", func() {
 				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
 				Expect(err).NotTo(HaveOccurred())
 
-				client, err := client.New(cfg)
-				Expect(err).NotTo(HaveOccurred())
-
 				cfConfig := &Config{
-					Client:     client,
-					SpaceNames: []string{space.Name},
+					SpaceNames:         []string{space.Name},
+					CloudFoundryConfig: cfg,
 				}
 
-				p := New(cfConfig, logger)
-				apps, err := p.listAppsFromCloudFoundry()
+				p, err := New(cfConfig, logger)
+				Expect(err).NotTo(HaveOccurred())
+				apps, err := p.ListApps()
 				Expect(err).To(HaveOccurred())
 				Expect(apps).To(BeNil())
 
@@ -175,24 +122,22 @@ var _ = Describe("CloudFoundry Provider", func() {
 				testutil.Teardown()
 			})
 
-			It("returns app namea per space", func() {
+			It("returns all the apps in the given space", func() {
 				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
 				Expect(err).NotTo(HaveOccurred())
 
-				client, err := client.New(cfg)
-				Expect(err).NotTo(HaveOccurred())
-
 				cfConfig := &Config{
-					Client:     client,
-					SpaceNames: []string{space.Name},
+					CloudFoundryConfig: cfg,
+					SpaceNames:         []string{space.Name},
 				}
 
-				p := New(cfConfig, logger)
-				apps, err := p.listAppsFromCloudFoundry()
+				p, err := New(cfConfig, logger)
+				Expect(err).NotTo(HaveOccurred())
+				apps, err := p.ListApps()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(apps).To(HaveLen(1))
 				Expect(apps).To(HaveKey(space.Name))
-				Expect(apps[space.Name]).To(ConsistOf(app1.Name, app2.Name))
+				Expect(apps[space.Name]).To(BeEquivalentTo([]string{app1.GUID, app2.GUID}))
 			})
 		})
 		Context("when apps don't exist in the space", func() {
@@ -224,15 +169,13 @@ var _ = Describe("CloudFoundry Provider", func() {
 				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
 				Expect(err).NotTo(HaveOccurred())
 
-				client, err := client.New(cfg)
-				Expect(err).NotTo(HaveOccurred())
-
 				cfConfig := &Config{
-					Client:     client,
-					SpaceNames: []string{emptySpace.Name},
+					CloudFoundryConfig: cfg,
+					SpaceNames:         []string{emptySpace.Name},
 				}
 
-				p := New(cfConfig, logger)
+				p, err := New(cfConfig, logger)
+				Expect(err).NotTo(HaveOccurred())
 				apps, err := p.listAppsFromCloudFoundry()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(apps).To(HaveLen(1))
@@ -241,7 +184,7 @@ var _ = Describe("CloudFoundry Provider", func() {
 		})
 	})
 
-	DescribeTable("extracts the sensitive infromation from an app", func(app Application) {
+	DescribeTable("extracts the sensitive information from an app", func(app Application) {
 		By("Copying the application manifest to be able to check against the resulting changes")
 		// copy the app manifest
 		b, err := yaml.Marshal(app)

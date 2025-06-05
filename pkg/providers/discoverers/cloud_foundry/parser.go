@@ -177,7 +177,7 @@ func ParseReadinessHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint str
 
 }
 
-func ParseCFApp(cfApp cfTypes.AppManifest) (Application, error) {
+func parseCFApp(cfApp cfTypes.AppManifest) (Application, error) {
 	timeout := 60
 	if cfApp.Timeout != 0 {
 		timeout = int(cfApp.Timeout)

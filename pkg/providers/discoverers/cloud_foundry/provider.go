@@ -26,23 +26,21 @@ const (
 	credentials  string = "credentials"
 )
 
-type AppDiscoveryConfig struct {
-	SpaceName       string
-	ApplicationName string
-}
-
 type Config struct {
-	ManifestPath           string         `json:"manifest_path" yaml:"manifest_path"`
-	CloudFoundryConfigPath string         `json:"cloud_foundry_config_path" yaml:"cloud_foundry_config_path"`
-	APIEndpoint            string         `json:"api_endpoint" yaml:"api_endpoint"`
-	SkipSSLValidation      bool           `json:"skip_ssl_validation" yaml:"skip_ssl_validation"`
-	SpaceNames             []string       `json:"space_names" yaml:"space_names"`
-	Client                 *client.Client `json:"-" yaml:"-"`
+	ManifestPath string `json:"manifest_path" yaml:"manifest_path"`
+	// CloudFoundryConfigPath string         `json:"cloud_foundry_config_path" yaml:"cloud_foundry_config_path"`
+	// APIEndpoint            string         `json:"api_endpoint" yaml:"api_endpoint"`
+	// SkipSSLValidation      bool           `json:"skip_ssl_validation" yaml:"skip_ssl_validation"`
+	CloudFoundryConfig *config.Config `json:"cloud_foundry_config,omitempty" yaml:"cloud_foundry_config,omitempty"`
+	SpaceNames         []string       `json:"space_names" yaml:"space_names"`
+	// Cloud Foundry transient client
+	Client *client.Client `json:"-" yaml:"-"`
 }
 
 type CloudFoundryProvider struct {
 	cfg    *Config
 	logger *log.Logger
+	cli    *client.Client
 }
 
 // ClientProvider defines the interface for GetClient, only for testing.
@@ -50,26 +48,31 @@ type ClientProvider interface {
 	GetClient() (*client.Client, error)
 }
 
-func New(cfg *Config, logger *log.Logger) *CloudFoundryProvider {
-	return &CloudFoundryProvider{
+func New(cfg *Config, logger *log.Logger) (*CloudFoundryProvider, error) {
+	var err error
+	cp := CloudFoundryProvider{
 		cfg:    cfg,
 		logger: logger,
 	}
+	if cfg.CloudFoundryConfig != nil {
+		cp.cli, err = cp.getClient()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &cp, nil
 }
 
-func (c *CloudFoundryProvider) GetClient() (*client.Client, error) {
+func (c *CloudFoundryProvider) getClient() (*client.Client, error) {
 	if c.cfg.Client != nil {
 		return c.cfg.Client, nil
 	}
-	cfg, err := config.NewFromCFHome()
+
+	cf, err := client.New(c.cfg.CloudFoundryConfig)
 	if err != nil {
 		return nil, err
 	}
-	cf, err := client.New(cfg)
-	if err != nil {
-		return nil, err
-	}
-	fmt.Println("Cloud Foundry client created successfully")
+	c.logger.Println("Cloud Foundry client created successfully")
 	c.cfg.Client = cf
 	return cf, nil
 }
@@ -88,16 +91,15 @@ func (c *CloudFoundryProvider) ListApps() (map[string]any, error) {
 	return c.listAppsFromCloudFoundry()
 }
 
-func (c *CloudFoundryProvider) Discover(discoverConfig any) (pTypes.DiscoverResult, error) {
-
-	dc, ok := discoverConfig.(AppDiscoveryConfig)
+func (c *CloudFoundryProvider) Discover(rawData any) (pTypes.DiscoverResult, error) {
+	appName, ok := rawData.(string)
 	if !ok {
-		return pTypes.DiscoverResult{}, fmt.Errorf("invalid application discovery configuration type %s", reflect.TypeOf(discoverConfig))
+		return pTypes.DiscoverResult{}, fmt.Errorf("invalid type %s", reflect.TypeOf(rawData))
 	}
 	if c.cfg.ManifestPath != "" {
 		return c.discoverFromManifest()
 	}
-	return c.discoverFromLive(dc.SpaceName, dc.ApplicationName)
+	return c.discoverFromLive(appName)
 }
 
 // listAppsFromLocalManifests handles discovery of apps by reading local manifest files.
@@ -182,24 +184,17 @@ func (c *CloudFoundryProvider) listAppsFromCloudFoundry() (map[string]any, error
 	appList := make(map[string]any, len(c.cfg.SpaceNames))
 	for _, spaceName := range c.cfg.SpaceNames {
 		c.logger.Println("Analyzing space:", spaceName)
-
-		cfClient, err := c.GetClient()
-		if err != nil {
-			return nil, fmt.Errorf("error creating Cloud Foundry client: %v", err)
-		}
-
-		apps, err := listAppsBySpaceName(cfClient, spaceName)
+		apps, err := c.listAppsBySpaceName(spaceName)
 		if err != nil {
 			return nil, fmt.Errorf("error listing Cloud Foundry apps for space %s: %v", spaceName, err)
 		}
-
 		c.logger.Printf("Apps discovered: %d\n", len(apps))
 
-		appNames := make([]string, 0, len(apps))
+		appsInSpace := make([]string, 0, len(apps))
 		for _, app := range apps {
-			appNames = append(appNames, app.Name)
+			appsInSpace = append(appsInSpace, app.GUID)
 		}
-		appList[spaceName] = appNames
+		appList[spaceName] = appsInSpace
 	}
 	return appList, nil
 }
@@ -263,22 +258,19 @@ func (c *CloudFoundryProvider) discoverFromManifest() (pTypes.DiscoverResult, er
 	return discoverResult, nil
 }
 
-func (c *CloudFoundryProvider) discoverFromLive(spaceName string, appName string) (pTypes.DiscoverResult, error) {
+func (c *CloudFoundryProvider) discoverFromLive(appGUID string) (pTypes.DiscoverResult, error) {
 	var discoverResult pTypes.DiscoverResult
 
-	if spaceName == "" {
-		return discoverResult, fmt.Errorf("no spaces provided for Cloud Foundry live discover")
-	}
-	if appName == "" {
+	if appGUID == "" {
 		return discoverResult, fmt.Errorf("no app GUID provided for Cloud Foundry live discover")
 	}
-	if c.cfg.APIEndpoint == "" && c.cfg.CloudFoundryConfigPath == "" {
+	if c.cfg.CloudFoundryConfig != nil {
 		return discoverResult, fmt.Errorf("missing required configuration: APIEndpoint and CloudFoundryConfigPath must be provided for Cloud Foundry live discover")
 	}
 
-	c.logger.Println("Starting live Cloud Foundry discovery for space:", spaceName)
+	c.logger.Println("Starting live Cloud Foundry discovery for app with GUID:", appGUID)
 
-	d, err := c.discoverFromLiveAPI(spaceName, appName)
+	d, err := c.discoverFromLiveAPI(appGUID)
 	if err != nil {
 		return discoverResult, fmt.Errorf("error during Cloud Foundry live discover: %v", err)
 	}
@@ -312,7 +304,7 @@ func (c *CloudFoundryProvider) discoverFromManifestFile() (*Application, error) 
 		return nil, fmt.Errorf("failed to unmarshal YAML: %v", err)
 	}
 
-	app, err := ParseCFApp(manifest)
+	app, err := parseCFApp(manifest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create application: %v", err)
 	}
@@ -325,56 +317,37 @@ func (c *CloudFoundryProvider) discoverFromManifestFile() (*Application, error) 
 // If the output folder is provided, it writes the manifest to a file in the
 // output folder with the name "manifest_<space_name>_<app_name>.yaml".
 // If the output folder is not provided, it returns a list of applications.
-func (c *CloudFoundryProvider) discoverFromLiveAPI(spaceName string, appName string) (*Application, error) {
-	space, err := getSpaceByName(c.cfg.Client, spaceName)
+func (c *CloudFoundryProvider) discoverFromLiveAPI(appGUID string) (*Application, error) {
+	cfManifests, err := c.generateCFManifestFromLiveAPI(appGUID)
 	if err != nil {
-		return nil, fmt.Errorf("error getting space for space name %s", spaceName)
-	}
-	app, err := c.getAppByName(space.GUID, appName)
-	if err != nil {
-		return nil, fmt.Errorf("error while retrieving the application %s/%s", spaceName, appName)
-	}
-	cfManifests, err := c.generateCFManifestFromLiveAPI(space, app.GUID)
-	if err != nil {
-		return nil, fmt.Errorf("error creating Cloud Foundry manifest for space '%s': %v", spaceName, err)
+		return nil, err
 	}
 
-	discoveredApp, err := ParseCFApp(*cfManifests)
+	discoveredApp, err := parseCFApp(*cfManifests)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create app from manifest: %v", err)
+		return nil, err
 	}
 
 	return &discoveredApp, nil
 }
 
-func (c *CloudFoundryProvider) getAppByName(spaceGUID string, appName string) (*resource.App, error) {
-	appsOpt := client.NewAppListOptions()
-	appsOpt.Names.EqualTo(appName)
-	appsOpt.SpaceGUIDs.EqualTo(spaceGUID)
-	return c.cfg.Client.Applications.First(context.Background(), appsOpt)
-}
-
-func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(space *resource.Space, appGUID string) (*cfTypes.AppManifest, error) {
+func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(appGUID string) (*cfTypes.AppManifest, error) {
 	ctx := context.Background()
-	c.logger.Println("Analyzing space: ", space.Name)
+	c.logger.Printf("Analyzing application %s", appGUID)
 
-	cfClient, err := c.GetClient()
+	// Retrieve app in Space and with app GUID
+	app, err := c.getAppBySpaceAndAppGUID(appGUID)
 	if err != nil {
-		return nil, fmt.Errorf("error creating Cloud Foundry client: %v", err)
-	}
-	app, err := getAppBySpaceName(cfClient, space.Name, appGUID)
-	if err != nil {
-		return nil, fmt.Errorf("error getting app by space name %s and app GUID %s: %v", space.Name, appGUID, err)
+		return nil, fmt.Errorf("error getting app GUID %s: %v", appGUID, err)
 	}
 
-	appManifest := cfTypes.AppManifest{}
 	c.logger.Println("Processing app:", app.Name)
-	appEnv, err := cfClient.Applications.GetEnvironment(context.Background(), app.GUID)
+	appEnv, err := c.cli.Applications.GetEnvironment(context.Background(), app.GUID)
 	if err != nil {
 		return nil, fmt.Errorf("error getting environment for app %s: %v", app.GUID, err)
 	}
 
-	processes, err := cfClient.Processes.ListForAppAll(ctx, app.GUID, nil)
+	processes, err := c.cli.Processes.ListForAppAll(ctx, app.GUID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error getting processes: %v", err)
 	}
@@ -403,15 +376,14 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(space *resource.Spa
 		})
 	}
 	routeOpts := client.NewRouteListOptions()
-	routeOpts.SpaceGUIDs.EqualTo(space.GUID)
-	routes, err := cfClient.Routes.ListForAppAll(ctx, app.GUID, routeOpts)
+	routeOpts.SpaceGUIDs.EqualTo(app.Relationships.Space.Data.GUID)
+	routes, err := c.cli.Routes.ListForAppAll(ctx, app.GUID, routeOpts)
 	if err != nil {
 		return nil, fmt.Errorf("error getting processes: %v", err)
 	}
 	appRoutes := cfTypes.AppManifestRoutes{}
 	for _, r := range routes {
-		destinations, err := cfClient.
-			Routes.GetDestinations(ctx, r.GUID)
+		destinations, err := c.cli.Routes.GetDestinations(ctx, r.GUID)
 		if err != nil {
 			return nil, fmt.Errorf("error getting destinations for route %s: %v", r.GUID, err)
 		}
@@ -427,8 +399,13 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(space *resource.Spa
 
 	}
 
+	// Sidecars
+	sidecars, err := c.getSidecars(app.GUID)
+	if err != nil {
+		return nil, err
+	}
 	// There is the buildpack list but not per app
-	allBuildpacks, err := cfClient.Buildpacks.ListAll(ctx, nil)
+	allBuildpacks, err := c.cli.Buildpacks.ListAll(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error listing all buildpacks: %s", err)
 	}
@@ -443,7 +420,7 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(space *resource.Spa
 	}
 
 	// FIXME: uncomment this when we know how to handle them
-	appStack, err := getStack(ctx, cfClient, app)
+	appStack, err := c.getStack(ctx, app)
 	if err != nil {
 		return nil, fmt.Errorf("error getting stack for app %s: %s", app.Name, err)
 	}
@@ -453,7 +430,7 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(space *resource.Spa
 	if err != nil {
 		return nil, fmt.Errorf("error getting services for app %s: %s", app.Name, err)
 	}
-
+	appManifest := cfTypes.AppManifest{}
 	appManifest = cfTypes.AppManifest{
 		Name: app.Name,
 		Env:  appEnv.EnvVars, //TODO: Running, staging, appEnvVar, SystemEnvVar
@@ -461,19 +438,45 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(space *resource.Spa
 			Labels:      app.Metadata.Labels,
 			Annotations: app.Metadata.Annotations,
 		},
-		Processes: &appProcesses,
-		Routes:    &appRoutes,
 		// AppManifestProcess
+		Processes: &appProcesses,
+		// AppRoutes
+		Routes: &appRoutes,
+		// Build Packs
 		Buildpacks: appBuildpacks,
-		// RandomRoute
+		// RandomRoute cannot be determined at runtime
 		// NoRoute
-		Services: appServices,
-		// Sidecars
-		Stack: appStack,
+		NoRoute:  len(appRoutes) == 0,
+		Services: &appServices,
+		Sidecars: &sidecars,
+		Stack:    appStack,
 	}
 
 	return &appManifest, nil
 
+}
+
+func (c *CloudFoundryProvider) getSidecars(appGUID string) (cfTypes.AppManifestSideCars, error) {
+	list, err := c.cli.Sidecars.ListForAppAll(context.Background(), appGUID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error while retrieving sidecars for app %s: %s", appGUID, err)
+	}
+	sidecars := cfTypes.AppManifestSideCars{}
+	for _, sc := range list {
+		pt := make([]cfTypes.AppProcessType, 0, len(sc.ProcessTypes))
+		for _, t := range sc.ProcessTypes {
+			p := cfTypes.AppProcessType(t)
+			pt = append(pt, p)
+		}
+		sidecars = append(sidecars, cfTypes.AppManifestSideCar{
+			Name:         sc.Name,
+			ProcessTypes: pt,
+			Command:      sc.Command,
+			Memory:       sc.MemoryInMB,
+			Origin:       sc.Origin,
+		})
+	}
+	return sidecars, nil
 }
 
 // appVCAPServiceAttributes is a structure that maps the relevant JSON fields from a runtime service structure as
@@ -485,7 +488,7 @@ type appVCAPServiceAttributes struct {
 	Credentials json.RawMessage `json:"credentials,omitempty"`
 }
 
-func getServicesFromApplicationEnvironment(env map[string]json.RawMessage) (*cfTypes.AppManifestServices, error) {
+func getServicesFromApplicationEnvironment(env map[string]json.RawMessage) (cfTypes.AppManifestServices, error) {
 	vcap, ok := env[vcapServices]
 	if !ok {
 		return nil, fmt.Errorf("unable to find VCAP_SERVICES in Cloud Foundry environment")
@@ -500,17 +503,17 @@ func getServicesFromApplicationEnvironment(env map[string]json.RawMessage) (*cfT
 		s := cfTypes.AppManifestService{Name: name, BindingName: svc.Name, Parameters: map[string]any{credentials: svc.Credentials}}
 		appServices = append(appServices, s)
 	}
-	return &appServices, nil
+	return appServices, nil
 }
 
-func getStack(ctx context.Context, cfClient *client.Client, app *resource.App) (string, error) {
+func (c *CloudFoundryProvider) getStack(ctx context.Context, app *resource.App) (string, error) {
 	var appStack string
-	allStacks, err := cfClient.Stacks.ListAll(ctx, nil)
+	allStacks, err := c.cli.Stacks.ListAll(ctx, nil)
 	if err != nil {
 		return "", fmt.Errorf("error getting stacks: %v", err)
 	}
 	for _, stack := range allStacks {
-		appsOnStack, err := cfClient.Stacks.ListAppsOnStackAll(ctx, stack.GUID, nil)
+		appsOnStack, err := c.cli.Stacks.ListAppsOnStackAll(ctx, stack.GUID, nil)
 		if err != nil {
 			return "", fmt.Errorf("error getting buildpacks: %v", err)
 		}
@@ -527,40 +530,42 @@ func getStack(ctx context.Context, cfClient *client.Client, app *resource.App) (
 	return appStack, nil
 }
 
-func getSpaceByName(cfClient *client.Client, spaceName string) (*resource.Space, error) {
+func (c *CloudFoundryProvider) getSpaceByName(spaceName string) (*resource.Space, error) {
 	spaceOpts := client.NewSpaceListOptions()
 	spaceOpts.Names.EqualTo(spaceName)
-	remoteSpace, err := cfClient.Spaces.First(context.Background(), spaceOpts)
+	remoteSpace, err := c.cli.Spaces.First(context.Background(), spaceOpts)
 	if err != nil {
 		return nil, fmt.Errorf("error finding Cloud Foundry space for name %s: %v", spaceName, err)
 	}
 	return remoteSpace, nil
 }
 
-func listAppsBySpaceName(cfClient *client.Client, spaceName string) ([]*resource.App, error) {
-	space, err := getSpaceByName(cfClient, spaceName)
+func (c *CloudFoundryProvider) listAppsBySpaceName(spaceName string) ([]*resource.App, error) {
+	space, err := c.getSpaceByName(spaceName)
 	if err != nil {
 		return nil, fmt.Errorf("error getting space for space name %s: %v", spaceName, err)
 	}
 	appsOpt := client.NewAppListOptions()
 	appsOpt.SpaceGUIDs.EqualTo(space.GUID)
-	apps, err := cfClient.Applications.ListAll(context.Background(), appsOpt)
+	apps, err := c.cli.Applications.ListAll(context.Background(), appsOpt)
 	if err != nil {
 		return nil, fmt.Errorf("error listing Cloud Foundry apps for space name %s: %v", space.Name, err)
 	}
 	return apps, nil
 }
 
-func getAppBySpaceName(cfClient *client.Client, spaceGUID string, appGUID string) (*resource.App, error) {
+func (c *CloudFoundryProvider) getAppBySpaceAndAppGUID(appGUID string) (*resource.App, error) {
 	appsOpt := client.NewAppListOptions()
-	appsOpt.SpaceGUIDs.EqualTo(spaceGUID)
 	appsOpt.GUIDs.EqualTo(appGUID)
-	app, err := cfClient.Applications.ListAll(context.Background(), appsOpt)
+	app, err := c.cli.Applications.ListAll(context.Background(), appsOpt)
 	if err != nil {
-		return nil, fmt.Errorf("error listing Cloud Foundry apps for space %s: %v", spaceGUID, err)
+		return nil, fmt.Errorf("error listing Cloud Foundry apps: %s", err)
+	}
+	if len(app) == 0 {
+		return nil, fmt.Errorf("no application found with GUID %s", appGUID)
 	}
 	if len(app) > 1 {
-		return nil, fmt.Errorf("multiple applications found for space %s with GUID %s", spaceGUID, appGUID)
+		return nil, fmt.Errorf("multiple applications found with GUID %s", appGUID)
 	}
 	return app[0], nil
 }
