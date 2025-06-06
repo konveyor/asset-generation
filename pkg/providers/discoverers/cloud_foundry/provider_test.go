@@ -233,7 +233,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					params := discoverInputParam{spaceName: "not here", appName: app1.Name}
 					apps, err := p.Discover(params)
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(Equal("no application found with GUID " + app1.Name))
+					Expect(err.Error()).To(ContainSubstring("error finding Cloud Foundry space for name 'not here'"))
 					Expect(apps).To(BeNil())
 
 				})
@@ -281,7 +281,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 							Endpoint:    "/v3/spaces",
 							Output:      g.Paged([]string{space.JSON}),
 							Status:      http.StatusOK,
-							QueryString: "names=" + space.Name + "&" + pagingQueryString,
+							QueryString: "names=" + space.Name + "&" + pagingQueryString + "&guids=" + space.GUID,
 						},
 					}, GlobalT)
 				})
@@ -289,13 +289,12 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					testutil.Teardown()
 				})
 
-				FIt("discovers an app with empty spec and only its name and GUID defined", func() {
+				It("discovers an app with empty spec and only its name and GUID defined", func() {
 					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
 					Expect(err).NotTo(HaveOccurred())
 
 					cfConfig := &Config{
 						CloudFoundryConfig: cfg,
-						SpaceNames:         []string{space.Name},
 					}
 
 					p, err := New(cfConfig, logger)
@@ -307,7 +306,6 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 			})
 			Context("when apps don't exist in the space", func() {
 				BeforeEach(func() {
-					// Create two mock apps in the test server
 					serverURL = testutil.SetupMultiple([]testutil.MockRoute{
 						{
 							Method:      "GET",
@@ -374,7 +372,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				It("returns app names from manifests in the directory (ignoring subfolders and non-yaml files)", func() {
 					apps, err := provider.listAppsFromLocalManifests()
 					Expect(err).NotTo(HaveOccurred())
-
+					Expect(apps).To(HaveKey("local"))
 					localApps, ok := apps["local"]
 					Expect(ok).To(BeTrue())
 

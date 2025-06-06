@@ -135,7 +135,7 @@ func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string]any, err
 				continue
 			}
 			c.logger.Printf("found app name '%s' in manifest file '%s'", appName, filePath)
-			apps = append(apps, filePath)
+			apps = append(apps, appName)
 		}
 		return map[string]any{"local": apps}, nil
 	} else {
@@ -275,7 +275,7 @@ func (c *CloudFoundryProvider) discoverFromLive(spaceName string, appName string
 		return nil, fmt.Errorf("missing required configuration: APIEndpoint and CloudFoundryConfigPath must be provided for Cloud Foundry live discover")
 	}
 
-	c.logger.Println("Starting live Cloud Foundry discovery for app with GUID:", appName)
+	c.logger.Println("Starting live Cloud Foundry discovery for app with name:", appName)
 
 	d, err := c.discoverFromLiveAPI(spaceName, appName)
 	if err != nil {
@@ -499,7 +499,7 @@ func (c *CloudFoundryProvider) getSpaceByName(spaceName string) (*resource.Space
 	spaceOpts.Names.EqualTo(spaceName)
 	remoteSpace, err := c.cli.Spaces.First(context.Background(), spaceOpts)
 	if err != nil {
-		return nil, fmt.Errorf("error finding Cloud Foundry space for name %s: %v", spaceName, err)
+		return nil, fmt.Errorf("error finding Cloud Foundry space for name '%s': %v", spaceName, err)
 	}
 	return remoteSpace, nil
 }
