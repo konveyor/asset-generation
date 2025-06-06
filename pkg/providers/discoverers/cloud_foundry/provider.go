@@ -449,6 +449,9 @@ func (c *CloudFoundryProvider) getSidecars(appGUID string) (cfTypes.AppManifestS
 	}
 	sidecars := cfTypes.AppManifestSideCars{}
 	for _, sc := range list {
+		if sc.Origin != "user" {
+			continue
+		}
 		pt := make([]cfTypes.AppProcessType, 0, len(sc.ProcessTypes))
 		for _, t := range sc.ProcessTypes {
 			p := cfTypes.AppProcessType(t)
