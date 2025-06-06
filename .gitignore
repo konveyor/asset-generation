@@ -1,2 +1,2 @@
 vendor/
-pkg/providers/***/ginkgo.report
+coverage/
