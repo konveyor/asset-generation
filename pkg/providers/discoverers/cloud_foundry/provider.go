@@ -244,12 +244,47 @@ func hasYAMLExtension(filename string) bool {
 	return ext == ".yaml" || ext == ".yml"
 }
 
-func (c *CloudFoundryProvider) discoverFromManifest(filePath string) (*pTypes.DiscoverResult, error) {
+func (c *CloudFoundryProvider) discoverFromManifest(appName string) (*pTypes.DiscoverResult, error) {
 	var discoverResult pTypes.DiscoverResult
 
 	c.logger.Println("Manifest path provided, using it for local Cloud Foundry discover")
 
-	d, err := c.discoverFromManifestFile(filePath)
+	isDirResult, err := isDir(c.cfg.ManifestPath)
+	if err != nil {
+		return nil, fmt.Errorf("error checking if path is directory %s: %v", c.cfg.ManifestPath, err)
+	}
+	var manifestFile string
+
+	if isDirResult {
+		files, err := os.ReadDir(c.cfg.ManifestPath)
+		if err != nil {
+			return nil, fmt.Errorf("error reading directory %s: %v", c.cfg.ManifestPath, err)
+		}
+
+		for _, file := range files {
+			filePath := filepath.Join(c.cfg.ManifestPath, file.Name())
+
+			name, err := c.getAppNameFromManifest(filePath)
+			if err != nil {
+				c.logger.Printf("error processing manifest file '%s': %v", filePath, err)
+				continue
+			}
+			if name == "" {
+				c.logger.Printf("manifest file '%s' does not contain an app name", filePath)
+				continue
+			}
+			if name != appName {
+				continue
+			}
+			manifestFile = filePath
+			c.logger.Printf("found app name '%s' in manifest file '%s'", appName, manifestFile)
+			break
+		}
+	} else {
+		manifestFile = c.cfg.ManifestPath
+	}
+
+	d, err := c.discoverFromManifestFile(manifestFile)
 	if err != nil {
 		return nil, fmt.Errorf("error discovering from Cloud Foundry manifest file: %v", err)
 	}
@@ -449,9 +484,6 @@ func (c *CloudFoundryProvider) getSidecars(appGUID string) (cfTypes.AppManifestS
 	}
 	sidecars := cfTypes.AppManifestSideCars{}
 	for _, sc := range list {
-		if sc.Origin != "user" {
-			continue
-		}
 		pt := make([]cfTypes.AppProcessType, 0, len(sc.ProcessTypes))
 		for _, t := range sc.ProcessTypes {
 			p := cfTypes.AppProcessType(t)

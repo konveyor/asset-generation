@@ -1,0 +1,3 @@
+name: app3
+memory: 512M
+disk_quota: 1G

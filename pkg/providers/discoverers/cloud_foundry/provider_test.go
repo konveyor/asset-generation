@@ -3,6 +3,7 @@ package cloud_foundry
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -453,51 +454,93 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				nopLogger    = log.New(io.Discard, "", 0)
 				err          error
 			)
+			Context("when it's a single file", func() {
+				BeforeEach(func() {
+					manifestPath = filepath.Join("test_data", "test-app", "manifest.yml")
+					provider, err = New(&Config{ManifestPath: manifestPath}, nopLogger)
+					Expect(err).NotTo(HaveOccurred())
+				})
 
+				It("successfully parses a valid manifest and returns an Application", func() {
+					app, err := provider.discoverFromManifestFile(manifestPath)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(app).ToNot(BeNil())
+					Expect(app.Metadata).ToNot(BeNil())
+					Expect(app.Metadata.Name).To(Equal("my-app"))
+				})
+
+				It("returns an error if the manifest file does not exist", func() {
+					app, err := provider.discoverFromManifestFile("/not/exist/manifest")
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to read manifest file"))
+					Expect(app).To(BeNil())
+				})
+
+				It("returns an error if the manifest YAML is invalid", func() {
+					invalidManifestPath := filepath.Join("test_data", "invalid_manifest", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(invalidManifestPath)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to unmarshal YAML"))
+					Expect(app).To(BeNil())
+				})
+
+				It("returns an error if parseCFApp fails", func() {
+					mockParseCF := func(manifest cfTypes.AppManifest) (Application, error) {
+						return Application{}, fmt.Errorf("mock parse error")
+					}
+					parseCFApp = mockParseCF
+
+					app, err := provider.discoverFromManifestFile(manifestPath)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to create application"))
+					Expect(app).To(BeNil())
+				})
+			})
+		})
+		Context("when manifest path is a directory", func() {
+			var (
+				provider     *CloudFoundryProvider
+				manifestPath string
+				nopLogger    = log.New(io.Discard, "", 0)
+				err          error
+			)
 			BeforeEach(func() {
-				manifestPath = filepath.Join("test_data", "test-app", "manifest.yml")
-				provider, err = New(&Config{}, nopLogger)
+				manifestPath = filepath.Join("test_data", "multiple_manifests")
+				provider, err = New(&Config{ManifestPath: manifestPath}, nopLogger)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("successfully parses a valid manifest and returns an Application", func() {
-
-				app, err := provider.discoverFromManifestFile(manifestPath)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(app).ToNot(BeNil())
-				Expect(app.Metadata).ToNot(BeNil())
-				Expect(app.Metadata.Name).To(Equal("my-app"))
-			})
-
-			It("returns an error if the manifest file does not exist", func() {
-				app, err := provider.discoverFromManifestFile("/not/exist/manifest")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to read manifest file"))
-				Expect(app).To(BeNil())
-			})
-
-			It("returns an error if the manifest YAML is invalid", func() {
-				invalidManifestPath := filepath.Join("test_data", "invalid_manifest", "manifest.yml")
-
-				app, err := provider.discoverFromManifestFile(invalidManifestPath)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to unmarshal YAML"))
-				Expect(app).To(BeNil())
-			})
-
-			It("returns an error if parseCFApp fails", func() {
-				mockParseCF := func(manifest cfTypes.AppManifest) (Application, error) {
-					return Application{}, fmt.Errorf("mock parse error")
+			It("returns the app name from the single manifest file", func() {
+				input := discoverInputParam{
+					appName: "app3",
 				}
-				parseCFApp = mockParseCF
-
-				app, err := provider.discoverFromManifestFile(manifestPath)
+				apps, err := provider.Discover(input)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(apps).ToNot(BeNil())
+				var resultApp Application
+				err = MapToStruct(apps.Content, &resultApp)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(resultApp).ToNot(Equal(Application{}))
+				Expect(resultApp.Metadata).ToNot(Equal(Metadata{}))
+				Expect(resultApp.Metadata.Name).To(Equal("app3"))
+			})
+			It("returns an error if the app name doesn't exists", func() {
+				input := discoverInputParam{
+					appName: "not-exists",
+				}
+				apps, err := provider.Discover(input)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to create application"))
-				Expect(app).To(BeNil())
+				Expect(apps).To(BeNil())
+			})
+			It("returns an error if the app name is empty", func() {
+				input := discoverInputParam{
+					appName: "",
+				}
+				apps, err := provider.Discover(input)
+				Expect(err).To(HaveOccurred())
+				Expect(apps).To(BeNil())
 			})
 		})
-
 	})
 	// Describe("getAppBySpaceAndAppGUID", func() {
 	// 	var (
@@ -687,4 +730,11 @@ func getModuleRoot() string {
 		log.Fatal("GOMOD is empty")
 	}
 	return filepath.Dir(gomodPath)
+}
+func MapToStruct(m map[string]any, obj *Application) error {
+	b, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, obj)
 }
