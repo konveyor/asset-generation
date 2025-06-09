@@ -485,6 +485,10 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				})
 
 				It("returns an error if parseCFApp fails", func() {
+					originalParseCFApp := parseCFApp
+					DeferCleanup(func() {
+						parseCFApp = originalParseCFApp
+					})
 					mockParseCF := func(manifest cfTypes.AppManifest) (Application, error) {
 						return Application{}, fmt.Errorf("mock parse error")
 					}
