@@ -1,0 +1,32 @@
+name: Manual Release Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to tag (e.g., v1.2.3)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Show current version
+        run: make version
+
+      - name: Tag the repository
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: make tag
+      
+      - name: Show new version
+        run: make version
