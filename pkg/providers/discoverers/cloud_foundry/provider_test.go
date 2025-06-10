@@ -142,7 +142,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(apps).To(HaveLen(1))
 					Expect(apps).To(HaveKey(space.Name))
-					Expect(apps[space.Name]).To(BeEquivalentTo([]discoverInputParam{{spaceName: space.Name, appName: app1.Name}, {spaceName: space.Name, appName: app2.Name}}))
+					Expect(apps[space.Name]).To(BeEquivalentTo([]DiscoverInputParam{{SpaceName: space.Name, appName: app1.Name}, {SpaceName: space.Name, appName: app2.Name}}))
 				})
 			})
 			Context("when apps don't exist in the space", func() {
@@ -231,7 +231,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 
 					p, err := New(cfConfig, logger)
 					Expect(err).NotTo(HaveOccurred())
-					params := discoverInputParam{spaceName: "not here", appName: app1.Name}
+					params := DiscoverInputParam{SpaceName: "not here", appName: app1.Name}
 					apps, err := p.Discover(params)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("error finding Cloud Foundry space for name 'not here'"))
@@ -300,7 +300,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 
 					p, err := New(cfConfig, logger)
 					Expect(err).NotTo(HaveOccurred())
-					apps, err := p.Discover(discoverInputParam{spaceName: space.Name, appName: app1.Name})
+					apps, err := p.Discover(DiscoverInputParam{SpaceName: space.Name, appName: app1.Name})
 					Expect(err).NotTo(HaveOccurred())
 					Expect(apps).NotTo(Equal(&pTypes.DiscoverResult{}))
 				})
@@ -515,7 +515,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 			})
 
 			It("returns the app name from the single manifest file", func() {
-				input := discoverInputParam{
+				input := DiscoverInputParam{
 					appName: "app3",
 				}
 				apps, err := provider.Discover(input)
@@ -529,7 +529,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				Expect(resultApp.Metadata.Name).To(Equal("app3"))
 			})
 			It("returns an error if the app name doesn't exists", func() {
-				input := discoverInputParam{
+				input := DiscoverInputParam{
 					appName: "not-exists",
 				}
 				apps, err := provider.Discover(input)
@@ -537,7 +537,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				Expect(apps).To(BeNil())
 			})
 			It("returns an error if the app name is empty", func() {
-				input := discoverInputParam{
+				input := DiscoverInputParam{
 					appName: "",
 				}
 				apps, err := provider.Discover(input)
