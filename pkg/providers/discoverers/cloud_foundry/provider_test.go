@@ -28,9 +28,8 @@ const (
 )
 
 var (
-	repoBasePath      = getModuleRoot()
-	templatePath      = filepath.Join(repoBasePath, "vendor", "github.com", "cloudfoundry", "go-cfclient", "v3", "testutil", "template")
-	pagingQueryString = "page=1&per_page=50"
+	repoBasePath = getModuleRoot()
+	templatePath = filepath.Join(repoBasePath, "vendor", "github.com", "cloudfoundry", "go-cfclient", "v3", "testutil", "template")
 )
 
 var _ = Describe("CloudFoundry Provider", Ordered, func() {
@@ -142,7 +141,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(apps).To(HaveLen(1))
 					Expect(apps).To(HaveKey(space.Name))
-					Expect(apps[space.Name]).To(BeEquivalentTo([]DiscoverInputParam{{SpaceName: space.Name, appName: app1.Name}, {SpaceName: space.Name, appName: app2.Name}}))
+					Expect(apps[space.Name]).To(BeEquivalentTo([]DiscoverInputParam{{SpaceName: space.Name, AppName: app1.Name}, {SpaceName: space.Name, AppName: app2.Name}}))
 				})
 			})
 			Context("when apps don't exist in the space", func() {
@@ -190,54 +189,524 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 
 		Context("discovering apps from Cloud Foundry", func() {
 			var (
-				g    *testutil.ObjectJSONGenerator
-				app1 *testutil.JSONResource
-				// app2       *testutil.JSONResource
+				g          *testutil.ObjectJSONGenerator
+				app1       *testutil.JSONResource
 				space      *testutil.JSONResource
 				emptySpace *testutil.JSONResource
 				serverURL  string
 				logger     = log.New(io.Discard, "", 0)
 			)
-
 			BeforeAll(func() {
 				g = testutil.NewObjectJSONGenerator()
 				space = g.Space()
 				emptySpace = g.Space()
 				app1 = g.Application()
-				// app2 = g.Application()
 			})
-			Context("when space name doesn't exist", func() {
-				BeforeEach(func() {
-					serverURL = testutil.SetupMultiple([]testutil.MockRoute{
-						{
-							Method:      "GET",
-							Endpoint:    "/v3/apps",
-							Output:      g.Single(""),
-							Status:      http.StatusOK,
-							QueryString: "guids=" + app1.Name + "&" + pagingQueryString + "&space_guids=not+here",
-						},
-					}, GlobalT)
-				})
+
+			When("calling the generateCFManifestFromLiveAPI() function to generate the app manifest from a live connection", func() {
 				AfterEach(func() {
 					testutil.Teardown()
 				})
-				It("returns an error", func() {
+
+				DescribeTable("the metadata field", func(metadata cfTypes.AppMetadata) {
+					expected := cfTypes.AppManifest{
+						Name:     "name",
+						Metadata: &metadata,
+					}
+					m, serverURL := newMockApplication(expected, GlobalT)
 					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
 					Expect(err).NotTo(HaveOccurred())
-
+					By("Instantiating a new CF REST API client")
 					cfConfig := &Config{
 						CloudFoundryConfig: cfg,
+						SpaceNames:         []string{m.space().Name},
 					}
-
 					p, err := New(cfConfig, logger)
 					Expect(err).NotTo(HaveOccurred())
-					params := DiscoverInputParam{SpaceName: "not here", appName: app1.Name}
-					apps, err := p.Discover(params)
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("error finding Cloud Foundry space for name 'not here'"))
-					Expect(apps).To(BeNil())
+					By("generating the CF manifest from a Live API connection")
+					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					Expect(err).NotTo(HaveOccurred())
+					By("validating the application discovered contains the expected app data")
+					Expect(expected.Name).To(Equal(received.Name))
+					Expect(expected.Metadata).To(Equal(received.Metadata))
+				},
+					Entry("discovers an app with empty values", cfTypes.AppMetadata{}),
+					Entry("discovers an app with label values only", cfTypes.AppMetadata{Labels: map[string]*string{"foo": ptrTo("bar")}}),
+					Entry("discovers an app with annotation values only", cfTypes.AppMetadata{Annotations: map[string]*string{"foo": ptrTo("bar")}}),
+					Entry("discovers an app with label and annotation values",
+						cfTypes.AppMetadata{
+							Labels:      map[string]*string{"foo": ptrTo("bar"), "lazy": ptrTo("fox")},
+							Annotations: map[string]*string{"bar": ptrTo("foo"), "fox": ptrTo("lazy")},
+						}),
+				)
+				DescribeTable("the Env field", func(env map[string]string) {
+					expected := cfTypes.AppManifest{
+						Name:     "name",
+						Metadata: &cfTypes.AppMetadata{},
+						Env:      env,
+					}
+					m, serverURL := newMockApplication(expected, GlobalT)
+					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+					Expect(err).NotTo(HaveOccurred())
+					By("Instantiating a new CF REST API client")
+					cfConfig := &Config{
+						CloudFoundryConfig: cfg,
+						SpaceNames:         []string{m.space().Name},
+					}
+					p, err := New(cfConfig, logger)
+					Expect(err).NotTo(HaveOccurred())
+					By("generating the CF manifest from a Live API connection")
+					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					Expect(err).NotTo(HaveOccurred())
+					By("validating the application discovered contains the expected app data")
+					Expect(expected.Name).To(Equal(received.Name))
+					Expect(expected.Env).To(Equal(received.Env))
+				},
+					Entry("discovers an app with empty values", map[string]string{}),
+					Entry("discovers an app with a few env values",
+						map[string]string{
+							"foo":              "bar",
+							"app_env_settings": `{"foo":"bar"}`,
+						}),
+				)
 
+				DescribeTable("the Buildpacks field", func(buildpacks []string) {
+					expected := cfTypes.AppManifest{
+						Name:       "name",
+						Metadata:   &cfTypes.AppMetadata{},
+						Buildpacks: buildpacks,
+					}
+					m, serverURL := newMockApplication(expected, GlobalT)
+					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+					Expect(err).NotTo(HaveOccurred())
+					By("Instantiating a new CF REST API client")
+					cfConfig := &Config{
+						CloudFoundryConfig: cfg,
+						SpaceNames:         []string{m.space().Name},
+					}
+					p, err := New(cfConfig, logger)
+					Expect(err).NotTo(HaveOccurred())
+					By("generating the CF manifest from a Live API connection")
+					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					Expect(err).NotTo(HaveOccurred())
+					By("validating the application discovered contains the expected app data")
+					Expect(expected.Name).To(Equal(received.Name))
+					if len(buildpacks) == 0 {
+						Expect(received.Buildpacks).To(BeNil())
+					} else {
+						Expect(received.Buildpacks).To(Equal(expected.Buildpacks))
+					}
+				},
+					Entry("discovers an app with empty values", []string{}),
+					Entry("discovers an app with a few values",
+						[]string{"java_pack", "ruby_pack"}),
+				)
+
+				DescribeTable("the stack field", func(stack string) {
+					expected := cfTypes.AppManifest{
+						Name:     "name",
+						Metadata: &cfTypes.AppMetadata{},
+						Stack:    stack,
+					}
+					m, serverURL := newMockApplication(expected, GlobalT)
+					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+					Expect(err).NotTo(HaveOccurred())
+					By("Instantiating a new CF REST API client")
+					cfConfig := &Config{
+						CloudFoundryConfig: cfg,
+						SpaceNames:         []string{m.space().Name},
+					}
+					p, err := New(cfConfig, logger)
+					Expect(err).NotTo(HaveOccurred())
+					By("generating the CF manifest from a Live API connection")
+					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					Expect(err).NotTo(HaveOccurred())
+					By("validating the application discovered contains the expected app data")
+					Expect(expected.Name).To(Equal(received.Name))
+					if len(stack) == 0 {
+						Expect(received.Stack).To(BeEmpty())
+					} else {
+						Expect(received.Stack).To(Equal(expected.Stack))
+					}
+				},
+					Entry("discovers an app with empty values", ""),
+					Entry("discovers an app with a few values", "cflinuxfs4"),
+				)
+
+				DescribeTable("the docker field", func(docker *cfTypes.AppManifestDocker) {
+					expected := cfTypes.AppManifest{
+						Name:     "name",
+						Metadata: &cfTypes.AppMetadata{},
+						Docker:   docker,
+					}
+					m, serverURL := newMockApplication(expected, GlobalT)
+					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+					Expect(err).NotTo(HaveOccurred())
+					By("Instantiating a new CF REST API client")
+					cfConfig := &Config{
+						CloudFoundryConfig: cfg,
+						SpaceNames:         []string{m.space().Name},
+					}
+					p, err := New(cfConfig, logger)
+					Expect(err).NotTo(HaveOccurred())
+					By("generating the CF manifest from a Live API connection")
+					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					Expect(err).NotTo(HaveOccurred())
+					By("validating the application discovered contains the expected app data")
+					Expect(expected.Name).To(Equal(received.Name))
+					if docker == nil {
+						Expect(received.Docker).To(BeNil())
+					} else {
+						// Docker's username is not provided for runtime applications
+						Expect(received.Docker.Image).To(Equal(expected.Docker.Image))
+					}
+				},
+					Entry("discovers an app with nil value", nil),
+					Entry("discovers an app with the image populated", &cfTypes.AppManifestDocker{Image: "python31:latest"}),
+					Entry("discovers an app with the image and username populated", &cfTypes.AppManifestDocker{Image: "python31:latest", Username: "anonymous"}),
+				)
+				DescribeTable("the routes field", func(routes *cfTypes.AppManifestRoutes) {
+					expected := cfTypes.AppManifest{
+						Name:     "name",
+						Metadata: &cfTypes.AppMetadata{},
+						Routes:   routes,
+						NoRoute:  (routes == nil || (routes != nil && len(*routes) == 0)),
+					}
+					m, serverURL := newMockApplication(expected, GlobalT)
+					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+					Expect(err).NotTo(HaveOccurred())
+					By("Instantiating a new CF REST API client")
+					cfConfig := &Config{
+						CloudFoundryConfig: cfg,
+						SpaceNames:         []string{m.space().Name},
+					}
+					p, err := New(cfConfig, logger)
+					Expect(err).NotTo(HaveOccurred())
+					By("generating the CF manifest from a Live API connection")
+					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					Expect(err).NotTo(HaveOccurred())
+					By("validating the application discovered contains the expected app data")
+					Expect(expected.Name).To(Equal(received.Name))
+					Expect(received.NoRoute).To(Equal(expected.NoRoute))
+					if expected.NoRoute {
+						Expect(received.Routes).To(Equal(&cfTypes.AppManifestRoutes{}))
+					} else {
+						Expect([]cfTypes.AppManifestRoute(*received.Routes)).To(Equal([]cfTypes.AppManifestRoute(*expected.Routes)))
+					}
+				},
+					Entry("discovers an app with no route value and nil routes", nil),
+					Entry("discovers an app with no route value and empty routes", &cfTypes.AppManifestRoutes{}),
+					Entry("discovers an app with routes defined routes", &cfTypes.AppManifestRoutes{{Route: serverURL, Protocol: cfTypes.HTTP2},
+						{Route: "https://foo.bar", Protocol: cfTypes.HTTP2},
+					}),
+				)
+
+				DescribeTable("the services field", func(services *cfTypes.AppManifestServices) {
+					expected := cfTypes.AppManifest{
+						Name:     "name",
+						Metadata: &cfTypes.AppMetadata{},
+						Services: services,
+					}
+					m, serverURL := newMockApplication(expected, GlobalT)
+					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+					Expect(err).NotTo(HaveOccurred())
+					By("Instantiating a new CF REST API client")
+					cfConfig := &Config{
+						CloudFoundryConfig: cfg,
+						SpaceNames:         []string{m.space().Name},
+					}
+					p, err := New(cfConfig, logger)
+					Expect(err).NotTo(HaveOccurred())
+					By("generating the CF manifest from a Live API connection")
+					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					Expect(err).NotTo(HaveOccurred())
+					By("validating the application discovered contains the expected app data")
+					Expect(expected.Name).To(Equal(received.Name))
+					if expected.Services == nil {
+						Expect(received.Services).To(BeNil())
+					} else {
+						Expect([]cfTypes.AppManifestService(*received.Services)).To(ContainElements([]cfTypes.AppManifestService(*expected.Services)))
+					}
+				},
+					Entry("discovers an app with no services", nil),
+					Entry("discovers an app with no services value and empty value", &cfTypes.AppManifestServices{}),
+					Entry("discovers an app with services defined", &cfTypes.AppManifestServices{
+						{
+							Name:        "service_1",
+							BindingName: "binding_service_1",
+							Parameters:  map[string]interface{}{"credentials": `{"username":"anonymous","password":"P@ssW0rd"}`, "plan": "xlarge"},
+						},
+						{
+							Name:        "service_2",
+							BindingName: "binding_service_2",
+						},
+					}),
+				)
+
+				DescribeTable("the sidecars field", func(sidecars *cfTypes.AppManifestSideCars) {
+					expected := cfTypes.AppManifest{
+						Name:     "name",
+						Metadata: &cfTypes.AppMetadata{},
+						Sidecars: sidecars,
+					}
+					m, serverURL := newMockApplication(expected, GlobalT)
+					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+					Expect(err).NotTo(HaveOccurred())
+					By("Instantiating a new CF REST API client")
+					cfConfig := &Config{
+						CloudFoundryConfig: cfg,
+						SpaceNames:         []string{m.space().Name},
+					}
+					p, err := New(cfConfig, logger)
+					Expect(err).NotTo(HaveOccurred())
+					By("generating the CF manifest from a Live API connection")
+					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					Expect(err).NotTo(HaveOccurred())
+					By("validating the application discovered contains the expected app data")
+					Expect(expected.Name).To(Equal(received.Name))
+					if expected.Sidecars == nil {
+						Expect(received.Sidecars).To(BeNil())
+					} else {
+						Expect([]cfTypes.AppManifestSideCar(*received.Sidecars)).To(BeEquivalentTo([]cfTypes.AppManifestSideCar(*expected.Sidecars)))
+					}
+				},
+					Entry("discovers an app with no sidecars", nil),
+					Entry("discovers an app with sidecars defined", &cfTypes.AppManifestSideCars{
+						{
+							Name:         "sidecar_1",
+							ProcessTypes: []cfTypes.AppProcessType{cfTypes.WebAppProcessType, cfTypes.WorkerAppProcessType},
+							Command:      "sleep 100",
+							Memory:       100,
+						},
+						{
+							Name:         "sidecar_2",
+							ProcessTypes: []cfTypes.AppProcessType{cfTypes.WebAppProcessType},
+							Command:      "/bin/sh -c echo 'hello world'",
+							Memory:       1024,
+						},
+					}),
+				)
+
+				DescribeTable("the process field", func(buildpack []string, docker *cfTypes.AppManifestDocker, processes cfTypes.AppManifestProcesses, inline bool) {
+					expected := cfTypes.AppManifest{
+						Name:       "name",
+						Metadata:   &cfTypes.AppMetadata{},
+						Buildpacks: buildpack,
+						Docker:     docker,
+					}
+					if len(processes) > 0 {
+						if !inline {
+							expected.Processes = &processes
+						} else {
+							p := processes[0]
+							b, err := json.Marshal(p)
+							Expect(err).NotTo(HaveOccurred())
+							Expect(json.Unmarshal(b, &expected)).NotTo(HaveOccurred())
+						}
+					}
+					m, serverURL := newMockApplication(expected, GlobalT)
+					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+					Expect(err).NotTo(HaveOccurred())
+					By("Instantiating a new CF REST API client")
+					cfConfig := &Config{
+						CloudFoundryConfig: cfg,
+						SpaceNames:         []string{m.space().Name},
+					}
+					p, err := New(cfConfig, logger)
+					Expect(err).NotTo(HaveOccurred())
+					By("generating the CF manifest from a Live API connection")
+					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					Expect(err).NotTo(HaveOccurred())
+					By("validating the application discovered contains the expected app data")
+					Expect(expected.Name).To(Equal(received.Name))
+					if inline {
+						r := cfTypes.AppManifestProcess{}
+						b, err := json.Marshal((*received.Processes)[0])
+						Expect(err).NotTo(HaveOccurred())
+						Expect(json.Unmarshal(b, &r)).NotTo(HaveOccurred())
+						Expect(r).To(Equal(processes[0]))
+						// Since we control how many processes we inject here, ensure that the inline process is not
+						// duplicated as inline and as a process by accident during the converstion
+						Expect(len(*received.Processes)).To(Equal(1))
+					} else {
+						if expected.Processes == nil {
+							Expect(received.Processes).To(BeNil())
+						} else if !inline {
+							Expect([]cfTypes.AppManifestProcess(*received.Processes)).To(ContainElements([]cfTypes.AppManifestProcess(*expected.Processes)))
+						}
+					}
+
+				},
+					Entry("discovers an app with no processes", nil, nil, nil, false),
+					Entry("discovers an app with two proccesses defined for python buildpack lifecycle", []string{"python_buildpack"}, nil, cfTypes.AppManifestProcesses{
+						{
+							Type:                         cfTypes.WebAppProcessType,
+							Command:                      "/bin/echo hello world",
+							DiskQuota:                    "1000",
+							HealthCheckType:              cfTypes.Http,
+							HealthCheckHTTPEndpoint:      "/healthEndpoint",
+							HealthCheckInvocationTimeout: 100,
+							Instances:                    ptrTo(uint(2)),
+							LogRateLimitPerSecond:        "10",
+							Memory:                       "1024",
+							// Timeout:                          50, Timeout is not available at runtime
+							HealthCheckInterval:              120,
+							ReadinessHealthCheckType:         cfTypes.Process,
+							ReadinessHealthCheckHttpEndpoint: "/readinessCheck",
+							ReadinessHealthInvocationTimeout: 150,
+							ReadinessHealthCheckInterval:     70,
+							Lifecycle:                        "buildpack",
+						},
+						{
+							Type:                         cfTypes.WorkerAppProcessType,
+							Command:                      "/bin/echo foo bar",
+							HealthCheckType:              cfTypes.Port,
+							HealthCheckHTTPEndpoint:      "/healthz",
+							HealthCheckInvocationTimeout: 10,
+							Instances:                    ptrTo(uint(1)),
+							LogRateLimitPerSecond:        "70",
+							Memory:                       "2048",
+							DiskQuota:                    "200",
+							// Timeout:                          500,
+							HealthCheckInterval:              20,
+							ReadinessHealthCheckType:         cfTypes.Http,
+							ReadinessHealthCheckHttpEndpoint: "/readinez",
+							ReadinessHealthInvocationTimeout: 10,
+							ReadinessHealthCheckInterval:     730,
+							Lifecycle:                        "buildpack",
+						},
+					}, false),
+					Entry("discovers an app with two proccesses defined for docker lifecycle", nil, &cfTypes.AppManifestDocker{Image: "pyton31:latest"}, cfTypes.AppManifestProcesses{
+						{
+							Type:                         cfTypes.WebAppProcessType,
+							Command:                      "/bin/echo hello world",
+							DiskQuota:                    "1000",
+							HealthCheckType:              cfTypes.Http,
+							HealthCheckHTTPEndpoint:      "/healthEndpoint",
+							HealthCheckInvocationTimeout: 100,
+							Instances:                    ptrTo(uint(2)),
+							LogRateLimitPerSecond:        "10",
+							Memory:                       "1024",
+							// Timeout:                          50, Timeout is not available at runtime
+							HealthCheckInterval:              120,
+							ReadinessHealthCheckType:         cfTypes.Process,
+							ReadinessHealthCheckHttpEndpoint: "/readinessCheck",
+							ReadinessHealthInvocationTimeout: 150,
+							ReadinessHealthCheckInterval:     70,
+							Lifecycle:                        "docker",
+						},
+						{
+							Type:                         cfTypes.WorkerAppProcessType,
+							Command:                      "/bin/echo foo bar",
+							HealthCheckType:              cfTypes.Port,
+							HealthCheckHTTPEndpoint:      "/healthz",
+							HealthCheckInvocationTimeout: 10,
+							Instances:                    ptrTo(uint(1)),
+							LogRateLimitPerSecond:        "70",
+							Memory:                       "2048",
+							DiskQuota:                    "200",
+							// Timeout:                          500,
+							HealthCheckInterval:              20,
+							ReadinessHealthCheckType:         cfTypes.Http,
+							ReadinessHealthCheckHttpEndpoint: "/readinez",
+							ReadinessHealthInvocationTimeout: 10,
+							ReadinessHealthCheckInterval:     730,
+							Lifecycle:                        "docker",
+						},
+					}, false),
+					Entry("discovers an app with one process inline", []string{"python_buildpack"}, nil, cfTypes.AppManifestProcesses{
+						{
+							Type:                         cfTypes.WebAppProcessType,
+							Command:                      "/bin/echo hello world",
+							DiskQuota:                    "1000",
+							HealthCheckType:              cfTypes.Http,
+							HealthCheckHTTPEndpoint:      "/healthEndpoint",
+							HealthCheckInvocationTimeout: 100,
+							Instances:                    ptrTo(uint(2)),
+							LogRateLimitPerSecond:        "10",
+							Memory:                       "1024",
+							// Timeout:                          50,
+							HealthCheckInterval:              120,
+							ReadinessHealthCheckType:         cfTypes.Process,
+							ReadinessHealthCheckHttpEndpoint: "/readinessCheck",
+							ReadinessHealthInvocationTimeout: 150,
+							ReadinessHealthCheckInterval:     70,
+							Lifecycle:                        "buildpack",
+						},
+					}, true),
+				)
+
+				It("discover an app fully defined", func() {
+					expected := cfTypes.AppManifest{
+						Name: "name",
+						Env:  map[string]string{"fox": "lazy"},
+						Metadata: &cfTypes.AppMetadata{
+							Labels: map[string]*string{"foo": ptrTo("bar")},
+						},
+						Docker: &cfTypes.AppManifestDocker{
+							Image: "docker_image",
+						},
+						Routes: &cfTypes.AppManifestRoutes{
+							{
+								Route:    "https://route1",
+								Protocol: cfTypes.HTTP2,
+							},
+						},
+						Services: &cfTypes.AppManifestServices{
+							{
+								Name:        "service_A",
+								BindingName: "binding_service_A",
+								Parameters: map[string]interface{}{
+									"credentials": `{"username":"anonymous","password":"P@ssW0rd"}`,
+								},
+							},
+						},
+						Sidecars: &cfTypes.AppManifestSideCars{
+							{
+								Name:         "sidecar_A",
+								ProcessTypes: []cfTypes.AppProcessType{cfTypes.WebAppProcessType, cfTypes.WorkerAppProcessType},
+								Command:      "/bin/sleep 1000",
+								Memory:       100,
+							},
+						},
+						Processes: &cfTypes.AppManifestProcesses{
+							{
+								Type:                             cfTypes.WebAppProcessType,
+								Command:                          "/bin/echo hello world",
+								DiskQuota:                        "1000",
+								HealthCheckType:                  cfTypes.Http,
+								HealthCheckHTTPEndpoint:          "/healthEndpoint",
+								HealthCheckInvocationTimeout:     100,
+								Instances:                        ptrTo(uint(2)),
+								LogRateLimitPerSecond:            "10",
+								Memory:                           "1024",
+								HealthCheckInterval:              120,
+								ReadinessHealthCheckType:         cfTypes.Process,
+								ReadinessHealthCheckHttpEndpoint: "/readinessCheck",
+								ReadinessHealthInvocationTimeout: 150,
+								ReadinessHealthCheckInterval:     70,
+								Lifecycle:                        "docker",
+							},
+						},
+						Stack: "cfLinux65",
+					}
+					m, serverURL := newMockApplication(expected, GlobalT)
+					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+					Expect(err).NotTo(HaveOccurred())
+					By("Instantiating a new CF REST API client")
+					cfConfig := &Config{
+						CloudFoundryConfig: cfg,
+						SpaceNames:         []string{m.space().Name},
+					}
+					p, err := New(cfConfig, logger)
+					Expect(err).NotTo(HaveOccurred())
+					By("discovering the application")
+					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					Expect(err).NotTo(HaveOccurred())
+					By("validating the application discovered contains the expected app data")
+					Expect(*received).To(Equal(expected))
 				})
+
 			})
 			Context("when apps exist in the space", func() {
 				BeforeEach(func() {
@@ -247,14 +716,14 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 							Endpoint:    "/v3/apps",
 							Output:      g.Paged([]string{app1.JSON}),
 							Status:      http.StatusOK,
-							QueryString: pagingQueryString + "&space_guids=" + space.GUID,
+							QueryString: "names=" + app1.Name + "&" + pagingQueryString + "&space_guids=" + space.GUID,
 						},
 						{
 							Method:      "GET",
 							Endpoint:    "/v3/apps/" + app1.GUID + "/env",
 							Output:      g.Paged([]string{}),
 							Status:      http.StatusOK,
-							QueryString: pagingQueryString,
+							QueryString: "",
 						},
 						{
 							Method:      "GET",
@@ -282,7 +751,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 							Endpoint:    "/v3/spaces",
 							Output:      g.Paged([]string{space.JSON}),
 							Status:      http.StatusOK,
-							QueryString: "names=" + space.Name + "&" + pagingQueryString + "&guids=" + space.GUID,
+							QueryString: "names=" + space.Name + "&" + pagingQueryString,
 						},
 					}, GlobalT)
 				})
@@ -300,11 +769,12 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 
 					p, err := New(cfConfig, logger)
 					Expect(err).NotTo(HaveOccurred())
-					apps, err := p.Discover(DiscoverInputParam{SpaceName: space.Name, appName: app1.Name})
+					apps, err := p.Discover(DiscoverInputParam{SpaceName: space.Name, AppName: app1.Name})
 					Expect(err).NotTo(HaveOccurred())
 					Expect(apps).NotTo(Equal(&pTypes.DiscoverResult{}))
 				})
 			})
+
 			Context("when apps don't exist in the space", func() {
 				BeforeEach(func() {
 					serverURL = testutil.SetupMultiple([]testutil.MockRoute{
@@ -380,7 +850,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					appSlice, ok := localApps.([]string)
 					Expect(ok).To(BeTrue())
 
-					Expect(appSlice).To(ContainElements("app1", "app2"))
+					Expect(appSlice).To(ContainElements("app1", "app2", "app3"))
 					Expect(appSlice).NotTo(ContainElement("app-in-subfolder"))
 					Expect(appSlice).NotTo(ContainElement("text-file"))
 				})
@@ -516,7 +986,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 
 			It("returns the app name from the single manifest file", func() {
 				input := DiscoverInputParam{
-					appName: "app3",
+					AppName: "app3",
 				}
 				apps, err := provider.Discover(input)
 				Expect(err).NotTo(HaveOccurred())
@@ -530,7 +1000,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 			})
 			It("returns an error if the app name doesn't exists", func() {
 				input := DiscoverInputParam{
-					appName: "not-exists",
+					AppName: "not-exists",
 				}
 				apps, err := provider.Discover(input)
 				Expect(err).To(HaveOccurred())
@@ -538,7 +1008,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 			})
 			It("returns an error if the app name is empty", func() {
 				input := DiscoverInputParam{
-					appName: "",
+					AppName: "",
 				}
 				apps, err := provider.Discover(input)
 				Expect(err).To(HaveOccurred())
@@ -546,89 +1016,6 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 			})
 		})
 	})
-	// Describe("getAppBySpaceAndAppGUID", func() {
-	// 	var (
-	// 		serverURL string
-	// 		nopLogger = log.New(io.Discard, "", 0)
-
-	// 		// client   *client.Client
-	// 		provider *CloudFoundryProvider
-	// 		g        = testutil.NewObjectJSONGenerator()
-	// 		space    *testutil.JSONResource
-	// 		app1     *testutil.JSONResource
-	// 	)
-
-	// 	BeforeEach(func() {
-	// 		space = g.Space()
-	// 		app1 = g.Application()
-	// 		fmt.Println("CREATED APP GUID", app1.GUID)
-	// 		serverURL = testutil.SetupMultiple([]testutil.MockRoute{
-	// 			{
-	// 				Method:      "GET",
-	// 				Endpoint:    "/v3/apps/" + app1.GUID,
-	// 				Output:      g.Single(app1.JSON),
-	// 				Status:      http.StatusOK,
-	// 				QueryString: pagingQueryString + "&space_guids=" + space.GUID,
-	// 			},
-	// 			// {
-	// 			// 	Method:      "GET",
-	// 			// 	Endpoint:    "/v3/apps",
-	// 			// 	Output:      g.SinglePaged(""),
-	// 			// 	Status:      http.StatusOK,
-	// 			// 	QueryString: "guids=non-existent-guid",
-	// 			// },
-	// 			// {
-	// 			// 	Method:      "GET",
-	// 			// 	Endpoint:    "/v3/apps",
-	// 			// 	Output:      g.SinglePaged(`{"errors":[{"detail":"API failure"}]}`),
-	// 			// 	Status:      http.StatusInternalServerError,
-	// 			// 	QueryString: "guids=error-guid",
-	// 			// },
-	// 		}, GlobalT)
-
-	// 		cfConfig, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
-	// 		Expect(err).NotTo(HaveOccurred())
-
-	// 		cfg := &Config{
-	// 			CloudFoundryConfig: cfConfig,
-	// 			ManifestPath:       filepath.Join("test_data", "test-app", "manifest.yml"),
-	// 			SpaceNames:         []string{space.Name},
-	// 		}
-	// 		provider, err = New(cfg, nopLogger)
-	// 		Expect(err).ToNot(HaveOccurred())
-
-	// 	})
-
-	// 	AfterEach(func() {
-	// 		testutil.Teardown()
-	// 	})
-
-	// 	It("returns the app when exactly one app is found", func() {
-	// 		app, err := provider.getAppBySpaceAndAppGUID(space.GUID, app1.GUID)
-	// 		Expect(err).ToNot(HaveOccurred())
-	// 		Expect(app).ToNot(BeNil())
-	// 		// Expect(app.GUID).To(Equal(app1.GUID))
-	// 		// Expect(app.Name).To(Equal(app1.Name))
-	// 	})
-
-	// It("returns error when no app is found", func() {
-	// 	app, err := provider.getAppBySpaceAndAppGUID("non-existent-guid")
-	// 	Expect(err).To(MatchError("no application found with GUID non-existent-guid"))
-	// 	Expect(app).To(BeNil())
-	// })
-
-	// It("returns error when multiple apps are found", func() {
-	// 	app, err := provider.getAppBySpaceAndAppGUID("ambiguous-guid")
-	// 	Expect(err).To(MatchError("multiple applications found with GUID ambiguous-guid"))
-	// 	Expect(app).To(BeNil())
-	// })
-
-	// It("returns error when API call fails", func() {
-	// 	app, err := provider.getAppBySpaceAndAppGUID("error-guid")
-	// 	Expect(err).To(MatchError(ContainSubstring("error listing Cloud Foundry apps")))
-	// 	Expect(app).To(BeNil())
-	// })
-	// })
 
 	DescribeTable("extracts the sensitive information from an app", func(app Application) {
 		By("Copying the application manifest to be able to check against the resulting changes")
@@ -721,10 +1108,6 @@ func downloadTemplateFolder() error {
 }
 
 func getModuleRoot() string {
-	// gomodPath := os.Getenv("GOMOD")
-	// if gomodPath == "" {
-	// 	log.Fatal("GOMOD environment variable is not set; make sure to run with Go modules enabled")
-	// }
 	out, err := exec.Command("go", "env", "GOMOD").Output()
 	if err != nil {
 		log.Fatalf("Failed to get GOMOD via 'go env': %v", err)

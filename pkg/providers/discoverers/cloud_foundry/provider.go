@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
@@ -373,8 +374,67 @@ func (c *CloudFoundryProvider) discoverFromLiveAPI(spaceName string, appName str
 	return &discoveredApp, nil
 }
 
+func (c *CloudFoundryProvider) getProcesses(appGUID, lifecycle string) (*cfTypes.AppManifestProcesses, error) {
+	processes, err := c.cli.Processes.ListForAppAll(context.Background(), appGUID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error getting processes: %v", err)
+	}
+
+	if len(processes) == 0 {
+		return nil, nil
+	}
+	appProcesses := cfTypes.AppManifestProcesses{}
+	for _, proc := range processes {
+		procInstances := uint(proc.Instances)
+
+		appProcesses = append(appProcesses, cfTypes.AppManifestProcess{
+			Type:                         cfTypes.AppProcessType(proc.Type),
+			Command:                      safePtr(proc.Command, ""),
+			DiskQuota:                    strconv.Itoa(proc.DiskInMB),
+			HealthCheckType:              cfTypes.AppHealthCheckType(proc.HealthCheck.Type),
+			HealthCheckHTTPEndpoint:      safePtr(proc.HealthCheck.Data.Endpoint, ""),
+			HealthCheckInvocationTimeout: uint(safePtr(proc.HealthCheck.Data.InvocationTimeout, 0)),
+			HealthCheckInterval:          uint(*proc.HealthCheck.Data.Interval),
+			Instances:                    &procInstances,
+			LogRateLimitPerSecond:        strconv.Itoa(proc.LogRateLimitInBytesPerSecond),
+			Memory:                       strconv.Itoa(proc.MemoryInMB),
+			// Timeout not available
+			ReadinessHealthCheckType:         cfTypes.AppHealthCheckType(proc.ReadinessCheck.Type),
+			ReadinessHealthCheckHttpEndpoint: safePtr(proc.ReadinessCheck.Data.Endpoint, ""),
+			ReadinessHealthInvocationTimeout: uint(safePtr(proc.ReadinessCheck.Data.InvocationTimeout, 0)),
+			ReadinessHealthCheckInterval:     uint(safePtr(proc.ReadinessCheck.Data.Interval, 0)),
+			Lifecycle:                        lifecycle,
+		})
+	}
+	return &appProcesses, nil
+}
+
+func (c *CloudFoundryProvider) getRoutes(appGUID string) (*cfTypes.AppManifestRoutes, error) {
+	routeOpts := client.NewRouteListOptions()
+	routes, err := c.cli.Routes.ListForAppAll(context.Background(), appGUID, routeOpts)
+	if err != nil {
+		return nil, fmt.Errorf("error getting processes: %v", err)
+	}
+	appRoutes := cfTypes.AppManifestRoutes{}
+	for _, r := range routes {
+		destinations, err := c.cli.Routes.GetDestinations(context.Background(), r.GUID)
+		if err != nil {
+			return nil, fmt.Errorf("error getting destinations for route %s: %v", r.GUID, err)
+		}
+		var protocol string
+		if len(destinations.Destinations) > 0 {
+			protocol = *destinations.Destinations[0].Protocol
+		}
+		appRoutes = append(appRoutes, cfTypes.AppManifestRoute{
+			Route:    r.URL,
+			Protocol: cfTypes.AppRouteProtocol(protocol),
+			// TODO: Options: loadbalancing?
+		})
+	}
+	return &appRoutes, nil
+}
 func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(spaceName string, appName string) (*cfTypes.AppManifest, error) {
-	ctx := context.Background()
+
 	c.logger.Printf("Analyzing application %s", appName)
 
 	// Retrieve app in space and app name
@@ -389,56 +449,14 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(spaceName string, a
 		return nil, err
 	}
 
-	processes, err := c.cli.Processes.ListForAppAll(ctx, app.GUID, nil)
+	appProcesses, err := c.getProcesses(app.GUID, string(app.Lifecycle.Type))
+
 	if err != nil {
-		return nil, fmt.Errorf("error getting processes: %v", err)
+		return nil, err
 	}
-
-	appProcesses := cfTypes.AppManifestProcesses{}
-	for _, proc := range processes {
-		fmt.Println("Process: ", proc)
-		procInstances := uint(proc.Instances)
-
-		appProcesses = append(appProcesses, cfTypes.AppManifestProcess{
-			Type:                         cfTypes.AppProcessType(proc.Type),
-			Command:                      safePtr(proc.Command, ""),
-			DiskQuota:                    fmt.Sprintf("%d", proc.DiskInMB),
-			HealthCheckType:              cfTypes.AppHealthCheckType(proc.HealthCheck.Type),
-			HealthCheckHTTPEndpoint:      safePtr(proc.HealthCheck.Data.Endpoint, ""),
-			HealthCheckInvocationTimeout: uint(safePtr(proc.HealthCheck.Data.InvocationTimeout, 0)),
-			Instances:                    &procInstances,
-			LogRateLimitPerSecond:        fmt.Sprintf("%d", proc.LogRateLimitInBytesPerSecond),
-			Memory:                       fmt.Sprintf("%dMB", proc.MemoryInMB),
-			// Timeout
-			ReadinessHealthCheckType:         cfTypes.AppHealthCheckType(proc.ReadinessCheck.Type),
-			ReadinessHealthCheckHttpEndpoint: safePtr(proc.ReadinessCheck.Data.Endpoint, ""),
-			ReadinessHealthInvocationTimeout: uint(safePtr(proc.ReadinessCheck.Data.InvocationTimeout, 0)),
-			ReadinessHealthCheckInterval:     uint(safePtr(proc.ReadinessCheck.Data.Interval, 0)),
-			Lifecycle:                        string(app.Lifecycle.Type),
-		})
-	}
-	routeOpts := client.NewRouteListOptions()
-	routeOpts.SpaceGUIDs.EqualTo(app.Relationships.Space.Data.GUID)
-	routes, err := c.cli.Routes.ListForAppAll(ctx, app.GUID, routeOpts)
+	appRoutes, err := c.getRoutes(app.GUID)
 	if err != nil {
-		return nil, fmt.Errorf("error getting processes: %v", err)
-	}
-	appRoutes := cfTypes.AppManifestRoutes{}
-	for _, r := range routes {
-		destinations, err := c.cli.Routes.GetDestinations(ctx, r.GUID)
-		if err != nil {
-			return nil, fmt.Errorf("error getting destinations for route %s: %v", r.GUID, err)
-		}
-		var protocol string
-		if len(destinations.Destinations) > 0 {
-			protocol = *destinations.Destinations[0].Protocol
-		}
-		appRoutes = append(appRoutes, cfTypes.AppManifestRoute{
-			Route:    r.URL,
-			Protocol: cfTypes.AppRouteProtocol(protocol),
-			// TODO: Options: loadbalancing?
-		})
-
+		return nil, err
 	}
 
 	// Sidecars
@@ -452,24 +470,30 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(spaceName string, a
 	if err != nil {
 		return nil, fmt.Errorf("error getting services for app %s: %s", app.Name, err)
 	}
+	// Retrieve docker image pullspec when the buildpack is type docker
+	dockerSpec, err := c.getDockerSpecification(*app)
+	if err != nil {
+		return nil, err
+	}
 	appManifest := cfTypes.AppManifest{
-		Name: app.Name,
-		Env:  appEnv.EnvVars, //TODO: Running, staging, appEnvVar
+		Name:   app.Name,
+		Env:    appEnv.EnvVars, //TODO: Running, staging, appEnvVar
+		Docker: dockerSpec,
 		Metadata: &cfTypes.AppMetadata{
 			Labels:      app.Metadata.Labels,
 			Annotations: app.Metadata.Annotations,
 		},
 		// AppManifestProcess
-		Processes: &appProcesses,
+		Processes: appProcesses,
 		// AppRoutes
-		Routes: &appRoutes,
+		Routes: appRoutes,
 		// Build Packs
 		Buildpacks: app.Lifecycle.BuildpackData.Buildpacks,
 		// RandomRoute cannot be determined at runtime
 		// NoRoute
-		NoRoute:  len(appRoutes) == 0,
-		Services: &appServices,
-		Sidecars: &sidecars,
+		NoRoute:  len(*appRoutes) == 0,
+		Services: appServices,
+		Sidecars: sidecars,
 		Stack:    app.Lifecycle.BuildpackData.Stack,
 	}
 
@@ -477,12 +501,29 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(spaceName string, a
 
 }
 
-func (c *CloudFoundryProvider) getSidecars(appGUID string) (cfTypes.AppManifestSideCars, error) {
+func (c *CloudFoundryProvider) getDockerSpecification(app resource.App) (*cfTypes.AppManifestDocker, error) {
+
+	docker := cfTypes.AppManifestDocker{}
+	if app.Lifecycle.Type != "docker" {
+		return nil, nil
+	}
+	d, err := c.cli.Droplets.GetCurrentForApp(context.Background(), app.GUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve droplet for app %s", app.Name)
+	}
+	docker.Image = *d.Image
+	return &docker, nil
+}
+
+func (c *CloudFoundryProvider) getSidecars(appGUID string) (*cfTypes.AppManifestSideCars, error) {
 	list, err := c.cli.Sidecars.ListForAppAll(context.Background(), appGUID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error while retrieving sidecars for app %s: %s", appGUID, err)
 	}
-	sidecars := cfTypes.AppManifestSideCars{}
+	if len(list) == 0 {
+		return nil, nil
+	}
+	var sidecars cfTypes.AppManifestSideCars
 	for _, sc := range list {
 		pt := make([]cfTypes.AppProcessType, 0, len(sc.ProcessTypes))
 		for _, t := range sc.ProcessTypes {
@@ -496,7 +537,7 @@ func (c *CloudFoundryProvider) getSidecars(appGUID string) (cfTypes.AppManifestS
 			Memory:       sc.MemoryInMB,
 		})
 	}
-	return sidecars, nil
+	return &sidecars, nil
 }
 
 // appVCAPServiceAttributes is a structure that maps the relevant JSON fields from a runtime service structure as
@@ -508,11 +549,11 @@ type appVCAPServiceAttributes struct {
 	Credentials json.RawMessage `json:"credentials,omitempty"`
 }
 
-func getServicesFromApplicationEnvironment(env map[string]json.RawMessage) (cfTypes.AppManifestServices, error) {
+func getServicesFromApplicationEnvironment(env map[string]json.RawMessage) (*cfTypes.AppManifestServices, error) {
 	appServices := cfTypes.AppManifestServices{}
 	vcap, ok := env[vcapServices]
 	if !ok {
-		return appServices, nil
+		return nil, nil
 	}
 	instanceServices := map[string]appVCAPServiceAttributes{}
 	err := json.Unmarshal(vcap, &instanceServices)
@@ -520,10 +561,18 @@ func getServicesFromApplicationEnvironment(env map[string]json.RawMessage) (cfTy
 		return nil, fmt.Errorf("failed to unmarshal VCAP_SERVICES: %s", err)
 	}
 	for name, svc := range instanceServices {
-		s := cfTypes.AppManifestService{Name: name, BindingName: svc.Name, Parameters: map[string]any{credentials: svc.Credentials}}
+		var creds map[string]any
+		if len(svc.Credentials) > 0 {
+			creds = map[string]any{}
+			err := json.Unmarshal(svc.Credentials, &creds)
+			if err != nil {
+				return nil, err
+			}
+		}
+		s := cfTypes.AppManifestService{Name: name, BindingName: svc.Name, Parameters: creds}
 		appServices = append(appServices, s)
 	}
-	return appServices, nil
+	return &appServices, nil
 }
 
 func (c *CloudFoundryProvider) getSpaceByName(spaceName string) (*resource.Space, error) {
