@@ -1,0 +1,4 @@
+# invalid
+foo: bar
+foofoo: barbar
+invalid_yaml: [unclosed list
