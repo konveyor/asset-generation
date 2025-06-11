@@ -8,7 +8,7 @@ import (
 	"github.com/konveyor/asset-generation/pkg/providers/generators/helm"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 var _ = Describe("Helm command", func() {
