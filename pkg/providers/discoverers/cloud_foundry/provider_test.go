@@ -1056,7 +1056,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Name:        "elephantsql",
 					BindingName: "elephantsql-binding-c6c60",
 					Parameters: map[string]interface{}{
-						"credentials": `"uri": "postgres://exampleuser:examplepass@babar.elephantsql.com:5432/exampleuser"`,
+						"credentials": `"uri": "postgres://exampleuser:examplepass@babar.elephantsql.com:5432/exampleuser"`, //notsecret
 					},
 				},
 			}}),
