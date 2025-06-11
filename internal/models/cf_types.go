@@ -1,4 +1,4 @@
-package cloud_foundry
+package models
 
 // Original source from https://github.com/cloudfoundry/go-cfclient/blob/main/operation/manifest.go
 
@@ -33,8 +33,8 @@ type CloudFoundryManifest struct {
 
 // Metadata allows you to tag API resources with information that does not directly affect its functionality.
 type AppMetadata struct {
-	Labels      map[string]*string `json:"labels"`
-	Annotations map[string]*string `json:"annotations"`
+	Labels      map[string]*string `yaml:"labels,omitempty"`
+	Annotations map[string]*string `yaml:"annotations,omitempty"`
 }
 type AppManifest struct {
 	Name               string                `yaml:"name"`
@@ -147,7 +147,7 @@ type AppManifestSideCar struct {
 	Name         string           `yaml:"name"`
 	ProcessTypes []AppProcessType `yaml:"process_types,omitempty"`
 	Command      string           `yaml:"command,omitempty"`
-	Memory       string           `yaml:"memory,omitempty"`
+	Memory       int              `yaml:"memory,omitempty"`
 }
 
 func NewCloudFoundryManifest(space string, applications ...*AppManifest) *CloudFoundryManifest {
