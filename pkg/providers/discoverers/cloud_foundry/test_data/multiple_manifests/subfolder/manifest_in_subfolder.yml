@@ -1,0 +1,12 @@
+name: my-app-subfolder
+memory: 512M
+disk_quota: 1G
+instances: 1
+buildpacks:
+  - python_buildpack
+path: ./app
+routes:
+  - route: my-app.example.com
+services:
+  - my-db
+health-check-type: port

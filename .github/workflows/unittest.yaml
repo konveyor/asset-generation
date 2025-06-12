@@ -22,6 +22,7 @@ jobs:
 
       - run: go mod tidy && git diff --exit-code go.mod go.sum
       - run: go vet ./...
+      - run: go mod vendor
 
       - name: Run Ginkgo tests with coverage
         id: ginkgo-tests
@@ -30,7 +31,7 @@ jobs:
           go tool cover -func=coverage.out
           COVERAGE=$(go tool cover --func=coverage.out | grep total | grep -Eo '[0-9]+\.[0-9]+')
           echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
-           
+
       - uses: actions/upload-artifact@v4
         with:
           name: test-coverage
@@ -52,7 +53,7 @@ jobs:
             exit 1
           fi
           echo "Coverage status: $COVERAGE"
-          if (( $(echo "$COVERAGE < 73.8" | bc -l) )); then 
-            echo "Min coverage failed"; 
-            exit 1; 
+          if (( $(echo "$COVERAGE < 73.8" | bc -l) )); then
+            echo "Min coverage failed";
+            exit 1;
           fi
