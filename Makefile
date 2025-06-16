@@ -1,14 +1,19 @@
 GO_VERSION := 1.23.6
 GOTOOLCHAIN := go$(GO_VERSION)
 
+GOPATH ?= $(HOME)/go
+GOBIN ?= $(GOPATH)/bin
+GOIMPORTS = $(GOBIN)/goimports
+GINKGO = $(GOBIN)/ginkgo
+
 COVERAGE_DIR := coverage
 COVERAGE_PROFILE := $(COVERAGE_DIR)/coverage.out
 # Default to recursive test if GINKGO_PKG not set
 GINKGO_PKG ?= -r
 GINKGO_VERBOSE ?= false
-GINKGO_FLAGS := $(if $(filter 1,$(GINKGO_VERBOSE)),-v) --cover --coverprofile=coverage.out --coverpkg=./... --output-dir=$(COVERAGE_DIR)
+GINKGO_FLAGS := $(if $(filter 1,$(GINKGO_VERBOSE)),-v) $(GINKGO_PKG) --mod=mod --randomize-all --randomize-suites --cover --coverprofile=coverage.out --coverpkg=./... --output-dir=$(COVERAGE_DIR)
 
-.PHONY: help test test-cloudfoundry test-helm coverage build
+.PHONY: help test test-cloudfoundry test-helm coverage build fmt vet
 
 define print_help
 	@echo "$(1) targets:"
@@ -23,6 +28,28 @@ define print_help
 	@echo ""
 endef
 
+PKG = ./internal/... \
+      ./pkg/...
+
+
+PKGDIR = $(subst /...,,$(PKG))
+
+# Ensure goimports installed.
+$(GOIMPORTS):
+	go install golang.org/x/tools/cmd/goimports@v0.24
+
+
+$(GINKGO):
+	go install github.com/onsi/ginkgo/v2/ginkgo
+
+# Format the code.
+fmt: $(GOIMPORTS)
+	$(GOIMPORTS) -w $(PKGDIR)
+
+# Run go vet against code
+vet:
+	go vet -mod=mod $(PKG)
+
 help: ## Show this help
 	$(call print_help,Available,$(MAKEFILE_LIST))
 
@@ -36,7 +63,7 @@ define run_ginkgo
 	@GOCOVERDIR=$(COVERAGE_DIR) ginkgo $(GINKGO_FLAGS) $(1)
 endef
 
-test: ## Run all tests with coverage and JSON report
+test: $(GINKGO) fmt vet ## Run all tests with coverage and JSON report
 	$(call run_ginkgo,-r)
 
 test-coverage: ## Run all tests WITH coverage and JSON report
@@ -54,9 +81,3 @@ coverage: test ## Generate HTML coverage report
 	go tool cover -html=$(COVERAGE_PROFILE) -o $(COVERAGE_DIR)/coverage.html
 	@echo "Coverage report generated: $(COVERAGE_DIR)/coverage.html"
 
-## Build
-
-build: ## Build the asset-generation library
-	@echo "Running go mod tidy -go=$(GO_VERSION) and go mod vendor with Go toolchain $(GOTOOLCHAIN)"
-	@GOTOOLCHAIN=$(GOTOOLCHAIN) go mod tidy -go=$(GO_VERSION)
-	@GOTOOLCHAIN=$(GOTOOLCHAIN) go mod vendor
