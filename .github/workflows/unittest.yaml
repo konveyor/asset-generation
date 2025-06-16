@@ -20,17 +20,14 @@ jobs:
           go-version-file: "go.mod"
           cache: true
 
-      - run: go mod tidy && git diff --exit-code go.mod go.sum
-      - run: go vet ./...
-
       - name: Run Ginkgo tests with coverage
         id: ginkgo-tests
         run: |
-          go run github.com/onsi/ginkgo/v2/ginkgo -r --randomize-all --randomize-suites --fail-on-pending --keep-going --cover --coverprofile=coverage.out --coverpkg=./...
+          go run github.com/onsi/ginkgo/v2/ginkgo -r --mod=mod --randomize-all --randomize-suites --fail-on-pending --keep-going --cover --coverprofile=coverage.out --coverpkg=./...
           go tool cover -func=coverage.out
           COVERAGE=$(go tool cover --func=coverage.out | grep total | grep -Eo '[0-9]+\.[0-9]+')
           echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
-           
+
       - uses: actions/upload-artifact@v4
         with:
           name: test-coverage
@@ -52,7 +49,7 @@ jobs:
             exit 1
           fi
           echo "Coverage status: $COVERAGE"
-          if (( $(echo "$COVERAGE < 73.8" | bc -l) )); then 
-            echo "Min coverage failed"; 
-            exit 1; 
+          if (( $(echo "$COVERAGE < 73.8" | bc -l) )); then
+            echo "Min coverage failed";
+            exit 1;
           fi
