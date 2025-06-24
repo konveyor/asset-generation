@@ -117,67 +117,58 @@ func ParseRoutes(cfRoutes cfTypes.AppManifestRoutes) Routes {
 	return routes
 }
 
-func ParseHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfInterval, cfTimeout uint) ProbeSpec {
-
-	t := PortProbeType
+// parseProbeType returns the probe type with a fallback to the provided default
+func parseProbeType(cfType cfTypes.AppHealthCheckType, defaultType ProbeType) ProbeType {
 	if len(cfType) > 0 {
-		t = ProbeType(cfType)
+		return ProbeType(cfType)
 	}
+	return defaultType
+}
 
-	endpoint := "/"
-	if len(cfEndpoint) > 0 {
-		endpoint = cfEndpoint
+// parseProbeEndpoint returns the endpoint with a fallback to "/"
+func parseProbeEndpoint(cfEndpoint *string) string {
+	if cfEndpoint != nil && len(*cfEndpoint) > 0 {
+		fmt.Println("\n\n####### Using custom health check endpoint:", *cfEndpoint)
+		return *cfEndpoint
 	}
+	return "/"
+}
 
-	timeout := 1
-	if cfTimeout != 0 {
-		timeout = int(cfTimeout)
+// parseProbeTimeout handles both uint and int types and returns timeout with fallback to 1
+func parseProbeTimeout[T uint | int](cfTimeout *T) int {
+	if cfTimeout != nil && *cfTimeout != 0 {
+		return int(*cfTimeout)
 	}
+	return 1
+}
 
-	interval := 30
-	if cfInterval > 0 {
-		interval = int(cfInterval)
+// parseProbeInterval handles both uint and int types and returns interval with fallback to 30
+func parseProbeInterval[T uint | int](cfInterval *T) int {
+	if cfInterval != nil && *cfInterval > 0 {
+		return int(*cfInterval)
 	}
+	return 30
+}
 
+func ParseHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfInterval uint, cfTimeout uint) ProbeSpec {
 	return ProbeSpec{
-		Type:     t,
-		Endpoint: endpoint,
-		Timeout:  timeout,
-		Interval: interval,
+		Type:     parseProbeType(cfType, PortProbeType),
+		Endpoint: parseProbeEndpoint(&cfEndpoint),
+		Timeout:  parseProbeTimeout(&cfTimeout),
+		Interval: parseProbeInterval(&cfInterval),
 	}
 }
 
-func ParseReadinessHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfInterval, cfTimeout uint) ProbeSpec {
-	t := ProcessProbeType
-	if len(cfType) > 0 {
-		t = ProbeType(cfType)
-	}
-
-	endpoint := "/"
-	if len(cfEndpoint) > 0 {
-		endpoint = cfEndpoint
-	}
-
-	timeout := 1
-	if cfTimeout != 0 {
-		timeout = int(cfTimeout)
-	}
-
-	interval := 30
-	if cfInterval > 0 {
-		interval = int(cfInterval)
-	}
-
+func ParseReadinessHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfInterval uint, cfTimeout uint) ProbeSpec {
 	return ProbeSpec{
-		Type:     t,
-		Endpoint: endpoint,
-		Timeout:  timeout,
-		Interval: interval,
+		Type:     parseProbeType(cfType, ProcessProbeType),
+		Endpoint: parseProbeEndpoint(&cfEndpoint),
+		Timeout:  parseProbeTimeout(&cfTimeout),
+		Interval: parseProbeInterval(&cfInterval),
 	}
-
 }
 
-var parseCFApp = func(cfApp cfTypes.AppManifest) (Application, error) {
+var parseCFApp = func(spaceName string, cfApp cfTypes.AppManifest) (Application, error) {
 	timeout := 60
 	if cfApp.Timeout != 0 {
 		timeout = int(cfApp.Timeout)
@@ -222,6 +213,7 @@ var parseCFApp = func(cfApp cfTypes.AppManifest) (Application, error) {
 	app := Application{
 		Metadata: Metadata{
 			Name:        cfApp.Name,
+			Space:       spaceName,
 			Labels:      labels,
 			Annotations: annotations,
 		},

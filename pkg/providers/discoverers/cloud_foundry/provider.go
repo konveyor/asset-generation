@@ -392,17 +392,17 @@ func (c *CloudFoundryProvider) getProcesses(appGUID, lifecycle string) (*cfTypes
 			Command:                      safePtr(proc.Command, ""),
 			DiskQuota:                    strconv.Itoa(proc.DiskInMB),
 			HealthCheckType:              cfTypes.AppHealthCheckType(proc.HealthCheck.Type),
-			HealthCheckHTTPEndpoint:      safePtr(proc.HealthCheck.Data.Endpoint, ""),
-			HealthCheckInvocationTimeout: uint(safePtr(proc.HealthCheck.Data.InvocationTimeout, 0)),
-			HealthCheckInterval:          uint(*proc.HealthCheck.Data.Interval),
+			HealthCheckHTTPEndpoint:      parseProbeEndpoint(proc.HealthCheck.Data.Endpoint),
+			HealthCheckInvocationTimeout: uint(parseProbeTimeout(proc.HealthCheck.Data.InvocationTimeout)),
+			HealthCheckInterval:          uint(parseProbeInterval(proc.HealthCheck.Data.Interval)),
 			Instances:                    &procInstances,
 			LogRateLimitPerSecond:        strconv.Itoa(proc.LogRateLimitInBytesPerSecond),
 			Memory:                       strconv.Itoa(proc.MemoryInMB),
 			// Timeout not available
 			ReadinessHealthCheckType:         cfTypes.AppHealthCheckType(proc.ReadinessCheck.Type),
-			ReadinessHealthCheckHttpEndpoint: safePtr(proc.ReadinessCheck.Data.Endpoint, ""),
-			ReadinessHealthInvocationTimeout: uint(safePtr(proc.ReadinessCheck.Data.InvocationTimeout, 0)),
-			ReadinessHealthCheckInterval:     uint(safePtr(proc.ReadinessCheck.Data.Interval, 0)),
+			ReadinessHealthCheckHttpEndpoint: parseProbeEndpoint(proc.ReadinessCheck.Data.Endpoint),
+			ReadinessHealthInvocationTimeout: uint(parseProbeTimeout(proc.ReadinessCheck.Data.InvocationTimeout)),
+			ReadinessHealthCheckInterval:     uint(parseProbeInterval(proc.ReadinessCheck.Data.Interval)),
 			Lifecycle:                        lifecycle,
 		})
 	}
