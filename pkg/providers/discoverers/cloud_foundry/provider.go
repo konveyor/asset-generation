@@ -347,7 +347,7 @@ func (c *CloudFoundryProvider) discoverFromManifestFile(filePath string) (*Appli
 		return nil, fmt.Errorf("failed to unmarshal YAML: %v", err)
 	}
 
-	app, err := parseCFApp(manifest)
+	app, err := parseCFApp("", manifest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create application: %v", err)
 	}
@@ -366,7 +366,7 @@ func (c *CloudFoundryProvider) discoverFromLiveAPI(spaceName string, appName str
 		return nil, err
 	}
 
-	discoveredApp, err := parseCFApp(*cfManifests)
+	discoveredApp, err := parseCFApp(spaceName, *cfManifests)
 	if err != nil {
 		return nil, err
 	}

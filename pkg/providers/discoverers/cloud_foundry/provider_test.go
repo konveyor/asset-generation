@@ -951,7 +951,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					DeferCleanup(func() {
 						parseCFApp = originalParseCFApp
 					})
-					mockParseCF := func(manifest cfTypes.AppManifest) (Application, error) {
+					mockParseCF := func(spaceName string, manifest cfTypes.AppManifest) (Application, error) {
 						return Application{}, fmt.Errorf("mock parse error")
 					}
 					parseCFApp = mockParseCF
