@@ -133,7 +133,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(apps).To(HaveLen(1))
 					Expect(apps).To(HaveKey(space.Name))
-					Expect(apps[space.Name]).To(BeEquivalentTo([]DiscoverInputParam{{SpaceName: space.Name, AppName: app1.Name}, {SpaceName: space.Name, AppName: app2.Name}}))
+					Expect(apps[space.Name]).To(ConsistOf([]AppReference{{SpaceName: space.Name, AppName: app1.Name}, {SpaceName: space.Name, AppName: app2.Name}}))
 				})
 			})
 			Context("when apps don't exist in the space", func() {
@@ -761,7 +761,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 
 					p, err := New(cfConfig, logger)
 					Expect(err).NotTo(HaveOccurred())
-					apps, err := p.Discover(DiscoverInputParam{SpaceName: space.Name, AppName: app1.Name})
+					apps, err := p.Discover(AppReference{SpaceName: space.Name, AppName: app1.Name})
 					Expect(err).NotTo(HaveOccurred())
 					Expect(apps).NotTo(Equal(&pTypes.DiscoverResult{}))
 				})
@@ -839,8 +839,15 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					localApps, ok := apps["local"]
 					Expect(ok).To(BeTrue())
 
-					appSlice, ok := localApps.([]string)
-					Expect(ok).To(BeTrue())
+					appSlice := make([]string, 0)
+					for _, app := range localApps {
+						str, ok := app.(string)
+						Expect(ok).To(BeTrue())
+						Expect(str).ToNot(BeEmpty())
+						appSlice = append(appSlice, str)
+					}
+					// appSlice, ok := localApps.([]any)
+					// Expect(ok).To(BeTrue())
 
 					Expect(appSlice).To(ContainElements("app1", "app2", "app3"))
 					Expect(appSlice).NotTo(ContainElement("app-in-subfolder"))
@@ -901,9 +908,18 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 
 					localApp, ok := apps["local"]
 					Expect(ok).To(BeTrue())
+					Expect(localApp).To(HaveLen(1))
 
-					appName, ok := localApp.(string)
-					Expect(ok).To(BeTrue())
+					var appName string
+					for _, app := range localApp {
+						appName, ok = app.(string)
+						Expect(ok).To(BeTrue())
+						Expect(appName).ToNot(BeEmpty())
+					}
+					// appSlice, ok := localApps.([]any)
+					// Expect(ok).To(BeTrue())
+					// appName, ok := localApp.(string)
+					// Expect(ok).To(BeTrue())
 					Expect(appName).To(Equal("my-app"))
 				})
 			})
@@ -977,7 +993,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 			})
 
 			It("returns the app name from the single manifest file", func() {
-				input := DiscoverInputParam{
+				input := AppReference{
 					AppName: "app3",
 				}
 				apps, err := provider.Discover(input)
@@ -991,7 +1007,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				Expect(resultApp.Metadata.Name).To(Equal("app3"))
 			})
 			It("returns an error if the app name doesn't exists", func() {
-				input := DiscoverInputParam{
+				input := AppReference{
 					AppName: "not-exists",
 				}
 				apps, err := provider.Discover(input)
@@ -999,7 +1015,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				Expect(apps).To(BeNil())
 			})
 			It("returns an error if the app name is empty", func() {
-				input := DiscoverInputParam{
+				input := AppReference{
 					AppName: "",
 				}
 				apps, err := provider.Discover(input)

@@ -6,5 +6,5 @@ import (
 
 type Provider interface {
 	Discover(RawData any) (*pTypes.DiscoverResult, error)
-	ListApps() (map[string]any, error)
+	ListApps() (map[string][]any, error)
 }

@@ -27,10 +27,7 @@ const (
 )
 
 type Config struct {
-	ManifestPath string `json:"manifest_path" yaml:"manifest_path"`
-	// CloudFoundryConfigPath string         `json:"cloud_foundry_config_path" yaml:"cloud_foundry_config_path"`
-	// APIEndpoint            string         `json:"api_endpoint" yaml:"api_endpoint"`
-	// SkipSSLValidation      bool           `json:"skip_ssl_validation" yaml:"skip_ssl_validation"`
+	ManifestPath       string         `json:"manifest_path" yaml:"manifest_path"`
 	CloudFoundryConfig *config.Config `json:"cloud_foundry_config,omitempty" yaml:"cloud_foundry_config,omitempty"`
 	SpaceNames         []string       `json:"space_names" yaml:"space_names"`
 	// Cloud Foundry transient client
@@ -77,27 +74,28 @@ func (c *CloudFoundryProvider) getClient() (*client.Client, error) {
 	return cf, nil
 }
 
-// ListApps retrieves a list of application GUIDs from the specified Cloud
+// ListApps retrieves a list of application names from the specified Cloud
 // Foundry space.
-// It returns a slice of application GUIDs or an error in case of failure.
-func (c *CloudFoundryProvider) ListApps() (map[string]any, error) {
+// It returns a map where the keys are space names and the values are slices of
+// application names.
+func (c *CloudFoundryProvider) ListApps() (map[string][]any, error) {
 	if !isLiveDiscover(c.cfg) {
 		apps, err := c.listAppsFromLocalManifests()
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"local": apps}, nil
+		return apps, nil
 	}
 	return c.listAppsFromCloudFoundry()
 }
 
-type DiscoverInputParam struct {
+type AppReference struct {
 	SpaceName string `json:"spaceName"`
 	AppName   string `json:"appName"`
 }
 
 func (c *CloudFoundryProvider) Discover(RawData any) (*pTypes.DiscoverResult, error) {
-	input, ok := RawData.(DiscoverInputParam)
+	input, ok := RawData.(AppReference)
 	if !ok {
 		return nil, fmt.Errorf("invalid type %s", reflect.TypeOf(RawData))
 	}
@@ -108,7 +106,7 @@ func (c *CloudFoundryProvider) Discover(RawData any) (*pTypes.DiscoverResult, er
 }
 
 // listAppsFromLocalManifests handles discovery of apps by reading local manifest files.
-func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string]any, error) {
+func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string][]any, error) {
 	c.logger.Println("Using manifest path for Cloud Foundry local discover:", c.cfg.ManifestPath)
 
 	isDirResult, err := isDir(c.cfg.ManifestPath)
@@ -138,7 +136,7 @@ func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string]any, err
 			c.logger.Printf("found app name '%s' in manifest file '%s'", appName, filePath)
 			apps = append(apps, appName)
 		}
-		return map[string]any{"local": apps}, nil
+		return map[string][]any{"local": toAnySlice(apps)}, nil
 	} else {
 		appName, err := c.getAppNameFromManifest(c.cfg.ManifestPath)
 		if err != nil {
@@ -147,7 +145,7 @@ func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string]any, err
 		if appName == "" {
 			return nil, fmt.Errorf("no app name found in manifest file %s", c.cfg.ManifestPath)
 		}
-		return map[string]any{"local": appName}, nil
+		return map[string][]any{"local": {appName}}, nil
 	}
 }
 
@@ -188,8 +186,8 @@ func (c *CloudFoundryProvider) getAppNameFromManifest(filePath string) (string, 
 }
 
 // listAppsFromCloudFoundry handles discovery of apps by querying the Cloud Foundry API.
-func (c *CloudFoundryProvider) listAppsFromCloudFoundry() (map[string]any, error) {
-	appList := make(map[string]any, len(c.cfg.SpaceNames))
+func (c *CloudFoundryProvider) listAppsFromCloudFoundry() (map[string][]any, error) {
+	appList := make(map[string][]any, len(c.cfg.SpaceNames))
 	for _, spaceName := range c.cfg.SpaceNames {
 		c.logger.Println("Analyzing space:", spaceName)
 		apps, err := c.listAppsBySpaceName(spaceName)
@@ -198,11 +196,11 @@ func (c *CloudFoundryProvider) listAppsFromCloudFoundry() (map[string]any, error
 		}
 		c.logger.Printf("Apps discovered: %d\n", len(apps))
 
-		appsInSpace := make([]DiscoverInputParam, 0, len(apps))
+		appsInSpace := make([]AppReference, 0, len(apps))
 		for _, app := range apps {
-			appsInSpace = append(appsInSpace, DiscoverInputParam{SpaceName: spaceName, AppName: app.Name})
+			appsInSpace = append(appsInSpace, AppReference{SpaceName: spaceName, AppName: app.Name})
 		}
-		appList[spaceName] = appsInSpace
+		appList[spaceName] = toAnySlice(appsInSpace)
 	}
 	return appList, nil
 }
@@ -625,4 +623,12 @@ func safePtr[T any](ptr *T, defaultVal T) T {
 		return *ptr
 	}
 	return defaultVal
+}
+
+func toAnySlice[T any](input []T) []any {
+	result := make([]any, len(input))
+	for i, v := range input {
+		result[i] = v
+	}
+	return result
 }
