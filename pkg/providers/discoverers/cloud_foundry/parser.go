@@ -128,7 +128,6 @@ func parseProbeType(cfType cfTypes.AppHealthCheckType, defaultType ProbeType) Pr
 // parseProbeEndpoint returns the endpoint with a fallback to "/"
 func parseProbeEndpoint(cfEndpoint *string) string {
 	if cfEndpoint != nil && len(*cfEndpoint) > 0 {
-		fmt.Println("\n\n####### Using custom health check endpoint:", *cfEndpoint)
 		return *cfEndpoint
 	}
 	return "/"
@@ -243,7 +242,7 @@ func validateApplication(app Application) error {
 	if err != nil {
 		var errorList error
 		for _, err := range err.(validator.ValidationErrors) {
-			msg2 := fmt.Sprintf(
+			detailedMsg := fmt.Sprintf(
 				"\nvalidation failed for field '%s' (namespace: '%s'): actual value '%v' does not satisfy constraint '%s'",
 				err.Field(),
 				err.Namespace(),
@@ -252,15 +251,9 @@ func validateApplication(app Application) error {
 			)
 			// Include parameter if available (e.g., max=10)
 			if param := err.Param(); param != "" {
-				msg2 += fmt.Sprintf("=%s", param)
+				detailedMsg += fmt.Sprintf("=%s", param)
 			}
-			errorList = errors.Join(errorList,
-				fmt.Errorf(
-					"field validation for key '%s' field '%s' failed on the '%s' tag",
-					err.Namespace(),
-					err.Field(),
-					err.Tag()))
-
+			errorList = errors.Join(errorList, fmt.Errorf(detailedMsg))
 		}
 		return errorList
 	}

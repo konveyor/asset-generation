@@ -155,7 +155,7 @@ func (m *mockApplication) parseProcesses() map[string]*testutil.JSONResource {
 			HealthCheck: resource.ProcessHealthCheck{
 				Type: string(p.HealthCheckType),
 				Data: resource.ProcessHealthCheckData{
-					Timeout:           ptrTo(int(p.HealthCheckInvocationTimeout)),
+					Timeout:           ptrTo(int(p.Timeout)),
 					InvocationTimeout: ptrTo(int(p.HealthCheckInvocationTimeout)),
 					Interval:          ptrTo(int(p.HealthCheckInterval)),
 					Endpoint:          &p.HealthCheckHTTPEndpoint,
@@ -268,7 +268,7 @@ func (m *mockApplication) sidecars() []string {
 	for _, v := range *m.app.Sidecars {
 		pt := toJSON(v.ProcessTypes)
 		sptypes := []string{}
-		Expect(json.Unmarshal([]byte(pt), &sptypes))
+		Expect(json.Unmarshal([]byte(pt), &sptypes)).ToNot(HaveOccurred())
 		sc := resource.Sidecar{
 			Name:         v.Name,
 			Command:      v.Command,

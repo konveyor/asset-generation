@@ -21,10 +21,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const (
-	goCFClientTemplateURL = "git::https://github.com/cloudfoundry/go-cfclient.git//testutil/template"
-)
-
 var (
 	repoBasePath = getModuleRoot()
 	templatePath = filepath.Join(repoBasePath, "vendor", "github.com", "cloudfoundry", "go-cfclient", "v3", "testutil", "template")

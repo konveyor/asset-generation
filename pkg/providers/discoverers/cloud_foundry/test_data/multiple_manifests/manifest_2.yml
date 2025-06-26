@@ -6,7 +6,7 @@ buildpacks:
   - python_buildpack
 path: ./app
 routes:
-  - route: my-app.example.com
+  - my-app.example.com
 services:
   - my-db
 health-check-type: port

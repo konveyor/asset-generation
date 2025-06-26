@@ -23,7 +23,8 @@ jobs:
       - name: Run Ginkgo tests with coverage
         id: ginkgo-tests
         run: |
-          go run github.com/onsi/ginkgo/v2/ginkgo -r --mod=mod --randomize-all --randomize-suites --fail-on-pending --keep-going --cover --coverprofile=coverage.out --coverpkg=./...
+          go install github.com/onsi/ginkgo/v2/ginkgo@v2.23.4
+          ginkgo -r --mod=mod --randomize-all --randomize-suites --fail-on-pending --keep-going --cover --coverprofile=coverage.out --coverpkg=./...
           go tool cover -func=coverage.out
           COVERAGE=$(go tool cover --func=coverage.out | grep total | grep -Eo '[0-9]+\.[0-9]+')
           echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
@@ -49,7 +50,8 @@ jobs:
             exit 1
           fi
           echo "Coverage status: $COVERAGE"
-          if (( $(echo "$COVERAGE < 73.8" | bc -l) )); then
+          MIN_COVERAGE=${MIN_COVERAGE:-73.8}
+          if (( $(echo "$COVERAGE < $MIN_COVERAGE" | bc -l) )); then …
             echo "Min coverage failed";
             exit 1;
           fi
