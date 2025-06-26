@@ -384,10 +384,13 @@ func (c *CloudFoundryProvider) getProcesses(appGUID, lifecycle string) (*cfTypes
 	appProcesses := cfTypes.AppManifestProcesses{}
 	for _, proc := range processes {
 		procInstances := uint(proc.Instances)
-
+		resourceProcess, err := c.cli.Processes.Get(context.Background(), proc.GUID)
+		if err != nil {
+			return nil, fmt.Errorf("error getting process %s: %v", proc.GUID, err)
+		}
 		appProcesses = append(appProcesses, cfTypes.AppManifestProcess{
 			Type:                         cfTypes.AppProcessType(proc.Type),
-			Command:                      safePtr(proc.Command, ""),
+			Command:                      safePtr(resourceProcess.Command, ""),
 			DiskQuota:                    strconv.Itoa(proc.DiskInMB),
 			HealthCheckType:              cfTypes.AppHealthCheckType(proc.HealthCheck.Type),
 			HealthCheckHTTPEndpoint:      parseProbeEndpoint(proc.HealthCheck.Data.Endpoint),
