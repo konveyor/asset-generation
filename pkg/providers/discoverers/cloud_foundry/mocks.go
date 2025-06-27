@@ -169,9 +169,14 @@ func (m *mockApplication) parseProcesses() map[string]*testutil.JSONResource {
 					Endpoint:          &p.ReadinessHealthCheckHttpEndpoint,
 				},
 			},
+			Resource: resource.Resource{
+				GUID: t.GUID,
+			},
 		}
 		t.JSON = toJSON(resProc)
 		mp[t.GUID] = t
+		// Add the process individual route so that it can be fetched as well
+		m.mockRoutes = append(m.mockRoutes, m.generateMockRoute("/v3/processes/"+t.GUID, m.g.Single(t.JSON), ""))
 	}
 	m.resMap["processes"] = mp
 	return mp

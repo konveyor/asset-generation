@@ -842,8 +842,6 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						Expect(str).ToNot(BeEmpty())
 						appSlice = append(appSlice, str)
 					}
-					// appSlice, ok := localApps.([]any)
-					// Expect(ok).To(BeTrue())
 
 					Expect(appSlice).To(ContainElements("app1", "app2", "app3"))
 					Expect(appSlice).NotTo(ContainElement("app-in-subfolder"))
