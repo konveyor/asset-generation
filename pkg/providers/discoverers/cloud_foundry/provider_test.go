@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -21,14 +20,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var (
-	repoBasePath = getModuleRoot()
-	templatePath = filepath.Join(repoBasePath, "vendor", "github.com", "cloudfoundry", "go-cfclient", "v3", "testutil", "template")
-)
-
 var _ = Describe("CloudFoundry Provider", Ordered, func() {
 	AfterAll(func() {
-		os.RemoveAll(templatePath)
 		testutil.Teardown()
 	})
 
@@ -835,15 +828,15 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					localApps, ok := apps["local"]
 					Expect(ok).To(BeTrue())
 
-					appSlice := make([]string, 0)
+					appSlice := make([]AppReference, 0)
 					for _, app := range localApps {
-						str, ok := app.(string)
+						appRef, ok := app.(AppReference)
 						Expect(ok).To(BeTrue())
-						Expect(str).ToNot(BeEmpty())
-						appSlice = append(appSlice, str)
+						Expect(appRef).ToNot(Equal(AppReference{}))
+						appSlice = append(appSlice, appRef)
 					}
 
-					Expect(appSlice).To(ContainElements("app1", "app2", "app3"))
+					Expect(appSlice).To(ContainElements(AppReference{AppName: "app1"}, AppReference{AppName: "app2"}, AppReference{AppName: "app3"}))
 					Expect(appSlice).NotTo(ContainElement("app-in-subfolder"))
 					Expect(appSlice).NotTo(ContainElement("text-file"))
 				})
@@ -904,17 +897,13 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Expect(ok).To(BeTrue())
 					Expect(localApp).To(HaveLen(1))
 
-					var appName string
+					var appRef AppReference
 					for _, app := range localApp {
-						appName, ok = app.(string)
+						appRef, ok = app.(AppReference)
 						Expect(ok).To(BeTrue())
-						Expect(appName).ToNot(BeEmpty())
+						Expect(appRef).ToNot(Equal(AppReference{}))
 					}
-					// appSlice, ok := localApps.([]any)
-					// Expect(ok).To(BeTrue())
-					// appName, ok := localApp.(string)
-					// Expect(ok).To(BeTrue())
-					Expect(appName).To(Equal("my-app"))
+					Expect(appRef.AppName).To(Equal("my-app"))
 				})
 			})
 		})
