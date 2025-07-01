@@ -2,20 +2,17 @@ package cloud_foundry
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/testutil"
-	getter "github.com/hashicorp/go-getter"
 	cfTypes "github.com/konveyor/asset-generation/internal/models"
 	pTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 	. "github.com/onsi/ginkgo/v2"
@@ -23,20 +20,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var (
-	repoBasePath = getModuleRoot()
-	templatePath = filepath.Join(repoBasePath, "vendor", "github.com", "cloudfoundry", "go-cfclient", "v3", "testutil", "template")
-)
-
 var _ = Describe("CloudFoundry Provider", Ordered, func() {
-	BeforeAll(func() {
-		err := downloadTemplateFolder()
-		if err != nil {
-			log.Fatalf("Failed to download template folder: %v", err)
-		}
-	})
 	AfterAll(func() {
-		os.RemoveAll(templatePath)
 		testutil.Teardown()
 	})
 
@@ -1114,21 +1099,4 @@ func MapToStruct(m map[string]any, obj *Application) error {
 		return err
 	}
 	return json.Unmarshal(b, obj)
-}
-
-func downloadTemplateFolder() error {
-	goCFClientTemplateURL := "git::https://github.com/cloudfoundry/go-cfclient.git//testutil/template"
-	client := &getter.Client{
-		Ctx:      context.Background(),
-		Src:      goCFClientTemplateURL,
-		Dst:      templatePath,
-		Dir:      true,
-		Mode:     getter.ClientModeDir,
-		Insecure: true,
-	}
-
-	if err := client.Get(); err != nil {
-		return fmt.Errorf("failed to download from %q to %q: %w", goCFClientTemplateURL, templatePath, err)
-	}
-	return nil
 }
