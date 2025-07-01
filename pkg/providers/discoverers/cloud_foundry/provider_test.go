@@ -2,6 +2,7 @@ package cloud_foundry
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/testutil"
+	getter "github.com/hashicorp/go-getter"
 	cfTypes "github.com/konveyor/asset-generation/internal/models"
 	pTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 	. "github.com/onsi/ginkgo/v2"
@@ -27,6 +29,12 @@ var (
 )
 
 var _ = Describe("CloudFoundry Provider", Ordered, func() {
+	BeforeAll(func() {
+		err := downloadTemplateFolder()
+		if err != nil {
+			log.Fatalf("Failed to download template folder: %v", err)
+		}
+	})
 	AfterAll(func() {
 		os.RemoveAll(templatePath)
 		testutil.Teardown()
@@ -835,15 +843,15 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					localApps, ok := apps["local"]
 					Expect(ok).To(BeTrue())
 
-					appSlice := make([]string, 0)
+					appSlice := make([]AppReference, 0)
 					for _, app := range localApps {
-						str, ok := app.(string)
+						appRef, ok := app.(AppReference)
 						Expect(ok).To(BeTrue())
-						Expect(str).ToNot(BeEmpty())
-						appSlice = append(appSlice, str)
+						Expect(appRef).ToNot(Equal(AppReference{}))
+						appSlice = append(appSlice, appRef)
 					}
 
-					Expect(appSlice).To(ContainElements("app1", "app2", "app3"))
+					Expect(appSlice).To(ContainElements(AppReference{AppName: "app1"}, AppReference{AppName: "app2"}, AppReference{AppName: "app3"}))
 					Expect(appSlice).NotTo(ContainElement("app-in-subfolder"))
 					Expect(appSlice).NotTo(ContainElement("text-file"))
 				})
@@ -904,17 +912,13 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Expect(ok).To(BeTrue())
 					Expect(localApp).To(HaveLen(1))
 
-					var appName string
+					var appRef AppReference
 					for _, app := range localApp {
-						appName, ok = app.(string)
+						appRef, ok = app.(AppReference)
 						Expect(ok).To(BeTrue())
-						Expect(appName).ToNot(BeEmpty())
+						Expect(appRef).ToNot(Equal(AppReference{}))
 					}
-					// appSlice, ok := localApps.([]any)
-					// Expect(ok).To(BeTrue())
-					// appName, ok := localApp.(string)
-					// Expect(ok).To(BeTrue())
-					Expect(appName).To(Equal("my-app"))
+					Expect(appRef.AppName).To(Equal("my-app"))
 				})
 			})
 		})
@@ -1110,4 +1114,21 @@ func MapToStruct(m map[string]any, obj *Application) error {
 		return err
 	}
 	return json.Unmarshal(b, obj)
+}
+
+func downloadTemplateFolder() error {
+	goCFClientTemplateURL := "git::https://github.com/cloudfoundry/go-cfclient.git//testutil/template"
+	client := &getter.Client{
+		Ctx:      context.Background(),
+		Src:      goCFClientTemplateURL,
+		Dst:      templatePath,
+		Dir:      true,
+		Mode:     getter.ClientModeDir,
+		Insecure: true,
+	}
+
+	if err := client.Get(); err != nil {
+		return fmt.Errorf("failed to download from %q to %q: %w", goCFClientTemplateURL, templatePath, err)
+	}
+	return nil
 }

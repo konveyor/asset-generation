@@ -120,7 +120,7 @@ func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string][]any, e
 			return nil, fmt.Errorf("error reading directory %s: %v", c.cfg.ManifestPath, err)
 		}
 
-		var apps []string
+		var apps []AppReference
 		for _, file := range files {
 			filePath := filepath.Join(c.cfg.ManifestPath, file.Name())
 
@@ -134,7 +134,7 @@ func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string][]any, e
 				continue
 			}
 			c.logger.Printf("found app name '%s' in manifest file '%s'", appName, filePath)
-			apps = append(apps, appName)
+			apps = append(apps, AppReference{AppName: appName})
 		}
 		return map[string][]any{"local": toAnySlice(apps)}, nil
 	} else {
@@ -145,7 +145,7 @@ func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string][]any, e
 		if appName == "" {
 			return nil, fmt.Errorf("no app name found in manifest file %s", c.cfg.ManifestPath)
 		}
-		return map[string][]any{"local": {appName}}, nil
+		return map[string][]any{"local": {AppReference{AppName: appName}}}, nil
 	}
 }
 
