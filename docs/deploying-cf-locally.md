@@ -255,7 +255,7 @@ Not logged in. Use 'cf login' or 'cf login --sso' to log in.
 1. **Initialize CredHub CLI**
 
     ```bash
-    credhub api $CREDHUB_SERVER --ca-cert=$CREDHUB_CA_CERT
+    credhub api $CREDHUB_SERVER --ca-cert=$CREDHUB_CA_CERT --skip-tls-validation
     ```
 
     Expected output:
@@ -393,21 +393,6 @@ Commercial support is available at
 
 Make sure you can reach the `CredHub` VM via SSH:
 `bosh -e vbox -d cf ssh credhub`
-
-## ❌ Can't connect to the auth server via `credhub`?
-If you encounter the following error:
-```bash
-credhub api $CREDHUB_SERVER --ca-cert=$CREDHUB_CA_CERT
-Error connecting to the auth server: "Get \"https://192.168.56.6:8443/info\": tls: failed to verify certificate: x509: certificate signed by unknown authority". Please validate your target and retry your request.
-```
-add `--skip-tls-validation` flag and ignore the warning
-
-```bash
-credhub api $CREDHUB_SERVER --ca-cert=$CREDHUB_CA_CERT --skip-tls-validation
-Warning: The targeted TLS certificate has not been verified for this connection.
-Warning: The --skip-tls-validation flag is deprecated. Please use --ca-cert instead.
-Setting the target url: https://192.168.56.6:8844
-```
 
 ## ❌ Can't Push Docker Images?
 If you're seeing an error like this when pushing a Docker image:
