@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os/exec"
@@ -13,6 +12,8 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/testutil"
+	"github.com/go-logr/logr"
+	"github.com/go-logr/stdr"
 	cfTypes "github.com/konveyor/asset-generation/internal/models"
 	pTypes "github.com/konveyor/asset-generation/pkg/providers/types/provider"
 	. "github.com/onsi/ginkgo/v2"
@@ -35,7 +36,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				space      *testutil.JSONResource
 				emptySpace *testutil.JSONResource
 				serverURL  string
-				logger     = log.New(io.Discard, "", 0)
+				logger     = logr.New(logr.Discard().GetSink())
 			)
 
 			BeforeAll(func() {
@@ -69,7 +70,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 					}
 
-					p, err := New(cfConfig, logger)
+					p, err := New(cfConfig, &logger)
 					Expect(err).NotTo(HaveOccurred())
 					apps, err := p.ListApps()
 					Expect(err).To(HaveOccurred())
@@ -116,7 +117,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						SpaceNames:         []string{space.Name},
 					}
 
-					p, err := New(cfConfig, logger)
+					p, err := New(cfConfig, &logger)
 					Expect(err).NotTo(HaveOccurred())
 					apps, err := p.ListApps()
 					Expect(err).NotTo(HaveOccurred())
@@ -158,7 +159,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						SpaceNames:         []string{emptySpace.Name},
 					}
 
-					p, err := New(cfConfig, logger)
+					p, err := New(cfConfig, &logger)
 					Expect(err).NotTo(HaveOccurred())
 					apps, err := p.listAppsFromCloudFoundry()
 					Expect(err).NotTo(HaveOccurred())
@@ -175,7 +176,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				space      *testutil.JSONResource
 				emptySpace *testutil.JSONResource
 				serverURL  string
-				logger     = log.New(io.Discard, "", 0)
+				logger     = logr.New(logr.Discard().GetSink())
 			)
 			BeforeAll(func() {
 				g = testutil.NewObjectJSONGenerator()
@@ -202,7 +203,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, logger)
+					p, err := New(cfConfig, &logger)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -234,7 +235,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, logger)
+					p, err := New(cfConfig, &logger)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -265,7 +266,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, logger)
+					p, err := New(cfConfig, &logger)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -297,7 +298,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, logger)
+					p, err := New(cfConfig, &logger)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -328,7 +329,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, logger)
+					p, err := New(cfConfig, &logger)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -361,7 +362,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, logger)
+					p, err := New(cfConfig, &logger)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -396,7 +397,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, logger)
+					p, err := New(cfConfig, &logger)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -438,7 +439,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, logger)
+					p, err := New(cfConfig, &logger)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -493,7 +494,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, logger)
+					p, err := New(cfConfig, &logger)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -679,7 +680,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, logger)
+					p, err := New(cfConfig, &logger)
 					Expect(err).NotTo(HaveOccurred())
 					By("discovering the application")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -748,7 +749,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 					}
 
-					p, err := New(cfConfig, logger)
+					p, err := New(cfConfig, &logger)
 					Expect(err).NotTo(HaveOccurred())
 					apps, err := p.Discover(AppReference{SpaceName: space.Name, AppName: app1.Name})
 					Expect(err).NotTo(HaveOccurred())
@@ -788,7 +789,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						SpaceNames:         []string{emptySpace.Name},
 					}
 
-					p, err := New(cfConfig, logger)
+					p, err := New(cfConfig, &logger)
 					Expect(err).NotTo(HaveOccurred())
 					apps, err := p.listAppsFromCloudFoundry()
 					Expect(err).NotTo(HaveOccurred())
@@ -805,7 +806,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 		Describe("listAppsFromLocalManifests", func() {
 			var (
 				provider  *CloudFoundryProvider
-				nopLogger = log.New(io.Discard, "", 0)
+				nopLogger = logr.New(logr.Discard().GetSink())
 			)
 
 			BeforeEach(func() {
@@ -817,7 +818,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						cfg: &Config{
 							ManifestPath: filepath.Join("./test_data", "multiple_manifests"),
 						},
-						logger: nopLogger,
+						logger: &nopLogger,
 					}
 				})
 
@@ -843,12 +844,14 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 
 				It("logs an error and continues when manifest files contain invalid YAML", func() {
 					logBuf := new(bytes.Buffer)
-					logger := log.New(logBuf, "", 0)
+					stdLogger := log.New(logBuf, "", 0)
+					logger := stdr.New(stdLogger)
+
 					provider = &CloudFoundryProvider{
 						cfg: &Config{
 							ManifestPath: filepath.Join("./test_data", "invalid_manifest"),
 						},
-						logger: logger,
+						logger: &logger,
 					}
 					apps, err := provider.listAppsFromLocalManifests()
 					Expect(err).ToNot(HaveOccurred())
@@ -861,12 +864,14 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				})
 				It("logs a warning and skips manifests missing app name", func() {
 					logBuf := new(bytes.Buffer)
-					logger := log.New(logBuf, "", 0)
+					stdLogger := log.New(logBuf, "", 0)
+					logger := stdr.New(stdLogger)
+
 					provider = &CloudFoundryProvider{
 						cfg: &Config{
 							ManifestPath: filepath.Join("./test_data", "no_app_name_manifest"),
 						},
-						logger: logger,
+						logger: &logger,
 					}
 					apps, err := provider.listAppsFromLocalManifests()
 					Expect(err).ToNot(HaveOccurred())
@@ -885,7 +890,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						cfg: &Config{
 							ManifestPath: filepath.Join("./test_data", "test-app", "manifest.yml"),
 						},
-						logger: nopLogger,
+						logger: &nopLogger,
 					}
 				})
 
@@ -912,13 +917,13 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 			var (
 				provider     *CloudFoundryProvider
 				manifestPath string
-				nopLogger    = log.New(io.Discard, "", 0)
+				nopLogger    = logr.New(logr.Discard().GetSink())
 				err          error
 			)
 			Context("when it's a single file", func() {
 				BeforeEach(func() {
 					manifestPath = filepath.Join("test_data", "test-app", "manifest.yml")
-					provider, err = New(&Config{ManifestPath: manifestPath}, nopLogger)
+					provider, err = New(&Config{ManifestPath: manifestPath}, &nopLogger)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -966,12 +971,12 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 			var (
 				provider     *CloudFoundryProvider
 				manifestPath string
-				nopLogger    = log.New(io.Discard, "", 0)
+				nopLogger    = logr.New(logr.Discard().GetSink())
 				err          error
 			)
 			BeforeEach(func() {
 				manifestPath = filepath.Join("test_data", "multiple_manifests")
-				provider, err = New(&Config{ManifestPath: manifestPath}, nopLogger)
+				provider, err = New(&Config{ManifestPath: manifestPath}, &nopLogger)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
