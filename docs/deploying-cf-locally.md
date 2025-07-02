@@ -338,8 +338,36 @@ Create an organization and a space, target them, and push an example Docker-base
 
 ```bash
 cf create-org org && cf create-space -o org space && cf target -o org
+```
+
+Check current feature flags:
+`cf feature-flags`
+
+Expected output
+
+```bash
+Getting feature flags as admin...
+
+name                                          state
+app_bits_upload                               enabled
+app_scaling                                   enabled
+diego_cnb                                     disabled
+diego_docker                                  disabled
+```
+
+Look for the `diego_docker` flag — it will likely show `disabled`.
+
+Enable Docker support:
+```bash
+cf enable-feature-flag diego_docker
+```
+
+Push the example application:
+
+```
 cf push nginx --docker-image nginxinc/nginx-unprivileged:1.23.2
 ```
+
 Once deployed, test the app using `curl`:
 
 ```bash
@@ -393,25 +421,3 @@ Commercial support is available at
 
 Make sure you can reach the `CredHub` VM via SSH:
 `bosh -e vbox -d cf ssh credhub`
-
-## ❌ Can't Push Docker Images?
-If you're seeing an error like this when pushing a Docker image:
-
-```bash
-cf push nginx --docker-image nginxinc/nginx-unprivileged:1.23.2
-Pushing app nginx to org org / space space as admin...
-For application 'nginx': Feature Disabled: diego_docker
-FAILED
-```
-
-This means Docker support is not enabled in your Cloud Foundry deployment. By default, CF disables the [diego_docker feature flag](https://docs.cloudfoundry.org/adminguide/docker.html), which is required to push and run Docker images on Diego.
-Check the current feature flags:
-`cf feature-flags`
-
-Look for the `diego_docker` flag — it will likely show `disabled`.
-
-Enable Docker support:
-```bash
-cf enable-feature-flag diego_docker
-```
-After enabling the flag, retry your `cf push` command.
