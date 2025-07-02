@@ -176,9 +176,9 @@ Stemcell version: 1.423
 SHA1: 4ad3b7265af38de84d83887bf334193259a59981
 ```
 
-Use the version shown in the output to update your cf-deployment.yaml file:
+Use the version shown in the output to update your cf-deployment.yml file:
 ```bash
-yq e '.stemcells[0].alias = "default" | .stemcells[0].os = "ubuntu-jammy" | .stemcells[0].version = env(STEMCELL_VERSION)' -i cf-deployment.yaml
+yq e '.stemcells[0].alias = "default" | .stemcells[0].os = "ubuntu-jammy" | .stemcells[0].version = env(STEMCELL_VERSION)' -i cf-deployment.yml
 ```
 
 ## Upload cloud config and stemcell
