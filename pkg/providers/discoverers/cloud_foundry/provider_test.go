@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/testutil"
@@ -965,6 +963,41 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Expect(err.Error()).To(ContainSubstring("failed to create application"))
 					Expect(app).To(BeNil())
 				})
+
+				It("parses correctly the probes from an inlined process spec", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "app-with-inline-process"},
+						Docker:   Docker{Image: "myregistry/myapp:latest"},
+						Processes: Processes{
+							{
+								Type: Web,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									LogRateLimit: "16K",
+									Instances:    1,
+									Memory:       "500M",
+									ReadinessCheck: ProbeSpec{
+										Endpoint: "/",
+										Interval: 30,
+										Timeout:  1,
+										Type:     ProcessProbeType,
+									},
+									HealthCheck: ProbeSpec{
+										Endpoint: "/",
+										Interval: 30,
+										Timeout:  1,
+										Type:     PortProbeType,
+									},
+								},
+							},
+						},
+						Timeout:             60,
+						ProcessSpecTemplate: ProcessSpecTemplate{},
+					}
+					processManifestPath := filepath.Join("test_data", "process_manifest", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
 			})
 		})
 		Context("when manifest path is a directory", func() {
@@ -1087,17 +1120,6 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 
 })
 
-func getModuleRoot() string {
-	out, err := exec.Command("go", "env", "GOMOD").Output()
-	if err != nil {
-		log.Fatalf("Failed to get GOMOD via 'go env': %v", err)
-	}
-	gomodPath := strings.TrimSpace(string(out))
-	if gomodPath == "" {
-		log.Fatal("GOMOD is empty")
-	}
-	return filepath.Dir(gomodPath)
-}
 func MapToStruct(m map[string]any, obj *Application) error {
 	b, err := json.Marshal(m)
 	if err != nil {

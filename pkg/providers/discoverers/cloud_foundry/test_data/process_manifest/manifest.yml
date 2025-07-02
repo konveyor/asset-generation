@@ -1,0 +1,14 @@
+docker:
+    image: myregistry/myapp:latest
+health-check-type: port
+health-check-http-endpoint: "/"
+health-check-invocation-timeout: 1
+health-check-interval: 30
+memory: 500M
+name: app-with-inline-process
+readiness-health-check-type: process
+readiness-health-check-http-endpoint: "/"
+readiness-health-invocation-timeout: 1
+readiness-health-check-interval: 30
+instances: 1
+type: web
