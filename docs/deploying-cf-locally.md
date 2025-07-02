@@ -401,6 +401,48 @@ Commercial support is available at
 </body>
 </html>
 ```
+# Connect to a remote Cloud Foundry instance
+1. Update `/etc/hosts` on Your Local Machine
+
+    Add the following lines to your `/etc/hosts` file:
+
+    ```bash
+    127.0.0.1 api.bosh-lite.com
+    127.0.0.1 login.bosh-lite.com
+    127.0.0.1 uaa.bosh-lite.com
+    ```
+
+1. Set up ssh tunnel
+   * Share you _**public**_ ssh key with the remote system admin.
+   * Once access is granted, verify your SSH connection:
+      ```bash
+      ssh <user_remote>@<remote_server_address> -i <path_to/private/sshkey>
+      ```
+      > Note: Use the path to your private SSH key, not the public key.
+
+   * Set up the SSH tunnel on your local machine:
+      ```bash
+      sudo ssh -v -N \
+        -i <path_to/private/sshkey> \
+        -L 443:10.244.0.131:443 \
+        -L 8443:10.244.0.34:443 \
+        -L 8444:10.244.0.131:443 \
+        <user_remote>@<remote_server_address>
+      ```
+    > Extra info:<br/>
+    > The `-N` flag tells SSH not to execute a remote command.<br/>
+    > The `-v` flag enables verbose output for debugging.
+
+1. Verify Access to the Remote Cloud Foundry Instance
+  Open a new terminal on your local machine and check access to the remote CF instance
+
+    ```bash
+    ➜ cf apps
+    Getting apps in org org / space space as admin...
+
+    name    requested state   processes   routes
+    nginx   started           web:1/1     nginx.bosh-lite.com
+    ```
 
 # Troubleshooting
 ## ❌ Can't create VMs?
