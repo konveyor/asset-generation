@@ -1,6 +1,6 @@
 module github.com/konveyor/asset-generation
 
-go 1.23.6
+go 1.23.9
 
 require (
 	github.com/cloudfoundry/go-cfclient/v3 v3.0.0-alpha.12
