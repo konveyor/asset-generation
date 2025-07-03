@@ -3,6 +3,9 @@ Deploying Cloud Foundry with Bosh-Lite is a low-cost, lightweight approach tailo
 
 > 💡 Note: This environment is not production-grade.
 
+> ⚠️ Important: This setup only works on bare-metal Fedora 41.<br/>
+> Installing it on a VM or a virtualized host does not work and is not supported.
+
 ## Install VirtualBox and prerequisites
  
 Ensure that VirtualBox and its extension pack are installed and configured
