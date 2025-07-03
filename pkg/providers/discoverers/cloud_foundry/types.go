@@ -4,7 +4,7 @@ package cloud_foundry
 // the information it contains has been processed to simplify its transformation to a Kubernetes manifest using MTA
 type Application struct {
 	// Metadata captures the name, labels and annotations in the application.
-	Metadata Metadata `yaml:",inline" json:",inline" validate:"required"`
+	Metadata `yaml:",inline" json:",inline" validate:"required"`
 	// Env captures the `env` field values in the CF application manifest.
 	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 	// Routes represent the routes that are made available by the application.
