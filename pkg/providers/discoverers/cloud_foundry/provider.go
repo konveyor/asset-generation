@@ -340,15 +340,31 @@ func (c *CloudFoundryProvider) discoverFromManifestFile(filePath string) (*Appli
 		return nil, fmt.Errorf("failed to read manifest file: %v", err)
 	}
 	var manifest cfTypes.AppManifest
-	if err := yaml.Unmarshal(data, &manifest); err != nil {
+
+	if err = yaml.Unmarshal(data, &manifest); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal YAML: %v", err)
 	}
-
-	app, err := parseCFApp("", manifest)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create application: %v", err)
+	// Check if the file contains a single application that does not contain a space
+	if !reflect.DeepEqual(manifest, cfTypes.AppManifest{}) {
+		app, err := parseCFApp("", manifest)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create application: %v", err)
+		}
+		return &app, nil
 	}
-	// extract sensitive information into a secret's structure
+	c.logger.Printf("Failed to parse Application manifest. Will attempt again using the Cloud Foundry Application manifest: %s", err)
+	var cfManifest cfTypes.CloudFoundryManifest
+	if err := yaml.Unmarshal(data, &cfManifest); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal YAML: %v", err)
+	}
+	if len(cfManifest.Applications) == 0 {
+		return nil, fmt.Errorf("no applications found in %s", filePath)
+	}
+	c.logger.Printf("Found %d applications in manifest in %s", len(cfManifest.Applications), filePath)
+	app, err := parseCFApp(cfManifest.Space, *cfManifest.Applications[0])
+	if err != nil {
+		return nil, err
+	}
 	return &app, nil
 }
 

@@ -32,6 +32,8 @@ type Application struct {
 	Docker Docker `yaml:"docker,omitempty" json:"docker,omitempty" validate:"omitempty"`
 	// ProcessSpec embeds the process specification details, which are inlined and validated if present.
 	*ProcessSpecTemplate `yaml:",inline" json:",inline" validate:"omitempty"`
+	// Path informs Cloud Foundry the locatino of the directory in which it can find your app.
+	Path string `yaml:"path,omitempty" json:"path,omitempty" validate:"omitempty"`
 }
 
 type Services []ServiceSpec
@@ -51,12 +53,12 @@ type SidecarSpec struct {
 	// ProcessTypes captures the different process types defined for the sidecar.
 	// Compared to a Process, which has only one type, sidecar processes can
 	// accumulate more than one type.
-	ProcessTypes []ProcessType `yaml:"processType" json:"processType" validate:"required,oneof=worker web"`
+	ProcessTypes []ProcessType `yaml:"processType" json:"processType" validate:"required"`
 	// Command captures the command to run the sidecar
 	Command string `yaml:"command" json:"command" validate:"required"`
 	// Memory represents the amount of memory to allocate to the sidecar.
 	// It's an optional field.
-	Memory string `yaml:"memory,omitempty" json:"memory,omitempty"`
+	Memory int `yaml:"memory,omitempty" json:"memory,omitempty"`
 }
 
 type ServiceSpec struct {
@@ -165,14 +167,14 @@ type Route struct {
 	Route string `yaml:"route" json:"route" validate:"required"`
 	// Protocol captures the protocol type: http, http2 or tcp. Note that the CF `protocol` field is only available
 	// for CF deployments that use HTTP/2 routing.
-	Protocol RouteProtocol `yaml:"protocol,omitempty" json:"protocol,omitempty" validate:"oneof=http1 http2 tcp"`
+	Protocol RouteProtocol `yaml:"protocol,omitempty" json:"protocol,omitempty" validate:"omitempty,oneof=http1 http2 tcp"`
 	// Options captures the options for the Route. Only load balancing is supported at the moment.
 	Options RouteOptions `yaml:"options,omitempty" json:"options,omitempty" validate:"omitempty"`
 }
 
 type RouteOptions struct {
 	// LoadBalancing captures the settings for load balancing. Only `round-robin` or `least-connections` are supported
-	LoadBalancing LoadBalancingType `yaml:"loadBalancing,omitempty" json:"loadBalancing,omitempty" validate:"oneof=round-robin least-connections"`
+	LoadBalancing LoadBalancingType `yaml:"loadBalancing,omitempty" json:"loadBalancing,omitempty" validate:"omitempty,oneof=round-robin least-connections"`
 }
 
 type LoadBalancingType string

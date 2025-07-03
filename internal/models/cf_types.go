@@ -50,6 +50,7 @@ type AppManifest struct {
 	Stack              string                `yaml:"stack,omitempty"`
 	Metadata           *AppMetadata          `yaml:"metadata,omitempty"`
 	AppManifestProcess `yaml:",inline"`
+	Path               string `yaml:"path,omitempty"`
 }
 
 type AppManifestProcesses []AppManifestProcess

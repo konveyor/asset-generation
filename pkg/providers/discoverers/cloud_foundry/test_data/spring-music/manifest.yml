@@ -1,0 +1,23 @@
+---
+applications:
+  - name: spring-music
+    memory: 1G
+    path: build/libs/spring-music-1.0.jar
+    env:
+      JBP_CONFIG_SPRING_AUTO_RECONFIGURATION: '{enabled: false}'
+      SPRING_PROFILES_ACTIVE: http2
+      JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 17.+ } }'
+    disk_quota: 1G
+    instances: 1
+    buildpacks:
+      - java_buildpack
+    routes:
+      - route: rammstein.music
+        protocol: http2
+    services:
+      - mysql
+      - name: gateway
+        parameters:
+          routes: {"path": "/music/**"}
+      - name: lb
+        binding_name: load_balancer

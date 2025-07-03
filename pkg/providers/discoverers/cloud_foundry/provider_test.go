@@ -989,7 +989,8 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 								},
 							},
 						},
-						Timeout: 60,
+						Timeout:             60,
+						ProcessSpecTemplate: &ProcessSpecTemplate{Instances: 1},
 					}
 					processManifestPath := filepath.Join("test_data", "process_manifest", "manifest.yml")
 					app, err := provider.discoverFromManifestFile(processManifestPath)
@@ -1026,9 +1027,130 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 								},
 							},
 						},
-						Timeout: 10,
+						Timeout:             10,
+						ProcessSpecTemplate: &ProcessSpecTemplate{Instances: 1},
 					}
 					processManifestPath := filepath.Join("test_data", "inline-process-with-type-only-manifest", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+				It("validates the discovery data of an app with random route and path", func() {
+					expected := Application{
+						Metadata:            Metadata{Name: "hello-spring-cloud"},
+						ProcessSpecTemplate: &ProcessSpecTemplate{Instances: 1},
+						Path:                "target/hello-spring-cloud-0.0.1.BUILD-SNAPSHOT.jar",
+						Timeout:             60,
+						Routes: RouteSpec{
+							RandomRoute: true,
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "hello-spring-cloud", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+				It("validates the discovery data of an app with only a service", func() {
+					expected := Application{
+						Metadata:            Metadata{Name: "sailspong"},
+						ProcessSpecTemplate: &ProcessSpecTemplate{Instances: 1},
+						Timeout:             60,
+						Services: Services{
+							{Name: "mysql"},
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "pong-matcher-sails", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+				It("validates the discovery data of an app with a service, command and path", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "rails-sample"},
+						ProcessSpecTemplate: &ProcessSpecTemplate{
+							Instances: 1,
+							Command:   "bundle exec rake db:migrate && bundle exec rails s -p $PORT",
+							Memory:    "256M",
+						},
+						Timeout: 60,
+						Routes: RouteSpec{
+							RandomRoute: true,
+						},
+						Services: Services{
+							{Name: "rails-postgres"},
+						},
+						Path: ".",
+					}
+					processManifestPath := filepath.Join("test_data", "rails-sample-app", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+				It("validates the discovery data of an app with a sidecar", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "sidecar-dependent-app"},
+						ProcessSpecTemplate: &ProcessSpecTemplate{
+							Instances: 1,
+							Memory:    "256M",
+							DiskQuota: "1G",
+						},
+						Env: map[string]string{
+							"CONFIG_SERVER_PORT": "8082",
+						},
+						Stack:   "cflinuxfs3",
+						Timeout: 60,
+						Sidecars: Sidecars{
+							{
+								Name:         "config-server",
+								ProcessTypes: []ProcessType{"web"},
+								Command:      "./config-server",
+							},
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "sidecar-dependant-app", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+				It("validates the discovery data of an app with service, route and protocol in route", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "spring-music"},
+						ProcessSpecTemplate: &ProcessSpecTemplate{
+							Instances: 1,
+							Memory:    "1G",
+							DiskQuota: "1G",
+						},
+						Env: map[string]string{
+							"JBP_CONFIG_SPRING_AUTO_RECONFIGURATION": "{enabled: false}",
+							"SPRING_PROFILES_ACTIVE":                 "http2",
+							"JBP_CONFIG_OPEN_JDK_JRE":                "{ jre: { version: 17.+ } }",
+						},
+						BuildPacks: []string{"java_buildpack"},
+						Path:       "build/libs/spring-music-1.0.jar",
+						Timeout:    60,
+						Routes: RouteSpec{
+							Routes: Routes{
+								{
+									Route:    "rammstein.music",
+									Protocol: HTTP2RouteProtocol,
+								},
+							},
+						},
+						Services: Services{
+							{
+								Name: "mysql",
+							},
+							{
+								Name:       "gateway",
+								Parameters: map[string]any{"routes": map[string]any{"path": "/music/**"}},
+							},
+							{
+								Name:        "lb",
+								BindingName: "load_balancer",
+							},
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "spring-music", "manifest.yml")
 					app, err := provider.discoverFromManifestFile(processManifestPath)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(app).To(BeEquivalentTo(&expected))
