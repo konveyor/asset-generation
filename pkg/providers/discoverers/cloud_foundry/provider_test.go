@@ -990,8 +990,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 								},
 							},
 						},
-						Timeout:             60,
-						ProcessSpecTemplate: ProcessSpecTemplate{},
+						Timeout: 60,
 					}
 					processManifestPath := filepath.Join("test_data", "process_manifest", "manifest.yml")
 					app, err := provider.discoverFromManifestFile(processManifestPath)

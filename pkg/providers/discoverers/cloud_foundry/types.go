@@ -31,7 +31,7 @@ type Application struct {
 	// Docker captures the Docker specification in the CF application manifest.
 	Docker Docker `yaml:"docker,omitempty" json:"docker,omitempty" validate:"omitempty"`
 	// ProcessSpec embeds the process specification details, which are inlined and validated if present.
-	ProcessSpecTemplate `yaml:",inline" json:",inline" validate:"omitempty"`
+	*ProcessSpecTemplate `yaml:",inline" json:",inline" validate:"omitempty"`
 }
 
 type Services []ServiceSpec

@@ -223,7 +223,7 @@ var parseCFApp = func(spaceName string, cfApp cfTypes.AppManifest) (Application,
 			return Application{}, err
 		}
 		if t != nil {
-			app.ProcessSpecTemplate = *t
+			app.ProcessSpecTemplate = t
 		}
 	} else {
 		inlineProcess, err := parseProcessInline(cfApp)
