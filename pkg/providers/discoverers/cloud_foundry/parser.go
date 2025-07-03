@@ -62,6 +62,9 @@ func parseProcessInline(cfApp cfTypes.AppManifest) (*ProcessSpec, error) {
 	if cfApp.LogRateLimitPerSecond != "" {
 		processSpec.LogRateLimit = cfApp.LogRateLimitPerSecond
 	}
+	if cfApp.DiskQuota != "" {
+		processSpec.DiskQuota = cfApp.DiskQuota
+	}
 	return &processSpec, nil
 }
 
@@ -79,7 +82,9 @@ func parseProcessTemplate(cfApp cfTypes.AppManifest) (*ProcessSpecTemplate, erro
 	if cfApp.LogRateLimitPerSecond != "" {
 		template.LogRateLimit = cfApp.LogRateLimitPerSecond
 	}
-
+	if cfApp.DiskQuota != "" {
+		template.DiskQuota = cfApp.DiskQuota
+	}
 	return &template, nil
 }
 

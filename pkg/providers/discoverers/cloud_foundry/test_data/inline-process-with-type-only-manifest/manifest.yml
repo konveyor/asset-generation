@@ -1,0 +1,8 @@
+name: app-with-inline-process-only-type
+disk_quota: 512M
+memory: 500M
+timeout: 10
+docker:
+ image: myregistry/myapp:latest
+ username: docker-registry-user
+type: web

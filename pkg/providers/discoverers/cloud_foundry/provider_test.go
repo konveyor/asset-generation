@@ -963,7 +963,6 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Expect(err.Error()).To(ContainSubstring("failed to create application"))
 					Expect(app).To(BeNil())
 				})
-
 				It("parses correctly the probes from an inlined process spec", func() {
 					expected := Application{
 						Metadata: Metadata{Name: "app-with-inline-process"},
@@ -973,8 +972,45 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 								Type: Web,
 								ProcessSpecTemplate: ProcessSpecTemplate{
 									LogRateLimit: "16K",
+									Instances:    2,
+									Memory:       "500M",
+									ReadinessCheck: ProbeSpec{
+										Endpoint: "/readiness",
+										Interval: 60,
+										Timeout:  10,
+										Type:     ProcessProbeType,
+									},
+									HealthCheck: ProbeSpec{
+										Endpoint: "/health",
+										Interval: 90,
+										Timeout:  3,
+										Type:     PortProbeType,
+									},
+								},
+							},
+						},
+						Timeout: 60,
+					}
+					processManifestPath := filepath.Join("test_data", "process_manifest", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+
+				It("parses correctly the probes when only type is defined for an inline process", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "app-with-inline-process-only-type"},
+						Docker: Docker{
+							Image:    "myregistry/myapp:latest",
+							Username: "docker-registry-user"},
+						Processes: Processes{
+							{
+								Type: Web,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									LogRateLimit: "16K",
 									Instances:    1,
 									Memory:       "500M",
+									DiskQuota:    "512M",
 									ReadinessCheck: ProbeSpec{
 										Endpoint: "/",
 										Interval: 30,
@@ -990,9 +1026,9 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 								},
 							},
 						},
-						Timeout: 60,
+						Timeout: 10,
 					}
-					processManifestPath := filepath.Join("test_data", "process_manifest", "manifest.yml")
+					processManifestPath := filepath.Join("test_data", "inline-process-with-type-only-manifest", "manifest.yml")
 					app, err := provider.discoverFromManifestFile(processManifestPath)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(app).To(BeEquivalentTo(&expected))
