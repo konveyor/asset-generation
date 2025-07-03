@@ -107,8 +107,7 @@ func (c *CloudFoundryProvider) Discover(RawData any) (*pTypes.DiscoverResult, er
 
 // listAppsFromLocalManifests handles discovery of apps by reading local manifest files.
 func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string][]any, error) {
-	c.logger.Info("Using manifest path for Cloud Foundry local discover:", c.cfg.ManifestPath)
-
+	c.logger.Info("Using manifest path for Cloud Foundry local discover", "manifest_path", c.cfg.ManifestPath)
 	isDirResult, err := isDir(c.cfg.ManifestPath)
 	if err != nil {
 		return nil, fmt.Errorf("error checking if path is directory %s: %v", c.cfg.ManifestPath, err)
@@ -126,14 +125,14 @@ func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string][]any, e
 
 			appName, err := c.getAppNameFromManifest(filePath)
 			if err != nil {
-				c.logger.Info("error processing manifest file '%s': %v", filePath, err)
+				c.logger.Info("error processing manifest file", "file_path", filePath, "error", err)
 				continue
 			}
 			if appName == "" {
-				c.logger.Info("manifest file '%s' does not contain an app name", filePath)
+				c.logger.Info("manifest file does not contain an app name", "file_path", filePath)
 				continue
 			}
-			c.logger.Info("found app name '%s' in manifest file '%s'", appName, filePath)
+			c.logger.Info("found app name in manifest file", "app_name", appName, "file_path", filePath)
 			apps = append(apps, AppReference{AppName: appName})
 		}
 		return map[string][]any{"local": toAnySlice(apps)}, nil
@@ -155,13 +154,13 @@ func (c *CloudFoundryProvider) getAppNameFromManifest(filePath string) (string, 
 		return "", fmt.Errorf("failed to stat file %q: %v", filePath, err)
 	}
 	if info.IsDir() {
-		c.logger.Info("Skipping directory: %s\n", filePath)
+		c.logger.Info("Skipping directory", "path", filePath)
 		return "", nil
 	}
 
 	// Check file extension for YAML
 	if !hasYAMLExtension(filePath) {
-		c.logger.Info("Skipping non-YAML file: %s\n", filePath)
+		c.logger.Info("Skipping non-YAML file", "path", filePath)
 		return "", nil
 	}
 
@@ -178,7 +177,7 @@ func (c *CloudFoundryProvider) getAppNameFromManifest(filePath string) (string, 
 	}
 
 	if manifest.Name == "" {
-		c.logger.Info("Warning: manifest file %q does not contain a name\n", filePath)
+		c.logger.Info("Warning: manifest file does not contain a name", "file_path", filePath)
 		return "", nil
 	}
 
@@ -189,12 +188,12 @@ func (c *CloudFoundryProvider) getAppNameFromManifest(filePath string) (string, 
 func (c *CloudFoundryProvider) listAppsFromCloudFoundry() (map[string][]any, error) {
 	appList := make(map[string][]any, len(c.cfg.SpaceNames))
 	for _, spaceName := range c.cfg.SpaceNames {
-		c.logger.Info("Analyzing space:", spaceName)
+		c.logger.Info("Analyzing space", "space_name", spaceName)
 		apps, err := c.listAppsBySpaceName(spaceName)
 		if err != nil {
 			return nil, fmt.Errorf("error listing Cloud Foundry apps for space %s: %v", spaceName, err)
 		}
-		c.logger.Info("Apps discovered: %d\n", len(apps))
+		c.logger.Info("Apps discovered", "count", len(apps))
 
 		appsInSpace := make([]AppReference, 0, len(apps))
 		for _, app := range apps {
@@ -265,18 +264,18 @@ func (c *CloudFoundryProvider) discoverFromManifest(appName string) (*pTypes.Dis
 
 			name, err := c.getAppNameFromManifest(filePath)
 			if err != nil {
-				c.logger.Info("error processing manifest file '%s': %v", filePath, err)
+				c.logger.Info("error processing manifest file", "file_path", filePath, "error", err)
 				continue
 			}
 			if name == "" {
-				c.logger.Info("manifest file '%s' does not contain an app name", filePath)
+				c.logger.Info("manifest file does not contain an app name", "file_path", filePath)
 				continue
 			}
 			if name != appName {
 				continue
 			}
 			manifestFile = filePath
-			c.logger.Info("found app name '%s' in manifest file '%s'", appName, manifestFile)
+			c.logger.Info("found app name in manifest file", "app_name", appName, "file_path", manifestFile)
 			break
 		}
 	} else {
@@ -309,7 +308,7 @@ func (c *CloudFoundryProvider) discoverFromLive(spaceName string, appName string
 		return nil, fmt.Errorf("missing required configuration: APIEndpoint and CloudFoundryConfigPath must be provided for Cloud Foundry live discover")
 	}
 
-	c.logger.Info("Starting live Cloud Foundry discovery for app with name:", appName)
+	c.logger.Info("Starting live Cloud Foundry discovery for app", "app_name", appName)
 
 	d, err := c.discoverFromLiveAPI(spaceName, appName)
 	if err != nil {
@@ -436,7 +435,7 @@ func (c *CloudFoundryProvider) getRoutes(appGUID string) (*cfTypes.AppManifestRo
 }
 func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(spaceName string, appName string) (*cfTypes.AppManifest, error) {
 
-	c.logger.Info("Analyzing application %s", appName)
+	c.logger.Info("Analyzing application", "app_name", appName)
 
 	// Retrieve app in space and app name
 	app, err := c.getAppBySpaceAndAppName(spaceName, appName)
@@ -444,7 +443,7 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(spaceName string, a
 		return nil, err
 	}
 
-	c.logger.Info("Processing app:", app.Name)
+	c.logger.Info("Processing app", "app_name", app.Name)
 	appEnv, err := c.cli.Applications.GetEnvironment(context.Background(), app.GUID)
 	if err != nil {
 		return nil, err
