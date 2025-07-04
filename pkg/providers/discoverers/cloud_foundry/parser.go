@@ -29,7 +29,7 @@ const (
 	logRateLimit          = "16K"
 )
 
-func processProcessProbes(cfApp cfTypes.AppManifest) (ProbeSpec, ProbeSpec) {
+func processProcessProbes(cfApp cfTypes.AppManifestProcess) (ProbeSpec, ProbeSpec) {
 	healthCheck := ParseHealthCheck(
 		cfApp.HealthCheckType,
 		cfApp.HealthCheckHTTPEndpoint,
@@ -42,7 +42,7 @@ func processProcessProbes(cfApp cfTypes.AppManifest) (ProbeSpec, ProbeSpec) {
 		cfApp.ReadinessHealthInvocationTimeout)
 	return healthCheck, readinessCheck
 }
-func parseProcessInline(cfApp cfTypes.AppManifest) (*ProcessSpec, error) {
+func parseProcess(cfApp cfTypes.AppManifestProcess) (*ProcessSpec, error) {
 	if string(cfApp.Type) != string(Web) && string(cfApp.Type) != string(Worker) {
 		return nil, fmt.Errorf("unknown process type %s", cfApp.Type)
 	}
@@ -227,9 +227,23 @@ func parseService(service cfTypes.AppManifestService) (*ServiceSpec, error) {
 	return &svc, nil
 }
 
+func parseProcesses(cfProcs *cfTypes.AppManifestProcesses) (Processes, error) {
+
+	var procs Processes
+
+	for _, proc := range *cfProcs {
+		p, err := parseProcess(proc)
+		if err != nil {
+			return nil, err
+		}
+		procs = append(procs, *p)
+	}
+	return procs, nil
+}
+
 var parseCFApp = func(spaceName string, cfApp cfTypes.AppManifest) (Application, error) {
 	timeout := 60
-	if cfApp.Timeout != 0 {
+	if cfApp.Timeout != 0 && cfApp.Type == "" {
 		timeout = int(cfApp.Timeout)
 	}
 	services, err := parseServices(cfApp.Services)
@@ -251,7 +265,7 @@ var parseCFApp = func(spaceName string, cfApp cfTypes.AppManifest) (Application,
 	}
 	var processes Processes
 	if cfApp.Processes != nil {
-		processes, err = MarshalUnmarshal[Processes](cfApp.Processes)
+		processes, err = parseProcesses(cfApp.Processes)
 		if err != nil {
 			return Application{}, err
 		}
@@ -290,7 +304,7 @@ var parseCFApp = func(spaceName string, cfApp cfTypes.AppManifest) (Application,
 		}
 		app.ProcessSpecTemplate = t
 	} else {
-		inlineProcess, err := parseProcessInline(cfApp)
+		inlineProcess, err := parseProcess(cfApp.AppManifestProcess)
 		if err != nil {
 			return Application{}, err
 		}

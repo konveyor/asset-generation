@@ -112,6 +112,8 @@ type ProcessSpecTemplate struct {
 	// Lifecycle captures the value fo the lifecycle field in the CF application manifest.
 	// Valid values are `buildpack`, `cnb`, and `docker`. Defaults to `buildpack`
 	Lifecycle LifecycleType `yaml:"lifecycle,omitempty" json:"lifecycle,omitempty" validate:"omitempty,oneof=buildpack cnb docker"`
+	// Timeout represents the time in seconds at which the health-check will report failure.
+	Timeout int `yaml:"timeout,omitempty" json:"timeout,omitempty" validate:"omitempty"`
 }
 
 type LifecycleType string

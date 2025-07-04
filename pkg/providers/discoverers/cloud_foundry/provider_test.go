@@ -1024,10 +1024,11 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 										Timeout:  1,
 										Type:     PortProbeType,
 									},
+									Timeout: 10,
 								},
 							},
 						},
-						Timeout:             10,
+						Timeout:             60,
 						ProcessSpecTemplate: &ProcessSpecTemplate{Instances: 1},
 					}
 					processManifestPath := filepath.Join("test_data", "inline-process-with-type-only-manifest", "manifest.yml")
@@ -1151,6 +1152,70 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						},
 					}
 					processManifestPath := filepath.Join("test_data", "spring-music", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+				FIt("validates the discovery data of an app with multiple processes", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "multiple-processes"},
+						ProcessSpecTemplate: &ProcessSpecTemplate{
+							Instances: 1,
+						},
+						Timeout: 60,
+						Routes: RouteSpec{
+							RandomRoute: true,
+						},
+						Processes: Processes{
+							{
+								Type: Web,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Command:   "start-web.sh",
+									DiskQuota: "512M",
+									HealthCheck: ProbeSpec{
+										Endpoint: "/healthcheck",
+										Timeout:  10,
+										Type:     HTTPProbeType,
+										Interval: 30,
+									},
+									ReadinessCheck: ProbeSpec{
+										Endpoint: "/",
+										Interval: 30,
+										Timeout:  1,
+										Type:     ProcessProbeType,
+									},
+									Instances:    3,
+									Memory:       "500M",
+									Timeout:      10,
+									LogRateLimit: "16K",
+								},
+							},
+							{
+								Type: Worker,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Command:   "start-worker.sh",
+									DiskQuota: "1G",
+									Instances: 2,
+									Memory:    "256M",
+									HealthCheck: ProbeSpec{
+										Type:     ProcessProbeType,
+										Endpoint: "/",
+										Interval: 30,
+										Timeout:  1,
+									},
+									ReadinessCheck: ProbeSpec{
+										Endpoint: "/",
+										Timeout:  1,
+										Interval: 30,
+										Type:     ProcessProbeType,
+									},
+									Timeout:      15,
+									LogRateLimit: "16K",
+								},
+							},
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "multiple-processes", "manifest.yml")
 					app, err := provider.discoverFromManifestFile(processManifestPath)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(app).To(BeEquivalentTo(&expected))
