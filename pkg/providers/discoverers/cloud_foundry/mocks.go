@@ -274,11 +274,17 @@ func (m *mockApplication) sidecars() []string {
 		pt := toJSON(v.ProcessTypes)
 		sptypes := []string{}
 		Expect(json.Unmarshal([]byte(pt), &sptypes)).ToNot(HaveOccurred())
+		var mem int
+		var err error
+		if len(v.Memory) > 0 {
+			mem, err = strconv.Atoi(v.Memory)
+			Expect(err).NotTo(HaveOccurred())
+		}
 		sc := resource.Sidecar{
 			Name:         v.Name,
 			Command:      v.Command,
 			ProcessTypes: sptypes,
-			MemoryInMB:   v.Memory,
+			MemoryInMB:   mem,
 			Origin:       "user",
 		}
 		sidecars = append(sidecars, toJSON(sc))
