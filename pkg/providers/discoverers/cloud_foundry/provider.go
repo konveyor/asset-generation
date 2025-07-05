@@ -550,7 +550,7 @@ func (c *CloudFoundryProvider) getSidecars(appGUID string) (*cfTypes.AppManifest
 			Name:         sc.Name,
 			ProcessTypes: pt,
 			Command:      sc.Command,
-			Memory:       sc.MemoryInMB,
+			Memory:       strconv.Itoa(sc.MemoryInMB),
 		})
 	}
 	return &sidecars, nil

@@ -1,0 +1,57 @@
+# taken from https://v3-apidocs.cloudfoundry.org/version/3.76.0/index.html#the-app-manifest-specification
+# added application's name 'name: complete' since it is missing in the example and it
+# is required by the spec: https://docs.cloudfoundry.org/devguide/deploy-apps/manifest-attributes.html#minimal-manifest
+---
+applications:
+  - name: complete
+    buildpacks:
+      - ruby_buildpack
+      - java_buildpack
+    env:
+      VAR1: value1
+      VAR2: value2
+    routes:
+      - route: route.example.com
+      - route: another-route.example.com
+    services:
+      - my-service1
+      - my-service2
+      - name: my-service-with-arbitrary-params
+        parameters:
+          key1: value1
+          key2: value2
+    stack: cflinuxfs3
+    metadata:
+      annotations:
+        contact: bob@example.com jane@example.com
+      labels:
+        sensitive: true
+    processes:
+      - type: web
+        command: start-web.sh
+        disk_quota: 512M
+        health-check-http-endpoint: /healthcheck
+        health-check-type: http
+        health-check-invocation-timeout: 10
+        instances: 3
+        memory: 500M
+        timeout: 10
+      - type: worker
+        command: start-worker.sh
+        disk_quota: 1G
+        health-check-type: process
+        instances: 2
+        memory: 256M
+        timeout: 15
+    sidecars:
+      - name: authenticator
+        process_types:
+          - web
+          - worker
+        command: bundle exec run-authenticator
+        memory: 800M
+      - name: upcaser
+        process_types:
+          - worker
+        command: ./tr-server
+        memory: 900M

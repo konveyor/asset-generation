@@ -56,8 +56,11 @@ type SidecarSpec struct {
 	ProcessTypes []ProcessType `yaml:"processType" json:"processType" validate:"required"`
 	// Command captures the command to run the sidecar
 	Command string `yaml:"command" json:"command" validate:"required"`
-	// Memory represents the amount of memory to allocate to the sidecar.
+	// Memory represents the amount of memory in MB to allocate to the sidecar.
+	// Reference: https://v3-apidocs.cloudfoundry.org/version/3.192.0/index.html#the-sidecar-object
 	// It's an optional field.
+	// In the CF documentation it is referenced as an int when retrieving from a running application (live connection)
+	// but it is defined as a string (e.g: '800MB') in a manifest file.
 	Memory int `yaml:"memory,omitempty" json:"memory,omitempty"`
 }
 
@@ -90,7 +93,9 @@ type Metadata struct {
 type ProcessSpec struct {
 	// Type captures the `type` field in the Process specification.
 	// Accepted values are `web` or `worker`
-	Type                ProcessType `yaml:"type" json:"type" validate:"required,oneof=web worker"`
+	Type ProcessType `yaml:"type" json:"type" validate:"required,oneof=web worker"`
+	// Timeout represents the time in seconds at which the health-check will report failure.
+	Timeout             int `yaml:"timeout,omitempty" json:"timeout,omitempty" validate:"omitempty"`
 	ProcessSpecTemplate `yaml:",inline" json:",inline" validate:"omitempty"`
 }
 
@@ -112,8 +117,6 @@ type ProcessSpecTemplate struct {
 	// Lifecycle captures the value fo the lifecycle field in the CF application manifest.
 	// Valid values are `buildpack`, `cnb`, and `docker`. Defaults to `buildpack`
 	Lifecycle LifecycleType `yaml:"lifecycle,omitempty" json:"lifecycle,omitempty" validate:"omitempty,oneof=buildpack cnb docker"`
-	// Timeout represents the time in seconds at which the health-check will report failure.
-	Timeout int `yaml:"timeout,omitempty" json:"timeout,omitempty" validate:"omitempty"`
 }
 
 type LifecycleType string

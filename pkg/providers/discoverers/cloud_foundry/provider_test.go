@@ -456,13 +456,13 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 							Name:         "sidecar_1",
 							ProcessTypes: []cfTypes.AppProcessType{cfTypes.WebAppProcessType, cfTypes.WorkerAppProcessType},
 							Command:      "sleep 100",
-							Memory:       100,
+							Memory:       "100",
 						},
 						{
 							Name:         "sidecar_2",
 							ProcessTypes: []cfTypes.AppProcessType{cfTypes.WebAppProcessType},
 							Command:      "/bin/sh -c echo 'hello world'",
-							Memory:       1024,
+							Memory:       "1024",
 						},
 					}),
 				)
@@ -616,7 +616,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					}, true),
 				)
 
-				It("discover an app fully defined", func() {
+				It("discover an app fully defined app", func() {
 					expected := cfTypes.AppManifest{
 						Name: "name",
 						Env:  map[string]string{"fox": "lazy"},
@@ -646,7 +646,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 								Name:         "sidecar_A",
 								ProcessTypes: []cfTypes.AppProcessType{cfTypes.WebAppProcessType, cfTypes.WorkerAppProcessType},
 								Command:      "/bin/sleep 1000",
-								Memory:       100,
+								Memory:       "100",
 							},
 						},
 						Processes: &cfTypes.AppManifestProcesses{
@@ -1006,7 +1006,8 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 							Username: "docker-registry-user"},
 						Processes: Processes{
 							{
-								Type: Web,
+								Type:    Web,
+								Timeout: 10,
 								ProcessSpecTemplate: ProcessSpecTemplate{
 									LogRateLimit: "16K",
 									Instances:    1,
@@ -1024,7 +1025,6 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 										Timeout:  1,
 										Type:     PortProbeType,
 									},
-									Timeout: 10,
 								},
 							},
 						},
@@ -1156,7 +1156,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(app).To(BeEquivalentTo(&expected))
 				})
-				FIt("validates the discovery data of an app with multiple processes", func() {
+				It("validates the discovery data of an app with multiple processes", func() {
 					expected := Application{
 						Metadata: Metadata{Name: "multiple-processes"},
 						ProcessSpecTemplate: &ProcessSpecTemplate{
@@ -1168,7 +1168,8 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						},
 						Processes: Processes{
 							{
-								Type: Web,
+								Type:    Web,
+								Timeout: 10,
 								ProcessSpecTemplate: ProcessSpecTemplate{
 									Command:   "start-web.sh",
 									DiskQuota: "512M",
@@ -1186,12 +1187,12 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 									},
 									Instances:    3,
 									Memory:       "500M",
-									Timeout:      10,
 									LogRateLimit: "16K",
 								},
 							},
 							{
-								Type: Worker,
+								Type:    Worker,
+								Timeout: 15,
 								ProcessSpecTemplate: ProcessSpecTemplate{
 									Command:   "start-worker.sh",
 									DiskQuota: "1G",
@@ -1209,13 +1210,125 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 										Interval: 30,
 										Type:     ProcessProbeType,
 									},
-									Timeout:      15,
 									LogRateLimit: "16K",
 								},
 							},
 						},
 					}
 					processManifestPath := filepath.Join("test_data", "multiple-processes", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+				It("validates the discovery data of an app with env, services, processes, routes and sidecars ", func() {
+					expected := Application{
+						Metadata: Metadata{
+							Name: "complete",
+							Annotations: map[string]*string{
+								"contact": ptrTo("bob@example.com jane@example.com"),
+							},
+							Labels: map[string]*string{
+								"sensitive": ptrTo("true"),
+							},
+						},
+						BuildPacks: []string{
+							"ruby_buildpack",
+							"java_buildpack",
+						},
+						Env: map[string]string{
+							"VAR1": "value1",
+							"VAR2": "value2",
+						},
+						Routes: RouteSpec{
+							Routes: Routes{
+								{Route: "route.example.com"},
+								{Route: "another-route.example.com"},
+							},
+						},
+						Services: Services{
+							{
+								Name: "my-service1",
+							},
+							{
+								Name: "my-service2",
+							},
+							{
+								Name: "my-service-with-arbitrary-params",
+								Parameters: map[string]interface{}{
+									"key1": "value1",
+									"key2": "value2",
+								},
+							},
+						},
+						Stack: "cflinuxfs3",
+						ProcessSpecTemplate: &ProcessSpecTemplate{
+							Instances: 1,
+						},
+						Timeout: 60,
+						Processes: Processes{
+							{
+								Type:    Web,
+								Timeout: 10,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Command:   "start-web.sh",
+									DiskQuota: "512M",
+									HealthCheck: ProbeSpec{
+										Endpoint: "/healthcheck",
+										Timeout:  10,
+										Type:     HTTPProbeType,
+										Interval: 30,
+									},
+									ReadinessCheck: ProbeSpec{
+										Endpoint: "/",
+										Interval: 30,
+										Timeout:  1,
+										Type:     ProcessProbeType,
+									},
+									Instances:    3,
+									Memory:       "500M",
+									LogRateLimit: "16K",
+								},
+							},
+							{
+								Type:    Worker,
+								Timeout: 15,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Command:   "start-worker.sh",
+									DiskQuota: "1G",
+									Instances: 2,
+									Memory:    "256M",
+									HealthCheck: ProbeSpec{
+										Type:     ProcessProbeType,
+										Endpoint: "/",
+										Interval: 30,
+										Timeout:  1,
+									},
+									ReadinessCheck: ProbeSpec{
+										Endpoint: "/",
+										Timeout:  1,
+										Interval: 30,
+										Type:     ProcessProbeType,
+									},
+									LogRateLimit: "16K",
+								},
+							},
+						},
+						Sidecars: Sidecars{
+							{
+								Name:         "authenticator",
+								ProcessTypes: []ProcessType{Web, Worker},
+								Command:      "bundle exec run-authenticator",
+								Memory:       800, // Memory is stored as an int representing MB
+							},
+							{
+								Name:         "upcaser",
+								ProcessTypes: []ProcessType{Worker},
+								Command:      "./tr-server",
+								Memory:       900, // Memory is stored as an int representing MB
+							},
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "complete-manifest", "manifest.yml")
 					app, err := provider.discoverFromManifestFile(processManifestPath)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(app).To(BeEquivalentTo(&expected))

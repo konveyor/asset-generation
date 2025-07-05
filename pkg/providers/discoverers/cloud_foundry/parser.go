@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 
 	cfTypes "github.com/konveyor/asset-generation/internal/models"
 
@@ -187,11 +189,25 @@ func parseSidecars(sidecars cfTypes.AppManifestSideCars) (Sidecars, error) {
 	return s, nil
 }
 
-func parseSidecar(sidecar cfTypes.AppManifestSideCar) (*SidecarSpec, error) {
+func parseSidecarMemory(memInMB string) (int, error) {
+	re := regexp.MustCompile(`[A-Za-z]+`)
+	return strconv.Atoi(re.ReplaceAllString(memInMB, ""))
 
-	s, err := MarshalUnmarshal[SidecarSpec](sidecar)
-	if err != nil {
-		return nil, err
+}
+
+func parseSidecar(sidecar cfTypes.AppManifestSideCar) (*SidecarSpec, error) {
+	var mem int
+	var err error
+	if len(sidecar.Memory) > 0 {
+		mem, err = parseSidecarMemory(sidecar.Memory)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse memory value for sidecar %s: %s", sidecar.Name, err)
+		}
+	}
+	s := SidecarSpec{
+		Name:    sidecar.Name,
+		Command: sidecar.Command,
+		Memory:  mem,
 	}
 	for _, pt := range sidecar.ProcessTypes {
 		p := ProcessType(pt)
