@@ -1242,7 +1242,12 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						Routes: RouteSpec{
 							Routes: Routes{
 								{Route: "route.example.com"},
-								{Route: "another-route.example.com"},
+								{Route: "another-route.example.com",
+									Protocol: HTTP2RouteProtocol,
+									Options: RouteOptions{
+										LoadBalancing: LeastConnectionLoadBalancingType,
+									},
+								},
 							},
 						},
 						Services: Services{
@@ -1258,6 +1263,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 									"key1": "value1",
 									"key2": "value2",
 								},
+								BindingName: "my-service3",
 							},
 						},
 						Stack: "cflinuxfs3",

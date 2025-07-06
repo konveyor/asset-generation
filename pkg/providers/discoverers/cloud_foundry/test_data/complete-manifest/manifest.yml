@@ -13,6 +13,9 @@ applications:
     routes:
       - route: route.example.com
       - route: another-route.example.com
+        protocol: http2
+        options:
+          loadbalancing: "least-connection"
     services:
       - my-service1
       - my-service2
@@ -20,6 +23,7 @@ applications:
         parameters:
           key1: value1
           key2: value2
+        binding_name: my-service3
     stack: cflinuxfs3
     metadata:
       annotations:

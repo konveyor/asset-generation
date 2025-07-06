@@ -178,8 +178,9 @@ type Route struct {
 }
 
 type RouteOptions struct {
-	// LoadBalancing captures the settings for load balancing. Only `round-robin` or `least-connections` are supported
-	LoadBalancing LoadBalancingType `yaml:"loadBalancing,omitempty" json:"loadBalancing,omitempty" validate:"omitempty,oneof=round-robin least-connections"`
+	// LoadBalancing captures the settings for load balancing. Only `round-robin` or `least-connection` are supported
+	// https://v3-apidocs.cloudfoundry.org/version/3.192.0/index.html#the-route-options-object
+	LoadBalancing LoadBalancingType `yaml:"loadBalancing,omitempty" json:"loadBalancing,omitempty" validate:"omitempty,oneof=round-robin least-connection"`
 }
 
 type LoadBalancingType string
