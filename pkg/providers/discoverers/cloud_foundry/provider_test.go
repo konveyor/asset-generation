@@ -1270,7 +1270,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						ProcessSpecTemplate: &ProcessSpecTemplate{
 							Instances: 1,
 						},
-						Timeout: 60,
+						Timeout: 120,
 						Processes: Processes{
 							{
 								Type:    Web,

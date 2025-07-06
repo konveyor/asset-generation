@@ -25,6 +25,7 @@ applications:
           key2: value2
         binding_name: my-service3
     stack: cflinuxfs3
+    timeout: 120
     metadata:
       annotations:
         contact: bob@example.com jane@example.com
