@@ -34,6 +34,8 @@ type Application struct {
 	*ProcessSpecTemplate `yaml:",inline" json:",inline" validate:"omitempty"`
 	// Path informs Cloud Foundry the locatino of the directory in which it can find your app.
 	Path string `yaml:"path,omitempty" json:"path,omitempty" validate:"omitempty"`
+	// Feature represents a map of key/value pairs of the app feature names to boolean values indicating whether the feature is enabled or not
+	Features map[string]bool `yaml:"features,omitempty" json:"features,omitempty" validate:"omitempty"`
 }
 
 type Services []ServiceSpec
@@ -105,7 +107,7 @@ type ProcessSpecTemplate struct {
 	// DiskQuota represents the amount of persistent disk requested by the process.
 	DiskQuota string `yaml:"disk,omitempty" json:"disk,omitempty" validate:"omitempty"`
 	// Memory represents the amount of memory requested by the process.
-	Memory string `yaml:"memory" json:"memory" validate:"omitempty"`
+	Memory string `yaml:"memory,omitempty" json:"memory,omitempty" validate:"omitempty"`
 	// HealthCheck captures the health check information
 	HealthCheck ProbeSpec `yaml:"healthCheck,omitempty" json:"healthCheck,omitempty" validate:"omitempty"`
 	// ReadinessCheck captures the readiness check information.
