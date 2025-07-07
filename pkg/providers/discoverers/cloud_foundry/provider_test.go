@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/testutil"
@@ -458,13 +456,13 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 							Name:         "sidecar_1",
 							ProcessTypes: []cfTypes.AppProcessType{cfTypes.WebAppProcessType, cfTypes.WorkerAppProcessType},
 							Command:      "sleep 100",
-							Memory:       100,
+							Memory:       "100",
 						},
 						{
 							Name:         "sidecar_2",
 							ProcessTypes: []cfTypes.AppProcessType{cfTypes.WebAppProcessType},
 							Command:      "/bin/sh -c echo 'hello world'",
-							Memory:       1024,
+							Memory:       "1024",
 						},
 					}),
 				)
@@ -618,7 +616,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					}, true),
 				)
 
-				It("discover an app fully defined", func() {
+				It("discover an app fully defined app", func() {
 					expected := cfTypes.AppManifest{
 						Name: "name",
 						Env:  map[string]string{"fox": "lazy"},
@@ -648,7 +646,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 								Name:         "sidecar_A",
 								ProcessTypes: []cfTypes.AppProcessType{cfTypes.WebAppProcessType, cfTypes.WorkerAppProcessType},
 								Command:      "/bin/sleep 1000",
-								Memory:       100,
+								Memory:       "100",
 							},
 						},
 						Processes: &cfTypes.AppManifestProcesses{
@@ -965,6 +963,382 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Expect(err.Error()).To(ContainSubstring("failed to create application"))
 					Expect(app).To(BeNil())
 				})
+				It("parses correctly the probes from an inlined process spec", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "app-with-inline-process"},
+						Docker:   Docker{Image: "myregistry/myapp:latest"},
+						Processes: Processes{
+							{
+								Type: Web,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									LogRateLimit: "16K",
+									Instances:    2,
+									Memory:       "500M",
+									ReadinessCheck: ProbeSpec{
+										Endpoint: "/readiness",
+										Interval: 60,
+										Timeout:  10,
+										Type:     ProcessProbeType,
+									},
+									HealthCheck: ProbeSpec{
+										Endpoint: "/health",
+										Interval: 90,
+										Timeout:  3,
+										Type:     PortProbeType,
+									},
+								},
+							},
+						},
+						Timeout:             60,
+						ProcessSpecTemplate: &ProcessSpecTemplate{Instances: 1},
+					}
+					processManifestPath := filepath.Join("test_data", "process_manifest", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+
+				It("parses correctly the probes when only type is defined for an inline process", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "app-with-inline-process-only-type"},
+						Docker: Docker{
+							Image:    "myregistry/myapp:latest",
+							Username: "docker-registry-user"},
+						Processes: Processes{
+							{
+								Type:    Web,
+								Timeout: 10,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									LogRateLimit: "16K",
+									Instances:    1,
+									Memory:       "500M",
+									DiskQuota:    "512M",
+									ReadinessCheck: ProbeSpec{
+										Endpoint: "/",
+										Interval: 30,
+										Timeout:  1,
+										Type:     ProcessProbeType,
+									},
+									HealthCheck: ProbeSpec{
+										Endpoint: "/",
+										Interval: 30,
+										Timeout:  1,
+										Type:     PortProbeType,
+									},
+								},
+							},
+						},
+						Timeout:             60,
+						ProcessSpecTemplate: &ProcessSpecTemplate{Instances: 1},
+					}
+					processManifestPath := filepath.Join("test_data", "inline-process-with-type-only-manifest", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+				It("validates the discovery data of an app with random route and path", func() {
+					expected := Application{
+						Metadata:            Metadata{Name: "hello-spring-cloud"},
+						ProcessSpecTemplate: &ProcessSpecTemplate{Instances: 1},
+						Path:                "target/hello-spring-cloud-0.0.1.BUILD-SNAPSHOT.jar",
+						Timeout:             60,
+						Routes: RouteSpec{
+							RandomRoute: true,
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "hello-spring-cloud", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+				It("validates the discovery data of an app with only a service", func() {
+					expected := Application{
+						Metadata:            Metadata{Name: "sailspong"},
+						ProcessSpecTemplate: &ProcessSpecTemplate{Instances: 1},
+						Timeout:             60,
+						Services: Services{
+							{Name: "mysql"},
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "pong-matcher-sails", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+				It("validates the discovery data of an app with a service, command and path", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "rails-sample"},
+						ProcessSpecTemplate: &ProcessSpecTemplate{
+							Instances: 1,
+							Command:   "bundle exec rake db:migrate && bundle exec rails s -p $PORT",
+							Memory:    "256M",
+						},
+						Timeout: 60,
+						Routes: RouteSpec{
+							RandomRoute: true,
+						},
+						Services: Services{
+							{Name: "rails-postgres"},
+						},
+						Path: ".",
+					}
+					processManifestPath := filepath.Join("test_data", "rails-sample-app", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+				It("validates the discovery data of an app with a sidecar", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "sidecar-dependent-app"},
+						ProcessSpecTemplate: &ProcessSpecTemplate{
+							Instances: 1,
+							Memory:    "256M",
+							DiskQuota: "1G",
+						},
+						Env: map[string]string{
+							"CONFIG_SERVER_PORT": "8082",
+						},
+						Stack:   "cflinuxfs3",
+						Timeout: 60,
+						Sidecars: Sidecars{
+							{
+								Name:         "config-server",
+								ProcessTypes: []ProcessType{"web"},
+								Command:      "./config-server",
+							},
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "sidecar-dependant-app", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+				It("validates the discovery data of an app with service, route and protocol in route", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "spring-music"},
+						ProcessSpecTemplate: &ProcessSpecTemplate{
+							Instances: 1,
+							Memory:    "1G",
+							DiskQuota: "1G",
+						},
+						Env: map[string]string{
+							"JBP_CONFIG_SPRING_AUTO_RECONFIGURATION": "{enabled: false}",
+							"SPRING_PROFILES_ACTIVE":                 "http2",
+							"JBP_CONFIG_OPEN_JDK_JRE":                "{ jre: { version: 17.+ } }",
+						},
+						BuildPacks: []string{"java_buildpack"},
+						Path:       "build/libs/spring-music-1.0.jar",
+						Timeout:    60,
+						Routes: RouteSpec{
+							Routes: Routes{
+								{
+									Route:    "rammstein.music",
+									Protocol: HTTP2RouteProtocol,
+								},
+							},
+						},
+						Services: Services{
+							{
+								Name: "mysql",
+							},
+							{
+								Name:       "gateway",
+								Parameters: map[string]any{"routes": map[string]any{"path": "/music/**"}},
+							},
+							{
+								Name:        "lb",
+								BindingName: "load_balancer",
+							},
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "spring-music", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+				It("validates the discovery data of an app with multiple processes", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "multiple-processes"},
+						ProcessSpecTemplate: &ProcessSpecTemplate{
+							Instances: 1,
+						},
+						Timeout: 60,
+						Routes: RouteSpec{
+							RandomRoute: true,
+						},
+						Processes: Processes{
+							{
+								Type:    Web,
+								Timeout: 10,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Command:   "start-web.sh",
+									DiskQuota: "512M",
+									HealthCheck: ProbeSpec{
+										Endpoint: "/healthcheck",
+										Timeout:  10,
+										Type:     HTTPProbeType,
+										Interval: 30,
+									},
+									ReadinessCheck: ProbeSpec{
+										Endpoint: "/",
+										Interval: 30,
+										Timeout:  1,
+										Type:     ProcessProbeType,
+									},
+									Instances:    3,
+									Memory:       "500M",
+									LogRateLimit: "16K",
+								},
+							},
+							{
+								Type:    Worker,
+								Timeout: 15,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Command:   "start-worker.sh",
+									DiskQuota: "1G",
+									Instances: 2,
+									Memory:    "256M",
+									HealthCheck: ProbeSpec{
+										Type:     ProcessProbeType,
+										Endpoint: "/",
+										Interval: 30,
+										Timeout:  1,
+									},
+									ReadinessCheck: ProbeSpec{
+										Endpoint: "/",
+										Timeout:  1,
+										Interval: 30,
+										Type:     ProcessProbeType,
+									},
+									LogRateLimit: "16K",
+								},
+							},
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "multiple-processes", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+				It("validates the discovery data of an app with env, services, processes, routes and sidecars ", func() {
+					expected := Application{
+						Metadata: Metadata{
+							Name: "complete",
+							Annotations: map[string]*string{
+								"contact": ptrTo("bob@example.com jane@example.com"),
+							},
+							Labels: map[string]*string{
+								"sensitive": ptrTo("true"),
+							},
+						},
+						BuildPacks: []string{
+							"ruby_buildpack",
+							"java_buildpack",
+						},
+						Env: map[string]string{
+							"VAR1": "value1",
+							"VAR2": "value2",
+						},
+						Routes: RouteSpec{
+							Routes: Routes{
+								{Route: "route.example.com"},
+								{Route: "another-route.example.com",
+									Protocol: HTTP2RouteProtocol,
+									Options: RouteOptions{
+										LoadBalancing: LeastConnectionLoadBalancingType,
+									},
+								},
+							},
+						},
+						Services: Services{
+							{
+								Name: "my-service1",
+							},
+							{
+								Name: "my-service2",
+							},
+							{
+								Name: "my-service-with-arbitrary-params",
+								Parameters: map[string]interface{}{
+									"key1": "value1",
+									"key2": "value2",
+								},
+								BindingName: "my-service3",
+							},
+						},
+						Stack: "cflinuxfs3",
+						ProcessSpecTemplate: &ProcessSpecTemplate{
+							Instances: 1,
+						},
+						Timeout: 120,
+						Processes: Processes{
+							{
+								Type:    Web,
+								Timeout: 10,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Command:   "start-web.sh",
+									DiskQuota: "512M",
+									HealthCheck: ProbeSpec{
+										Endpoint: "/healthcheck",
+										Timeout:  10,
+										Type:     HTTPProbeType,
+										Interval: 30,
+									},
+									ReadinessCheck: ProbeSpec{
+										Endpoint: "/",
+										Interval: 30,
+										Timeout:  1,
+										Type:     ProcessProbeType,
+									},
+									Instances:    3,
+									Memory:       "500M",
+									LogRateLimit: "16K",
+								},
+							},
+							{
+								Type:    Worker,
+								Timeout: 15,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Command:   "start-worker.sh",
+									DiskQuota: "1G",
+									Instances: 2,
+									Memory:    "256M",
+									HealthCheck: ProbeSpec{
+										Type:     ProcessProbeType,
+										Endpoint: "/",
+										Interval: 30,
+										Timeout:  1,
+									},
+									ReadinessCheck: ProbeSpec{
+										Endpoint: "/",
+										Timeout:  1,
+										Interval: 30,
+										Type:     ProcessProbeType,
+									},
+									LogRateLimit: "16K",
+								},
+							},
+						},
+						Sidecars: Sidecars{
+							{
+								Name:         "authenticator",
+								ProcessTypes: []ProcessType{Web, Worker},
+								Command:      "bundle exec run-authenticator",
+								Memory:       800, // Memory is stored as an int representing MB
+							},
+							{
+								Name:         "upcaser",
+								ProcessTypes: []ProcessType{Worker},
+								Command:      "./tr-server",
+								Memory:       900, // Memory is stored as an int representing MB
+							},
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "complete-manifest", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
 			})
 		})
 		Context("when manifest path is a directory", func() {
@@ -1087,17 +1461,6 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 
 })
 
-func getModuleRoot() string {
-	out, err := exec.Command("go", "env", "GOMOD").Output()
-	if err != nil {
-		log.Fatalf("Failed to get GOMOD via 'go env': %v", err)
-	}
-	gomodPath := strings.TrimSpace(string(out))
-	if gomodPath == "" {
-		log.Fatal("GOMOD is empty")
-	}
-	return filepath.Dir(gomodPath)
-}
 func MapToStruct(m map[string]any, obj *Application) error {
 	b, err := json.Marshal(m)
 	if err != nil {

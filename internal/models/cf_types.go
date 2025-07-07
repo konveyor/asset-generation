@@ -50,6 +50,7 @@ type AppManifest struct {
 	Stack              string                `yaml:"stack,omitempty"`
 	Metadata           *AppMetadata          `yaml:"metadata,omitempty"`
 	AppManifestProcess `yaml:",inline"`
+	Path               string `yaml:"path,omitempty"`
 }
 
 type AppManifestProcesses []AppManifestProcess
@@ -147,7 +148,7 @@ type AppManifestSideCar struct {
 	Name         string           `yaml:"name"`
 	ProcessTypes []AppProcessType `yaml:"process_types,omitempty"`
 	Command      string           `yaml:"command,omitempty"`
-	Memory       int              `yaml:"memory,omitempty"`
+	Memory       string           `yaml:"memory,omitempty"`
 }
 
 func NewCloudFoundryManifest(space string, applications ...*AppManifest) *CloudFoundryManifest {

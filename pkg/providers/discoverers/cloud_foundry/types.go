@@ -31,7 +31,9 @@ type Application struct {
 	// Docker captures the Docker specification in the CF application manifest.
 	Docker Docker `yaml:"docker,omitempty" json:"docker,omitempty" validate:"omitempty"`
 	// ProcessSpec embeds the process specification details, which are inlined and validated if present.
-	ProcessSpecTemplate `yaml:",inline" json:",inline" validate:"omitempty"`
+	*ProcessSpecTemplate `yaml:",inline" json:",inline" validate:"omitempty"`
+	// Path informs Cloud Foundry the locatino of the directory in which it can find your app.
+	Path string `yaml:"path,omitempty" json:"path,omitempty" validate:"omitempty"`
 }
 
 type Services []ServiceSpec
@@ -51,12 +53,15 @@ type SidecarSpec struct {
 	// ProcessTypes captures the different process types defined for the sidecar.
 	// Compared to a Process, which has only one type, sidecar processes can
 	// accumulate more than one type.
-	ProcessTypes []ProcessType `yaml:"processType" json:"processType" validate:"required,oneof=worker web"`
+	ProcessTypes []ProcessType `yaml:"processType" json:"processType" validate:"required"`
 	// Command captures the command to run the sidecar
 	Command string `yaml:"command" json:"command" validate:"required"`
-	// Memory represents the amount of memory to allocate to the sidecar.
+	// Memory represents the amount of memory in MB to allocate to the sidecar.
+	// Reference: https://v3-apidocs.cloudfoundry.org/version/3.192.0/index.html#the-sidecar-object
 	// It's an optional field.
-	Memory string `yaml:"memory,omitempty" json:"memory,omitempty"`
+	// In the CF documentation it is referenced as an int when retrieving from a running application (live connection)
+	// but it is defined as a string (e.g: '800MB') in a manifest file.
+	Memory int `yaml:"memory,omitempty" json:"memory,omitempty"`
 }
 
 type ServiceSpec struct {
@@ -88,7 +93,9 @@ type Metadata struct {
 type ProcessSpec struct {
 	// Type captures the `type` field in the Process specification.
 	// Accepted values are `web` or `worker`
-	Type                ProcessType `yaml:"type" json:"type" validate:"required,oneof=web worker"`
+	Type ProcessType `yaml:"type" json:"type" validate:"required,oneof=web worker"`
+	// Timeout represents the time in seconds at which the health-check will report failure.
+	Timeout             int `yaml:"timeout,omitempty" json:"timeout,omitempty" validate:"omitempty"`
 	ProcessSpecTemplate `yaml:",inline" json:",inline" validate:"omitempty"`
 }
 
@@ -165,14 +172,15 @@ type Route struct {
 	Route string `yaml:"route" json:"route" validate:"required"`
 	// Protocol captures the protocol type: http, http2 or tcp. Note that the CF `protocol` field is only available
 	// for CF deployments that use HTTP/2 routing.
-	Protocol RouteProtocol `yaml:"protocol,omitempty" json:"protocol,omitempty" validate:"oneof=http1 http2 tcp"`
+	Protocol RouteProtocol `yaml:"protocol,omitempty" json:"protocol,omitempty" validate:"omitempty,oneof=http1 http2 tcp"`
 	// Options captures the options for the Route. Only load balancing is supported at the moment.
 	Options RouteOptions `yaml:"options,omitempty" json:"options,omitempty" validate:"omitempty"`
 }
 
 type RouteOptions struct {
-	// LoadBalancing captures the settings for load balancing. Only `round-robin` or `least-connections` are supported
-	LoadBalancing LoadBalancingType `yaml:"loadBalancing,omitempty" json:"loadBalancing,omitempty" validate:"oneof=round-robin least-connections"`
+	// LoadBalancing captures the settings for load balancing. Only `round-robin` or `least-connection` are supported
+	// https://v3-apidocs.cloudfoundry.org/version/3.192.0/index.html#the-route-options-object
+	LoadBalancing LoadBalancingType `yaml:"loadBalancing,omitempty" json:"loadBalancing,omitempty" validate:"omitempty,oneof=round-robin least-connection"`
 }
 
 type LoadBalancingType string
