@@ -49,8 +49,9 @@ type AppManifest struct {
 	Processes          *AppManifestProcesses `yaml:"processes,omitempty"`
 	Stack              string                `yaml:"stack,omitempty"`
 	Metadata           *AppMetadata          `yaml:"metadata,omitempty"`
+	Path               string                `yaml:"path,omitempty"`
+	Features           map[string]bool       `yaml:"features,omitempty"`
 	AppManifestProcess `yaml:",inline"`
-	Path               string `yaml:"path,omitempty"`
 }
 
 type AppManifestProcesses []AppManifestProcess

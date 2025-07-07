@@ -309,6 +309,7 @@ var parseCFApp = func(spaceName string, cfApp cfTypes.AppManifest) (Application,
 		Docker:              docker,
 		Sidecars:            sidecars,
 		Processes:           processes,
+		Features:            cfApp.Features,
 		Path:                cfApp.Path,
 		ProcessSpecTemplate: &ProcessSpecTemplate{Instances: defaultInstanceNumber},
 	}

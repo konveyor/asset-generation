@@ -34,6 +34,8 @@ type Application struct {
 	*ProcessSpecTemplate `yaml:",inline" json:",inline" validate:"omitempty"`
 	// Path informs Cloud Foundry the locatino of the directory in which it can find your app.
 	Path string `yaml:"path,omitempty" json:"path,omitempty" validate:"omitempty"`
+	// Feature represents a map of key/value pairs of the app feature names to boolean values indicating whether the feature is enabled or not
+	Features map[string]bool `yaml:"features,omitempty" json:"features,omitempty" validate:"omitempty"`
 }
 
 type Services []ServiceSpec

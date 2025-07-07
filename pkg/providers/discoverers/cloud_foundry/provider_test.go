@@ -1087,6 +1087,28 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(app).To(BeEquivalentTo(&expected))
 				})
+				It("validates the discovery data of an app with features", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "app-features"},
+						ProcessSpecTemplate: &ProcessSpecTemplate{
+							Instances: 1,
+						},
+						Routes: RouteSpec{
+							NoRoute: true,
+						},
+						Timeout: 60,
+						Features: map[string]bool{
+							"ssh":                      true,
+							"revisions":                true,
+							"service-binding-k8s":      false,
+							"file-based-vcap-services": false,
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "app-features", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
 				It("validates the discovery data of an app with a sidecar", func() {
 					expected := Application{
 						Metadata: Metadata{Name: "sidecar-dependent-app"},
