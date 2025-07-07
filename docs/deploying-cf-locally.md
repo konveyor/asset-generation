@@ -176,9 +176,9 @@ Stemcell version: 1.423
 SHA1: 4ad3b7265af38de84d83887bf334193259a59981
 ```
 
-Use the version shown in the output to update your cf-deployment.yaml file:
+Use the version shown in the output to update your cf-deployment.yml file:
 ```bash
-yq e '.stemcells[0].alias = "default" | .stemcells[0].os = "ubuntu-jammy" | .stemcells[0].version = env(STEMCELL_VERSION)' -i cf-deployment.yaml
+yq e '.stemcells[0].alias = "default" | .stemcells[0].os = "ubuntu-jammy" | .stemcells[0].version = env(STEMCELL_VERSION)' -i cf-deployment.yml
 ```
 
 ## Upload cloud config and stemcell
@@ -255,7 +255,7 @@ Not logged in. Use 'cf login' or 'cf login --sso' to log in.
 1. **Initialize CredHub CLI**
 
     ```bash
-    credhub api $CREDHUB_SERVER --ca-cert=$CREDHUB_CA_CERT
+    credhub api $CREDHUB_SERVER --ca-cert=$CREDHUB_CA_CERT --skip-tls-validation
     ```
 
     Expected output:
@@ -338,8 +338,36 @@ Create an organization and a space, target them, and push an example Docker-base
 
 ```bash
 cf create-org org && cf create-space -o org space && cf target -o org
+```
+
+Check current feature flags:
+`cf feature-flags`
+
+Expected output
+
+```bash
+Getting feature flags as admin...
+
+name                                          state
+app_bits_upload                               enabled
+app_scaling                                   enabled
+diego_cnb                                     disabled
+diego_docker                                  disabled
+```
+
+Look for the `diego_docker` flag — it will likely show `disabled`.
+
+Enable Docker support:
+```bash
+cf enable-feature-flag diego_docker
+```
+
+Push the example application:
+
+```
 cf push nginx --docker-image nginxinc/nginx-unprivileged:1.23.2
 ```
+
 Once deployed, test the app using `curl`:
 
 ```bash
@@ -373,6 +401,48 @@ Commercial support is available at
 </body>
 </html>
 ```
+# Connect to a remote Cloud Foundry instance
+1. Update `/etc/hosts` on Your Local Machine
+
+    Add the following lines to your `/etc/hosts` file:
+
+    ```bash
+    127.0.0.1 api.bosh-lite.com
+    127.0.0.1 login.bosh-lite.com
+    127.0.0.1 uaa.bosh-lite.com
+    ```
+
+1. Set up ssh tunnel
+   * Share you _**public**_ ssh key with the remote system admin.
+   * Once access is granted, verify your SSH connection:
+      ```bash
+      ssh <user_remote>@<remote_server_address> -i <path_to/private/sshkey>
+      ```
+      > Note: Use the path to your private SSH key, not the public key.
+
+   * Set up the SSH tunnel on your local machine:
+      ```bash
+      sudo ssh -v -N \
+        -i <path_to/private/sshkey> \
+        -L 443:10.244.0.131:443 \
+        -L 8443:10.244.0.34:443 \
+        -L 8444:10.244.0.131:443 \
+        <user_remote>@<remote_server_address>
+      ```
+    > Extra info:<br/>
+    > The `-N` flag tells SSH not to execute a remote command.<br/>
+    > The `-v` flag enables verbose output for debugging.
+
+1. Verify Access to the Remote Cloud Foundry Instance
+  Open a new terminal on your local machine and check access to the remote CF instance
+
+    ```bash
+    ➜ cf apps
+    Getting apps in org org / space space as admin...
+
+    name    requested state   processes   routes
+    nginx   started           web:1/1     nginx.bosh-lite.com
+    ```
 
 # Troubleshooting
 ## ❌ Can't create VMs?
@@ -393,40 +463,3 @@ Commercial support is available at
 
 Make sure you can reach the `CredHub` VM via SSH:
 `bosh -e vbox -d cf ssh credhub`
-
-## ❌ Can't connect to the auth server via `credhub`?
-If you encounter the following error:
-```bash
-credhub api $CREDHUB_SERVER --ca-cert=$CREDHUB_CA_CERT
-Error connecting to the auth server: "Get \"https://192.168.56.6:8443/info\": tls: failed to verify certificate: x509: certificate signed by unknown authority". Please validate your target and retry your request.
-```
-add `--skip-tls-validation` flag and ignore the warning
-
-```bash
-credhub api $CREDHUB_SERVER --ca-cert=$CREDHUB_CA_CERT --skip-tls-validation
-Warning: The targeted TLS certificate has not been verified for this connection.
-Warning: The --skip-tls-validation flag is deprecated. Please use --ca-cert instead.
-Setting the target url: https://192.168.56.6:8844
-```
-
-## ❌ Can't Push Docker Images?
-If you're seeing an error like this when pushing a Docker image:
-
-```bash
-cf push nginx --docker-image nginxinc/nginx-unprivileged:1.23.2
-Pushing app nginx to org org / space space as admin...
-For application 'nginx': Feature Disabled: diego_docker
-FAILED
-```
-
-This means Docker support is not enabled in your Cloud Foundry deployment. By default, CF disables the [diego_docker feature flag](https://docs.cloudfoundry.org/adminguide/docker.html), which is required to push and run Docker images on Diego.
-Check the current feature flags:
-`cf feature-flags`
-
-Look for the `diego_docker` flag — it will likely show `disabled`.
-
-Enable Docker support:
-```bash
-cf enable-feature-flag diego_docker
-```
-After enabling the flag, retry your `cf push` command.
