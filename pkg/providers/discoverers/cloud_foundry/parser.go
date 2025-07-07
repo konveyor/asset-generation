@@ -78,8 +78,8 @@ func parseProcessTemplate(cfApp cfTypes.AppManifest) (*ProcessSpecTemplate, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse template spec: %w", err)
 	}
-	if cfApp.Instances == nil {
-		template = ProcessSpecTemplate{Instances: defaultInstanceNumber}
+	if cfApp.Instances == nil || *cfApp.Instances == uint(0) {
+		template.Instances = defaultInstanceNumber
 	}
 	if cfApp.LogRateLimitPerSecond != "" {
 		template.LogRateLimit = cfApp.LogRateLimitPerSecond

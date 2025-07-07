@@ -352,7 +352,7 @@ func (c *CloudFoundryProvider) discoverFromManifestFile(filePath string) (*Appli
 		}
 		return &app, nil
 	}
-	c.logger.Printf("Failed to parse Application manifest. Will attempt again using the Cloud Foundry Application manifest: %s", err)
+	c.logger.Info("Failed to parse Application manifest. Will attempt again using the Cloud Foundry Application manifest", "error", err)
 	var cfManifest cfTypes.CloudFoundryManifest
 	if err := yaml.Unmarshal(data, &cfManifest); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal YAML: %v", err)
@@ -360,7 +360,7 @@ func (c *CloudFoundryProvider) discoverFromManifestFile(filePath string) (*Appli
 	if len(cfManifest.Applications) == 0 {
 		return nil, fmt.Errorf("no applications found in %s", filePath)
 	}
-	c.logger.Printf("Found %d applications in manifest in %s", len(cfManifest.Applications), filePath)
+	c.logger.Info("Found applications in manifest", "count", len(cfManifest.Applications), "file", filePath)
 	app, err := parseCFApp(cfManifest.Space, *cfManifest.Applications[0])
 	if err != nil {
 		return nil, err
