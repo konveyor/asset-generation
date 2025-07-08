@@ -107,7 +107,7 @@ type ProcessSpecTemplate struct {
 	// DiskQuota represents the amount of persistent disk requested by the process.
 	DiskQuota string `yaml:"disk,omitempty" json:"disk,omitempty" validate:"omitempty"`
 	// Memory represents the amount of memory requested by the process.
-	Memory string `yaml:"memory" json:"memory" validate:"omitempty"`
+	Memory string `yaml:"memory,omitempty" json:"memory,omitempty" validate:"omitempty"`
 	// HealthCheck captures the health check information
 	HealthCheck ProbeSpec `yaml:"healthCheck,omitempty" json:"healthCheck,omitempty" validate:"omitempty"`
 	// ReadinessCheck captures the readiness check information.
