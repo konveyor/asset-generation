@@ -68,7 +68,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 					}
 
-					p, err := New(cfConfig, &logger)
+					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					apps, err := p.ListApps()
 					Expect(err).To(HaveOccurred())
@@ -115,7 +115,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						SpaceNames:         []string{space.Name},
 					}
 
-					p, err := New(cfConfig, &logger)
+					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					apps, err := p.ListApps()
 					Expect(err).NotTo(HaveOccurred())
@@ -157,7 +157,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						SpaceNames:         []string{emptySpace.Name},
 					}
 
-					p, err := New(cfConfig, &logger)
+					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					apps, err := p.listAppsFromCloudFoundry()
 					Expect(err).NotTo(HaveOccurred())
@@ -201,7 +201,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, &logger)
+					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -233,7 +233,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, &logger)
+					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -264,7 +264,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, &logger)
+					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -296,7 +296,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, &logger)
+					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -327,7 +327,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, &logger)
+					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -360,7 +360,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, &logger)
+					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -395,7 +395,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, &logger)
+					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -437,7 +437,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, &logger)
+					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -492,7 +492,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, &logger)
+					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -678,7 +678,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{m.space().Name},
 					}
-					p, err := New(cfConfig, &logger)
+					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("discovering the application")
 					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
@@ -747,7 +747,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						CloudFoundryConfig: cfg,
 					}
 
-					p, err := New(cfConfig, &logger)
+					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					apps, err := p.Discover(AppReference{SpaceName: space.Name, AppName: app1.Name})
 					Expect(err).NotTo(HaveOccurred())
@@ -787,7 +787,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						SpaceNames:         []string{emptySpace.Name},
 					}
 
-					p, err := New(cfConfig, &logger)
+					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					apps, err := p.listAppsFromCloudFoundry()
 					Expect(err).NotTo(HaveOccurred())
@@ -921,7 +921,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 			Context("when it's a single file", func() {
 				BeforeEach(func() {
 					manifestPath = filepath.Join("test_data", "test-app", "manifest.yml")
-					provider, err = New(&Config{ManifestPath: manifestPath}, &nopLogger)
+					provider, err = New(&Config{ManifestPath: manifestPath}, &nopLogger, true)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -1372,7 +1372,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 			)
 			BeforeEach(func() {
 				manifestPath = filepath.Join("test_data", "multiple_manifests")
-				provider, err = New(&Config{ManifestPath: manifestPath}, &nopLogger)
+				provider, err = New(&Config{ManifestPath: manifestPath}, &nopLogger, true)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -1409,7 +1409,19 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 		})
 	})
 
-	DescribeTable("extracts the sensitive information from an app", func(app Application) {
+	It("validates no sensitive information is concealed when the provider is configured with the coceal flag to false", func() {
+		app := Application{
+			Docker: Docker{Username: "username"},
+			Services: Services{
+				{
+					Name:        "elephantsql",
+					BindingName: "elephantsql-binding-c6c60",
+					Parameters: map[string]interface{}{
+						"credentials": `"uri": "postgres://exampleuser:examplepass@babar.elephantsql.com:5432/exampleuser"`, // notsecret
+					},
+				},
+			}}
+		nopLogger := logr.New(logr.Discard().GetSink())
 		By("Copying the application manifest to be able to check against the resulting changes")
 		// copy the app manifest
 		b, err := yaml.Marshal(app)
@@ -1417,8 +1429,27 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 		appCopy := Application{}
 		err = yaml.Unmarshal(b, &appCopy)
 		Expect(err).NotTo(HaveOccurred())
+		provider, err := New(&Config{}, &nopLogger, false)
+		Expect(err).NotTo(HaveOccurred())
+		By("performing the extraction and modification of the application")
+		s := provider.extractSensitiveInformation(&app)
+		By("Validating that the app manifest has not been modified")
+		Expect(s).To(BeEmpty())
+		Expect(appCopy).To(BeEquivalentTo(app))
+	})
+	DescribeTable("extracts the sensitive information from an app when concealing is expected", func(app Application) {
+		By("Copying the application manifest to be able to check against the resulting changes")
+		nopLogger := logr.New(logr.Discard().GetSink())
+		// copy the app manifest
+		b, err := yaml.Marshal(app)
+		Expect(err).NotTo(HaveOccurred())
+		appCopy := Application{}
+		err = yaml.Unmarshal(b, &appCopy)
+		Expect(err).NotTo(HaveOccurred())
+		provider, err := New(&Config{}, &nopLogger, true)
+		Expect(err).NotTo(HaveOccurred())
 		By("performing the extraction and modification of the application to use UUID for sensitive information")
-		s := extractSensitiveInformation(&app)
+		s := provider.extractSensitiveInformation(&app)
 		c := 0
 		if app.Docker.Username != "" {
 			c++

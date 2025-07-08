@@ -38,6 +38,10 @@ type CloudFoundryProvider struct {
 	cfg    *Config
 	logger *logr.Logger
 	cli    *client.Client
+	// conceal extracts the sensitive information found in the CF manifest into a separate file and uses a
+	// unique ID to link each of the items found between the discover manifest and this new file containing the
+	// sensitive information
+	conceal bool
 }
 
 // ClientProvider defines the interface for GetClient, only for testing.
@@ -45,11 +49,12 @@ type ClientProvider interface {
 	GetClient() (*client.Client, error)
 }
 
-func New(cfg *Config, logger *logr.Logger) (*CloudFoundryProvider, error) {
+func New(cfg *Config, logger *logr.Logger, conceal bool) (*CloudFoundryProvider, error) {
 	var err error
 	cp := CloudFoundryProvider{
-		cfg:    cfg,
-		logger: logger,
+		cfg:     cfg,
+		logger:  logger,
+		conceal: conceal,
 	}
 	if cfg.CloudFoundryConfig != nil {
 		cp.cli, err = cp.getClient()
@@ -208,9 +213,14 @@ func (c *CloudFoundryProvider) listAppsFromCloudFoundry() (map[string][]any, err
 // including the environment values and the docker username if found,
 // and stores it in a map[string]any structure to be appended to the discover structure returned to the caller using
 // a UUID as reference.
-func extractSensitiveInformation(app *Application) map[string]any {
-	uuid.EnableRandPool() // Increases UUID generation speed by pregenerating a pool with this flag enabled
+// If the conceal flag is set to false no changes are made to the application manifest and the
+// function returns an empty map
+func (c CloudFoundryProvider) extractSensitiveInformation(app *Application) map[string]any {
 	m := map[string]any{}
+	if !c.conceal {
+		return m
+	}
+	uuid.EnableRandPool() // Increases UUID generation speed by pregenerating a pool with this flag enabled
 	if app.Docker.Username != "" {
 		id := uuid.NewString()
 		m[id] = app.Docker.Username
@@ -288,7 +298,7 @@ func (c *CloudFoundryProvider) discoverFromManifest(appName string) (*pTypes.Dis
 	}
 	// Extract sensitive information and use UUID as references to the map[string]any structure that contains
 	// the original values
-	s := extractSensitiveInformation(d)
+	s := c.extractSensitiveInformation(d)
 	discoverResult.Secret = s
 	discoverResult.Content, err = StructToMap(d)
 	if err != nil {
@@ -316,7 +326,7 @@ func (c *CloudFoundryProvider) discoverFromLive(spaceName string, appName string
 	}
 	// Extract sensitive information and use UUID as references to the map[string]any structure that contains
 	// the original values
-	s := extractSensitiveInformation(d)
+	s := c.extractSensitiveInformation(d)
 	discoverResult.Secret = s
 	discoverResult.Content, err = StructToMap(d)
 	if err != nil {
