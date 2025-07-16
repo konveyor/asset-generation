@@ -129,10 +129,11 @@ transformation.
 
 #### Input Manifest Support
 
-The library is able to process both:
+The library is able to process manifests in multiple ways:
 
-1. **Single Application Manifests** - Direct application definition of an individual app deployments
+1. **Single Application Manifests** - Direct application definition of an individual app deployment
 2. **Cloud Foundry Manifests** - Full CF manifests containing multiple applications under an `applications` array
+3. **Multiple Manifest Files in Folders** - When provided with a directory path, the library searches through all manifest files (both single application manifests and Cloud Foundry manifests) to find the application by name
 
 The discovery engine intelligently detects the manifest format and uses the appropriate parsing strategy:
 
@@ -146,22 +147,44 @@ The discovery engine intelligently detects the manifest format and uses the appr
     DATABASE_URL: postgres://...
   ```
 - **Cloud Foundry Format**: When single application parsing fails, automatically
-  falls back to parsing as a Cloud Foundry manifest and extracts the application
-  with the matching name from the applications array
+  falls back to parsing as a Cloud Foundry manifest and extracts the **first application**
+  from the applications array (**current implementation limitation**)
   ```yaml
   version: 1
   applications:
-    - name: my-app-1
+    - name: my-app-1      # This application will be selected
       memory: 512M
       instances: 2
       buildpacks: [java_buildpack]
       env:
         DATABASE_URL: postgres://...
-    - name: my-app-2
+    - name: my-app-2      # This application will be ignored
       memory: 256M
       instances: 1
       buildpacks: [java_buildpack]
   ```
+- **Multiple Manifest Files**: When provided with a directory path, **you must
+  specify an application name**. The library iterates through all manifest files
+  (`.yml` and `.yaml`) in the directory, parsing each one to find the
+  application with the specified name. Each file can be either a single
+  application manifest or a Cloud Foundry manifest. Once the correct file is
+  found (by matching the app name), it processes that specific manifest file
+  using the same parsing logic as above (Application manifest first, then
+  Cloud Foundry manifest taking the first application).
+  ```
+  manifests/
+    ├── app-1-manifest.yml     # Single app: name: app-1
+    ├── app-2-manifest.yml     # Single app: name: app-2  
+    ├── cf-apps-manifest.yml   # CF format with applications: [app-3, app-4]
+    └── other-file.txt         # Ignored (not a manifest)
+  
+  # To discover app-2, you must specify "app-2" as the application name
+  # The library will find and process app-2-manifest.yml
+  ```
+
+**Important Notes**:
+- **Application name is REQUIRED only for Directory-based discovery** (when searching through multiple manifest files in a folder)
+- **Current implementation limitation**: When processing Cloud Foundry format manifests with multiple applications, only the **first application** in the applications array will be processed.
 
 ### Discover manifest examples
 
