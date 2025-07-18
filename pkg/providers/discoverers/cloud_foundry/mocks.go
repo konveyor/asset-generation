@@ -211,10 +211,15 @@ func (m *mockApplication) space() *testutil.JSONResource {
 func (m *mockApplication) route(route models.AppManifestRoute) resource.Route {
 
 	testRoute := m.g.Route()
+	var options *resource.RouteOptions
+	if route.Options != nil {
+		options = &resource.RouteOptions{LoadBalancing: route.Options.LoadBalancing}
+	}
 	rr := resource.Route{
 		URL:      string(route.Route),
 		Protocol: "http1", // we don't capture it, so static to http1
 		Resource: resource.Resource{GUID: testRoute.GUID},
+		Options:  options,
 	}
 	testRoute.JSON = toJSON(rr)
 	// Add the destination

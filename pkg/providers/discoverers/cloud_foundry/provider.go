@@ -451,10 +451,14 @@ func (c *CloudFoundryProvider) getRoutes(appGUID string) (*cfTypes.AppManifestRo
 		if len(destinations.Destinations) > 0 {
 			protocol = *destinations.Destinations[0].Protocol
 		}
+		var options *cfTypes.AppRouteOptions
+		if r.Options != nil {
+			options = &cfTypes.AppRouteOptions{LoadBalancing: r.Options.LoadBalancing}
+		}
 		appRoutes = append(appRoutes, cfTypes.AppManifestRoute{
 			Route:    r.URL,
 			Protocol: cfTypes.AppRouteProtocol(protocol),
-			// TODO: Options: loadbalancing?
+			Options:  options,
 		})
 	}
 	return &appRoutes, nil

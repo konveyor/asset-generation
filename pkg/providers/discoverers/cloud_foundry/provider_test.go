@@ -379,6 +379,10 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Entry("discovers an app with routes defined routes", &cfTypes.AppManifestRoutes{{Route: serverURL, Protocol: cfTypes.HTTP2},
 						{Route: "https://foo.bar", Protocol: cfTypes.HTTP2},
 					}),
+					Entry("discovers an app with routes defined routes and round robin load balancing", &cfTypes.AppManifestRoutes{
+						{Route: serverURL, Protocol: cfTypes.HTTP2},
+						{Route: "https://foo.bar", Protocol: cfTypes.HTTP2, Options: &cfTypes.AppRouteOptions{LoadBalancing: string(RoundRobinLoadBalancingType)}},
+					}),
 				)
 
 				DescribeTable("the services field", func(services *cfTypes.AppManifestServices) {
