@@ -3,7 +3,7 @@ module github.com/konveyor/asset-generation
 go 1.23.9
 
 require (
-	github.com/cloudfoundry/go-cfclient/v3 v3.0.0-alpha.12
+	github.com/cloudfoundry/go-cfclient/v3 v3.0.0-alpha.12.0.20250712142925-13a7dc5466ad
 	github.com/go-logr/logr v1.4.3
 	github.com/go-logr/stdr v1.2.2
 	github.com/go-playground/validator/v10 v10.26.0
@@ -67,7 +67,7 @@ require (
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
 	golang.org/x/crypto v0.38.0 // indirect
 	golang.org/x/net v0.40.0 // indirect
-	golang.org/x/oauth2 v0.28.0 // indirect
+	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/term v0.32.0 // indirect
 	golang.org/x/text v0.25.0 // indirect
