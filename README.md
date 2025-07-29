@@ -302,24 +302,22 @@ the Discovery manifest output.
   docker:
     image: myregistry/myapp:latest
     username: docker-registry-user
-  type: web
   ```
   </td>
   <td>
-<strong>Content</strong>
+  <strong>Content</strong>
 
   ```yaml
   name: app-with-inline-process-no-type
   timeout: 10
   docker:
-      image: myregistry/myapp:latest
-      username: $(73dc8ee8-746f-4f91-a520-1f6e80ce3a3f)
+    image: myregistry/myapp:latest
+    username: $(73dc8ee8-746f-4f91-a520-1f6e80ce3a3f)
   disk: 512M
   memory: 500M
   instances: 1
   ```
   <strong>Secrets</strong>
-
 
   ```yaml
   73dc8ee8-746f-4f91-a520-1f6e80ce3a3f: docker-registry-user
@@ -335,14 +333,13 @@ the Discovery manifest output.
   memory: 500M
   timeout: 10
   docker:
-  image: myregistry/myapp:latest
-  username: docker-registry-user
+    image: myregistry/myapp:latest
+    username: docker-registry-user
   type: web
   ```
   </td>
   <td>
   <strong>Content</strong>
-
 
   ```yaml
   name: app-with-inline-process-only-type
@@ -373,7 +370,7 @@ the Discovery manifest output.
   <strong>Secrets</strong>
 
   ```yaml
- 7d8ff0a4-e93c-4e1f-9fa3-aa5536884930: docker-registry-user
+  7d8ff0a4-e93c-4e1f-9fa3-aa5536884930: docker-registry-user
   ```
   </td>
 </tr>
