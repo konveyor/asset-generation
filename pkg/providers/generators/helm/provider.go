@@ -36,7 +36,10 @@ func (p *helmProvider) Generate() (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	chart.Values = p.cfg.Values
+	if chart.Values == nil {
+		chart.Values = make(map[string]any)
+	}
+	maps.Copy(chart.Values, p.cfg.Values)
 	rendered := make(map[string]string)
 	if !p.cfg.SkipRenderK8SManifests {
 		rendered, err = generateK8sTemplates(*chart)
