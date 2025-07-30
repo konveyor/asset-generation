@@ -22,7 +22,10 @@ var _ = Describe("Helm command", func() {
 
 		DescribeTable("when generating the manifests", func(cfg helm.Config, additionalValues map[string]any, expectedManifests map[string]string) {
 			values := loadValues(testDiscoverPath, additionalValues)
-			cfg.Values = values
+			if cfg.Values == nil {
+				cfg.Values = make(map[string]any)
+			}
+			maps.Copy(cfg.Values, values)
 			generator := helm.New(cfg)
 			generatedManifests, err := generator.Generate()
 			Expect(err).NotTo(HaveOccurred())
@@ -45,17 +48,17 @@ kind: ConfigMap
 metadata:
   name: sample
 `}),
-			Entry("generates the manifests for a K8s chart while overriding the variable in the discover.yaml",
+			Entry("generates the manifests for a K8s chart while overriding the variable in the discover.yaml and values.yaml",
 				helm.Config{
-					ChartPath:                 path.Join(chartDir, "k8s_only"),
+					ChartPath:                 path.Join(chartDir, "with_values_in_chart"),
 					SkipRenderNonK8SManifests: true,
-				}, map[string]any{"foo": map[string]any{"bar": "bar.foo"}},
-				map[string]string{"k8s_only/templates/configmap.yaml": `apiVersion: v1
+				}, map[string]any{"foo": map[string]any{"bar": "bar.foo"}, "name": "replaced"},
+				map[string]string{"with_values_in_chart/templates/configmap.yaml": `apiVersion: v1
 data:
   chartName: bar.foo
 kind: ConfigMap
 metadata:
-  name: sample
+  name: replaced
 `}),
 			Entry("generates the manifests for a K8s chart while adding a new variable that is interpreted in the template",
 				helm.Config{
