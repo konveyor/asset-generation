@@ -3,49 +3,38 @@ Deploying Cloud Foundry with Bosh-Lite is a low-cost, lightweight approach tailo
 
 > 💡 Note: This environment is not production-grade.
 
-> ⚠️ Important: This setup only works on bare-metal Fedora 41.<br/>
-> Installing it on a VM or a virtualized host does not work and is not supported.
+> ⚠️ Important: This setup is known to work on Fedora 41 and 42.<br/>
+> Installing it on a VM works if Nested Virtualization is available.
 
 ## Install VirtualBox and prerequisites
  
-Ensure that VirtualBox and its extension pack are installed and configured
-properly.
+Ensure that VirtualBox is installed and configured properly.
 
-> 💡 **Note:** Always download and install the latest version of the VirtualBox Extension Pack that matches your installed VirtualBox version. You can find it on the [official VirtualBox downloads page](https://www.virtualbox.org/wiki/Downloads).
-
+Install Fedora 42
 ```bash
-sudo dnf install virtualbox
-# Replace with the latest version of the Extension Pack
-VBoxManage extpack install --replace Oracle_VirtualBox_Extension_Pack-7.1.8.vbox-extpack
+sudo dnf -y update
+sudo dnf -y install git ruby yq gcc make perl kernel-headers kernel-devel
+wget https://download.virtualbox.org/virtualbox/7.1.12/VirtualBox-7.1-7.1.12_169651_fedora40-1.x86_64.rpm
+sudo dnf -y install VirtualBox-7.1-7.1.12_169651_fedora40-1.x86_64.rpm
+sudo reboot
+sudo /sbin/vboxconfig
+sudo bash -c 'cat << EOF > /etc/modprobe.d/kvm-blacklist.conf
+blacklist kvm
+blacklist kvm_intel
+EOF'
 ```
-After installation, verify that the extension pack was installed correctly:
-
-```bash
-VBoxManage list extpacks
-```
-You should see output similar to the following:
-
-```bash
-Extension Packs: 1
-Pack no. 0:   Oracle VirtualBox Extension Pack
-Version:        7.1.8
-Revision:       168469
-Edition:        
-Description:    Oracle Cloud Infrastructure integration, Host Webcam, VirtualBox RDP, PXE ROM, Disk Encryption, NVMe, full VM encryption.
-VRDE Module:    VBoxVRDP
-Crypto Module:  VBoxPuelCrypto
-Usable:         true
-Why unusable:
-```
-
-Make sure `Usable: true` is present in the output — this indicates that the extension pack is functioning correctly.
-If `Why unusable:` contains any message, the extension pack installation may
-have issues (e.g., version mismatch or missing dependencies).
 
 Reboot your system after installation:
 
 ```bash
 sudo reboot
+```
+
+## Install BOSH
+```
+wget https://github.com/cloudfoundry/bosh-cli/releases/download/v7.9.8/bosh-cli-7.9.8-linux-amd64
+chmod +x ./bosh-cli-7.9.8-linux-amd64
+sudo mv ./bosh-cli-7.9.8-linux-amd64 /usr/local/bin/bosh
 ```
 
 ## Deploy the BOSH Director with bosh-lite 
@@ -151,6 +140,10 @@ User               admin
 Succeeded
 ```
 
+Enable BOSH DNS
+```
+bosh -e vbox update-runtime-config ~/workspace/bosh-deployment/runtime-configs/dns.yml --name dns
+```
 
 ## Clone the cf-deployment repository
 
