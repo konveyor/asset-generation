@@ -1517,7 +1517,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 			}),
 	)
 
-	FDescribe("getAppNameFromManifest", func() {
+	Describe("getAppNameFromManifest", func() {
 		var (
 			provider  *CloudFoundryProvider
 			nopLogger = logr.New(logr.Discard().GetSink())
