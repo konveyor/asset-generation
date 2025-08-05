@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 
 	"github.com/cloudfoundry/go-cfclient/v3/config"
@@ -1515,6 +1516,82 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				},
 			}),
 	)
+
+	FDescribe("getAppNameFromManifest", func() {
+		var (
+			provider  *CloudFoundryProvider
+			nopLogger = logr.New(logr.Discard().GetSink())
+		)
+
+		BeforeEach(func() {
+			provider = &CloudFoundryProvider{
+				logger: &nopLogger,
+			}
+		})
+
+		Context("when processing different manifest formats", func() {
+			It("correctly extracts app name from AppManifest format (name at root level)", func() {
+				manifestPath := filepath.Join("test_data", "test-app", "manifest.yml")
+				appName, err := provider.getAppNameFromManifest(manifestPath)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(appName).To(Equal("my-app"))
+			})
+
+			It("correctly extracts app name from CloudFoundryManifest format (applications array)", func() {
+				manifestPath := filepath.Join("test_data", "complete-manifest-multi-apps", "manifest.yml")
+				appName, err := provider.getAppNameFromManifest(manifestPath)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(appName).To(Equal("app1"))
+			})
+
+			It("returns empty string when file is a directory", func() {
+				dirPath := filepath.Join("test_data", "multiple_manifests")
+				appName, err := provider.getAppNameFromManifest(dirPath)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(appName).To(BeEmpty())
+			})
+
+			It("returns empty string when file is not a YAML file", func() {
+				textFilePath := filepath.Join("test_data", "multiple_manifests", "text-file.txt")
+				appName, err := provider.getAppNameFromManifest(textFilePath)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(appName).To(BeEmpty())
+			})
+
+			It("returns error when file does not exist", func() {
+				nonExistentPath := filepath.Join("test_data", "does-not-exist.yml")
+				appName, err := provider.getAppNameFromManifest(nonExistentPath)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to stat file"))
+				Expect(appName).To(BeEmpty())
+			})
+
+			It("returns error when YAML is completely invalid", func() {
+				invalidManifestPath := filepath.Join("test_data", "invalid_manifest", "manifest.yml")
+				appName, err := provider.getAppNameFromManifest(invalidManifestPath)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to unmarshal YAML"))
+				Expect(appName).To(BeEmpty())
+			})
+
+			It("returns empty string when CloudFoundryManifest has no applications", func() {
+				tempDir := GinkgoT().TempDir()
+				manifestPath := filepath.Join(tempDir, "no-apps-manifest.yml")
+				manifestContent := `---
+version: 1
+metadata:
+  name: test-manifest
+applications: []`
+				err := os.WriteFile(manifestPath, []byte(manifestContent), 0644)
+				Expect(err).NotTo(HaveOccurred())
+
+				appName, err := provider.getAppNameFromManifest(manifestPath)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("no applications found"))
+				Expect(appName).To(BeEmpty())
+			})
+		})
+	})
 
 })
 

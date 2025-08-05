@@ -178,15 +178,37 @@ func (c *CloudFoundryProvider) getAppNameFromManifest(filePath string) (string, 
 
 	var manifest cfTypes.AppManifest
 	if err := yaml.Unmarshal(data, &manifest); err != nil {
-		return "", fmt.Errorf("failed to unmarshal YAML from %q: %v", filePath, err)
+		c.logger.Info("Failed to parse as single application manifest, will try Cloud Foundry manifest format", "file_path", filePath, "error", err)
+	} else if manifest.Name != "" {
+		c.logger.Info("Successfully parsed single application manifest", "file_path", filePath, "app_name", manifest.Name)
+		return manifest.Name, nil
+	} else {
+		c.logger.Info("Single application manifest parsed but no app name found, trying Cloud Foundry manifest format", "file_path", filePath)
 	}
 
-	if manifest.Name == "" {
-		c.logger.Info("Warning: manifest file does not contain a name", "file_path", filePath)
+	c.logger.Info("Attempting to parse as Cloud Foundry manifest format", "file_path", filePath)
+	var cfManifest cfTypes.CloudFoundryManifest
+	if err := yaml.Unmarshal(data, &cfManifest); err != nil {
+		return "", fmt.Errorf("failed to unmarshal YAML: %v", err)
+	}
+	if len(cfManifest.Applications) == 0 {
+		return "", fmt.Errorf("no applications found in %s", filePath)
+	}
+
+	c.logger.Info("Successfully parsed Cloud Foundry manifest", "file_path", filePath, "application_count", len(cfManifest.Applications))
+
+	app, err := parseCFApp(cfManifest.Space, *cfManifest.Applications[0])
+	if err != nil {
+		return "", err
+	}
+
+	if app.Name == "" {
+		c.logger.Info("Cloud Foundry manifest parsed but application has no name", "file_path", filePath)
 		return "", nil
 	}
 
-	return manifest.Name, nil
+	c.logger.Info("Successfully extracted application name from Cloud Foundry manifest", "file_path", filePath, "app_name", app.Name)
+	return app.Name, nil
 }
 
 // listAppsFromCloudFoundry handles discovery of apps by querying the Cloud Foundry API.

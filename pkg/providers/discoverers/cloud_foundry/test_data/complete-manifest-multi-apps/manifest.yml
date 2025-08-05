@@ -1,0 +1,20 @@
+---
+applications:
+  - name: app1
+    buildpacks:
+      - ruby_buildpack
+      - java_buildpack
+    env:
+      VAR1: value1
+      VAR2: value2
+    routes:
+      - route: route.example.com
+  - name: app2
+    buildpacks:
+      - ruby_buildpack
+      - java_buildpack
+    env:
+      VAR1: value1
+      VAR2: value2
+    routes:
+      - route: route.example.com
