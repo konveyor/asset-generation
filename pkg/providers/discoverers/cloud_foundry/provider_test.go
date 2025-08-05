@@ -819,7 +819,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				BeforeEach(func() {
 					provider = &CloudFoundryProvider{
 						cfg: &Config{
-							ManifestPath: filepath.Join("./test_data", "multiple_manifests"),
+							ManifestPath: filepath.Join("./test_data", "multiple-manifests"),
 						},
 						logger: &nopLogger,
 					}
@@ -852,7 +852,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 
 					provider = &CloudFoundryProvider{
 						cfg: &Config{
-							ManifestPath: filepath.Join("./test_data", "invalid_manifest"),
+							ManifestPath: filepath.Join("./test_data", "invalid-manifest"),
 						},
 						logger: &logger,
 					}
@@ -872,7 +872,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 
 					provider = &CloudFoundryProvider{
 						cfg: &Config{
-							ManifestPath: filepath.Join("./test_data", "no_app_name_manifest"),
+							ManifestPath: filepath.Join("./test_data", "no-app-name-manifest"),
 						},
 						logger: &logger,
 					}
@@ -946,7 +946,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				})
 
 				It("returns an error if the manifest YAML is invalid", func() {
-					invalidManifestPath := filepath.Join("test_data", "invalid_manifest", "manifest.yml")
+					invalidManifestPath := filepath.Join("test_data", "invalid-manifest", "manifest.yml")
 					app, err := provider.discoverFromManifestFile(invalidManifestPath)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to unmarshal YAML"))
@@ -1376,7 +1376,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				err          error
 			)
 			BeforeEach(func() {
-				manifestPath = filepath.Join("test_data", "multiple_manifests")
+				manifestPath = filepath.Join("test_data", "multiple-manifests")
 				provider, err = New(&Config{ManifestPath: manifestPath}, &nopLogger, true)
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -1545,14 +1545,14 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 			})
 
 			It("returns empty string when file is a directory", func() {
-				dirPath := filepath.Join("test_data", "multiple_manifests")
+				dirPath := filepath.Join("test_data", "multiple-manifests")
 				appName, err := provider.getAppNameFromManifest(dirPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(appName).To(BeEmpty())
 			})
 
 			It("returns empty string when file is not a YAML file", func() {
-				textFilePath := filepath.Join("test_data", "multiple_manifests", "text-file.txt")
+				textFilePath := filepath.Join("test_data", "multiple-manifests", "text-file.txt")
 				appName, err := provider.getAppNameFromManifest(textFilePath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(appName).To(BeEmpty())
@@ -1567,7 +1567,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 			})
 
 			It("returns error when YAML is completely invalid", func() {
-				invalidManifestPath := filepath.Join("test_data", "invalid_manifest", "manifest.yml")
+				invalidManifestPath := filepath.Join("test_data", "invalid-manifest", "manifest.yml")
 				appName, err := provider.getAppNameFromManifest(invalidManifestPath)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to unmarshal YAML"))
