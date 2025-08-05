@@ -1,80 +1,119 @@
 # How to deploy Cloud Foundry in Bosh-Lite using cf-deployment
 Deploying Cloud Foundry with Bosh-Lite is a low-cost, lightweight approach tailored for development and testing environments. Unlike AWS deployments, Bosh-Lite runs the entire Cloud Foundry stack inside a single VM on your local machine using BOSH’s local CPI (warden). This drastically reduces infrastructure requirements and speeds up prototyping. Use this setup when you need an isolated, disposable CF environment for debugging, experimentation, or learning.
 
-> 💡 Note: This environment is not production-grade.
-
-> ⚠️ Important: This setup only works on bare-metal Fedora 41.<br/>
-> Installing it on a VM or a virtualized host does not work and is not supported.
+> 💡Note: This environment is not production-grade.<br/>
+> ⚠️ Important: This setup is known to work on Fedora 41 and 42.<br/>
+> ⚠️ Important: Installing on a VM only works if Nested Virtualization is available.<br/>
+> ⚠️ Important: Secure Boot must be disabled, else the VirtualBox modules must be signed with an enrolled MOK (machine owner key), to load.
 
 ## Install VirtualBox and prerequisites
- 
-Ensure that VirtualBox and its extension pack are installed and configured
-properly.
+Install Fedora 42
 
-> 💡 **Note:** Always download and install the latest version of the VirtualBox Extension Pack that matches your installed VirtualBox version. You can find it on the [official VirtualBox downloads page](https://www.virtualbox.org/wiki/Downloads).
+### Disable KVM virtualization
+VirtualBox cannot be used at the same time as KVM. In recent kernels kvm modules load automatically which can prevent Virtualbox VMs from starting even if KVM is not being actively used and you should choose an approach to prevent conflicts. https://www.virtualbox.org/ticket/22248 contains more information and links to additional resources.
 
-```bash
-sudo dnf install virtualbox
-# Replace with the latest version of the Extension Pack
-VBoxManage extpack install --replace Oracle_VirtualBox_Extension_Pack-7.1.8.vbox-extpack
-```
-After installation, verify that the extension pack was installed correctly:
+To temporarily disable KVM virtualization run these commands. This will last until you reboot.
 
 ```bash
-VBoxManage list extpacks
+if lsmod | grep -q kvm_intel; then sudo rmmod kvm_intel; fi
+if lsmod | grep -q kvm_amd; then sudo rmmod kvm_amd; fi
+if lsmod | grep -q kvm; then sudo rmmod kvm; fi
 ```
-You should see output similar to the following:
+
+To permanently disable KVM virtualization blacklist the modules. This will take effect on reboot and last until the file is removed.
 
 ```bash
-Extension Packs: 1
-Pack no. 0:   Oracle VirtualBox Extension Pack
-Version:        7.1.8
-Revision:       168469
-Edition:        
-Description:    Oracle Cloud Infrastructure integration, Host Webcam, VirtualBox RDP, PXE ROM, Disk Encryption, NVMe, full VM encryption.
-VRDE Module:    VBoxVRDP
-Crypto Module:  VBoxPuelCrypto
-Usable:         true
-Why unusable:
+sudo bash -c 'cat << EOF > /etc/modprobe.d/kvm-blacklist.conf
+blacklist kvm
+blacklist kvm_amd
+blacklist kvm_intel
+EOF'
 ```
 
-Make sure `Usable: true` is present in the output — this indicates that the extension pack is functioning correctly.
-If `Why unusable:` contains any message, the extension pack installation may
-have issues (e.g., version mismatch or missing dependencies).
+The VirtualBox ticket above also suggests adding `kvm.enable_virt_at_load=0` to the kernel commandline. This should also take effect on reboot and prevent kvm modules from loading automatically while allowing them to load if KVM is needed. Although this is more convenient, it appears that in some cases the modules may be loaded by some other process. If you would like to try this approach it can be done with grubby.
 
-Reboot your system after installation:
+```bash
+sudo grubby --update-kernel=ALL --args="kvm.enable_virt_at_load=0"
+```
+
+And it can be removed with
+
+```bash
+sudo grubby --update-kernel=ALL --remove-args="kvm.enable_virt_at_load=0"
+```
+
+### Update and Install VirtualBox
+```bash
+sudo dnf -y update
+sudo dnf -y install https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+sudo wget -O /etc/yum.repos.d/cloudfoundry-cli.repo https://packages.cloudfoundry.org/fedora/cloudfoundry-cli.repo
+sudo dnf -y install cf8-cli git jq ruby wget yq VirtualBox
+sudo bash -c 'cat << EOF >> /etc/hosts
+10.244.0.34 bosh-lite.com
+10.244.0.34 api.bosh-lite.com
+10.244.0.34 log-cache.bosh-lite.com
+10.244.0.34 login.bosh-lite.com
+10.244.0.34 uaa.bosh-lite.com
+EOF'
+```
+
+Reboot your system to finish the installation, including building modules for the updated kernel, and module blacklists taking effect. 
 
 ```bash
 sudo reboot
 ```
 
+## Install BOSH
+Follow instruction in `Bosh-Lite` [website](https://bosh.io/docs/bosh-lite/), for example:
+
+```bash
+wget https://github.com/cloudfoundry/bosh-cli/releases/download/v7.9.8/bosh-cli-7.9.8-linux-amd64
+chmod +x ./bosh-cli-7.9.8-linux-amd64
+mkdir -p ~/.local/bin
+mv ./bosh-cli-7.9.8-linux-amd64 ~/.local/bin/bosh
+```
+
 ## Deploy the BOSH Director with bosh-lite 
-Follow instruction in `Bosh-Lite` [website](https://bosh.io/docs/bosh-lite/)
 
 ```bash
 git clone https://github.com/cloudfoundry/bosh-deployment ~/workspace/bosh-deployment
 mkdir -p ~/deployments/vbox
 cd ~/deployments/vbox
 ```
+
+By default a VM with 4 CPU and 6GB of RAM will be deployed. This can be adjusted if desired, for example:
+
+```bash
+yq e '.[2].value.cpus=16' -i ~/workspace/bosh-deployment/virtualbox/cpi.yml
+yq e '.[2].value.memory=16384' -i ~/workspace/bosh-deployment/virtualbox/cpi.yml
+```
+
 Create the BOSH Director VM:
 
 ```bash
-bosh create-env ~/workspace/bosh-deployment/bosh.yml \
---state ./state.json \
--o ~/workspace/bosh-deployment/virtualbox/cpi.yml \
--o ~/workspace/bosh-deployment/virtualbox/outbound-network.yml \
--o ~/workspace/bosh-deployment/bosh-lite.yml \
--o ~/workspace/bosh-deployment/bosh-lite-runc.yml \
--o ~/workspace/bosh-deployment/uaa.yml \
--o ~/workspace/bosh-deployment/credhub.yml \
--o ~/workspace/bosh-deployment/jumpbox-user.yml \
---vars-store ./creds.yml \
--v director_name=bosh-lite \
--v internal_ip=192.168.56.6 \
--v internal_gw=192.168.56.1 \
--v internal_cidr=192.168.56.0/24 \
--v outbound_network_name=NatNetwork
+for i in {1..5}; do
+  bosh create-env ~/workspace/bosh-deployment/bosh.yml \
+  --state ./state.json \
+  -o ~/workspace/bosh-deployment/virtualbox/cpi.yml \
+  -o ~/workspace/bosh-deployment/virtualbox/outbound-network.yml \
+  -o ~/workspace/bosh-deployment/bosh-lite.yml \
+  -o ~/workspace/bosh-deployment/bosh-lite-runc.yml \
+  -o ~/workspace/bosh-deployment/uaa.yml \
+  -o ~/workspace/bosh-deployment/credhub.yml \
+  -o ~/workspace/bosh-deployment/jumpbox-user.yml \
+  --vars-store ./creds.yml \
+  -v director_name=bosh-lite \
+  -v internal_ip=192.168.56.6 \
+  -v internal_gw=192.168.56.1 \
+  -v internal_cidr=192.168.56.0/24 \
+  -v outbound_network_name=NatNetwork \
+  && break
+  echo bosh failed, retrying.
+done
 ```
+Note: bosh sometimes fails to complete properly. On investigation it appears the NatNetwork interface on eth1 is sometimes unable to obtain an IP address.
+Until we can determine why this is the case it is being run here in a bash until loop so that we can retry automatically until we have success. A second attempt frequently succeeds. Perhaps there is a race condition between the NatNetwork being ready and VM creation. TODO: Try creating the NatNetwork in advance.
+
 Check that the VMs have been created in VirtualBox:
 
 ```bash
@@ -112,15 +151,15 @@ Features           config_server: enabled
 User               admin  
 
 Succeeded
-helios02 :: 
 ```
+
 ## Set up routing for VM access
 Optionally, set up a local route for bosh ssh commands or accessing VMs
 directly:
 
 `sudo ip route add 10.244.0.0/16 via 192.168.56.6 # Linux (using iproute2 suite)`
 
-try `ping 192.168.56.6`
+try `ping -c3 192.168.56.6`
 
 Expected output: 
 
@@ -151,15 +190,21 @@ User               admin
 Succeeded
 ```
 
+## Enable BOSH DNS
+
+```bash
+bosh -e vbox update-runtime-config ~/workspace/bosh-deployment/runtime-configs/dns.yml --name dns
+```
 
 ## Clone the cf-deployment repository
 
 ```bash
-git clone https://github.com/cloudfoundry/cf-deployment.git
-cd cf-deployment
+git clone https://github.com/cloudfoundry/cf-deployment.git ~/cf-deployment
+cd ~/cf-deployment
 ```
 
 To ensure you're using the latest precompiled stemcell version, first check which version is referenced in the `operations/use-compiled-releases.yml` file:
+
 ```bash
 export STEMCELL_VERSION=$(grep -A 2 stemcell operations/use-compiled-releases.yml | grep version | sort -u | awk -F'"' '{print $2}')
 STEMCELL_SHA1=$(curl -s "https://bosh.io/api/v1/stemcells/bosh-warden-boshlite-ubuntu-jammy-go_agent" \
@@ -177,6 +222,7 @@ SHA1: 4ad3b7265af38de84d83887bf334193259a59981
 ```
 
 Use the version shown in the output to update your cf-deployment.yml file:
+
 ```bash
 yq e '.stemcells[0].alias = "default" | .stemcells[0].os = "ubuntu-jammy" | .stemcells[0].version = env(STEMCELL_VERSION)' -i cf-deployment.yml
 ```
@@ -187,6 +233,7 @@ The **cloud config** tells the BOSH Director how to provision VMs, networks, dis
 ```bash
 bosh -e vbox update-cloud-config ~/cf-deployment/iaas-support/bosh-lite/cloud-config.yml
 ```
+
 Next, upload the stemcell.
 
 ```bash
@@ -196,6 +243,7 @@ bosh -e vbox upload-stemcell \
 ```
 
 ## Deploy Cloud Foundry
+
 ```bash
 bosh -n -e vbox -d cf deploy \
   cf-deployment.yml \
@@ -205,7 +253,8 @@ bosh -n -e vbox -d cf deploy \
   -v stemcell_os=ubuntu-jammy \
   -v stemcell_version=${STEMCELL_VERSION}
 ```
-This process takes around 30–60 minutes.
+
+This process takes around 60-120 minutes.
 
 Make sure to match the `stemcell_version` with the one you uploaded earlier.
 
@@ -238,7 +287,14 @@ Not logged in. Use 'cf login' or 'cf login --sso' to log in.
 #### 1. Retrieve Credentials from CredHub
 
 1. **Install CredHub CLI**  
-    Follow the [official instructions](https://github.com/cloudfoundry/credhub-cli#installing-the-cli)
+    Follow the [official instructions](https://github.com/cloudfoundry/credhub-cli#installing-the-cli), for example:
+
+```bash
+wget https://github.com/cloudfoundry/credhub-cli/releases/download/2.9.48/credhub-linux-amd64-2.9.48.tgz
+tar zxvf credhub-linux-amd64-2.9.48.tgz
+mkdir -p ~/.local/bin
+mv credhub ~/.local/bin
+```
 
 1. **Set Up the Environment**
 
@@ -252,6 +308,7 @@ Not logged in. Use 'cf login' or 'cf login --sso' to log in.
     bosh int ~/deployments/vbox/creds.yml --path /credhub_tls/ca > credhub-ca.crt
     export CREDHUB_CA_CERT=./credhub-ca.crt
     ```
+
 1. **Initialize CredHub CLI**
 
     ```bash
@@ -290,8 +347,10 @@ Not logged in. Use 'cf login' or 'cf login --sso' to log in.
         - name: /dns_healthcheck_server_tls
         ... etc ...
     ```
+
 1. **Retrieve CF Admin Password and Log In**
     Set CF API endpoint
+
     ```bash
     cf api https://api.bosh-lite.com --skip-ssl-validation
     ```
@@ -308,7 +367,9 @@ Not logged in. Use 'cf login' or 'cf login --sso' to log in.
 
     Not logged in. Use 'cf login' or 'cf login --sso' to log in.
     ```
+
     Get the admin password from CredHub and login
+
     ```bash
     CF_ADMIN_PASSWORD=$(credhub get -n /bosh-lite/cf/cf_admin_password -q)
     cf login -a https://api.bosh-lite.com --skip-ssl-validation -u admin -p "$CF_ADMIN_PASSWORD"
@@ -330,6 +391,7 @@ Not logged in. Use 'cf login' or 'cf login --sso' to log in.
     org:            system
     space:          No space targeted, use 'cf target -s SPACE'
     ```
+
     ✅ You are now logged in and ready to use CF.
 
 ## Deploy an Example App
@@ -337,7 +399,7 @@ Not logged in. Use 'cf login' or 'cf login --sso' to log in.
 Create an organization and a space, target them, and push an example Docker-based app:
 
 ```bash
-cf create-org org && cf create-space -o org space && cf target -o org
+cf create-org org && cf create-space -o org space && cf target -o org -s space
 ```
 
 Check current feature flags:
@@ -358,6 +420,7 @@ diego_docker                                  disabled
 Look for the `diego_docker` flag — it will likely show `disabled`.
 
 Enable Docker support:
+
 ```bash
 cf enable-feature-flag diego_docker
 ```
@@ -367,6 +430,13 @@ Push the example application:
 ```
 cf push nginx --docker-image nginxinc/nginx-unprivileged:1.23.2
 ```
+
+Add a DNS entry for the application:
+
+```bash
+sudo bash -c 'cat << EOF >> /etc/hosts
+10.244.0.34 nginx.bosh-lite.com
+EOF'
 
 Once deployed, test the app using `curl`:
 
@@ -401,6 +471,7 @@ Commercial support is available at
 </body>
 </html>
 ```
+
 # Connect to a remote Cloud Foundry instance
 1. Update `/etc/hosts` on Your Local Machine
 
@@ -415,12 +486,14 @@ Commercial support is available at
 1. Set up ssh tunnel
    * Share you _**public**_ ssh key with the remote system admin.
    * Once access is granted, verify your SSH connection:
+
       ```bash
       ssh <user_remote>@<remote_server_address> -i <path_to/private/sshkey>
       ```
       > Note: Use the path to your private SSH key, not the public key.
 
    * Set up the SSH tunnel on your local machine:
+
       ```bash
       sudo ssh -v -N \
         -i <path_to/private/sshkey> \
@@ -429,6 +502,7 @@ Commercial support is available at
         -L 8444:10.244.0.131:443 \
         <user_remote>@<remote_server_address>
       ```
+
     > Extra info:<br/>
     > The `-N` flag tells SSH not to execute a remote command.<br/>
     > The `-v` flag enables verbose output for debugging.
@@ -453,6 +527,7 @@ Commercial support is available at
   rm -f ./state.json ./creds.yml
   rm -rf ~/.bosh/installations
   ```
+
   Then rerun:
 
   ```bash
