@@ -883,7 +883,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Expect(apps).To(HaveKey("local"))
 					Expect(apps["local"]).To(HaveLen(0))
 					logOutput := logBuf.String()
-					Expect(logOutput).To(ContainSubstring(" does not contain an app name"))
+					Expect(logOutput).To(ContainSubstring("no applications found"))
 				})
 			})
 
