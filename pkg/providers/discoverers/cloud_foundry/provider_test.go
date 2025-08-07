@@ -1122,8 +1122,10 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 							Memory:    "256M",
 							DiskQuota: "1G",
 						},
-						Env: map[string]string{
-							"CONFIG_SERVER_PORT": "8082",
+						Env: []EnvVar{
+							{
+								Name:  "CONFIG_SERVER_PORT",
+								Value: "8082"},
 						},
 						Stack:   "cflinuxfs3",
 						Timeout: 60,
@@ -1148,10 +1150,19 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 							Memory:    "1G",
 							DiskQuota: "1G",
 						},
-						Env: map[string]string{
-							"JBP_CONFIG_SPRING_AUTO_RECONFIGURATION": "{enabled: false}",
-							"SPRING_PROFILES_ACTIVE":                 "http2",
-							"JBP_CONFIG_OPEN_JDK_JRE":                "{ jre: { version: 17.+ } }",
+						Env: []EnvVar{
+							{
+								Name:  "JBP_CONFIG_OPEN_JDK_JRE",
+								Value: "{ jre: { version: 17.+ } }",
+							},
+							{
+								Name:  "JBP_CONFIG_SPRING_AUTO_RECONFIGURATION",
+								Value: "{enabled: false}",
+							},
+							{
+								Name:  "SPRING_PROFILES_ACTIVE",
+								Value: "http2",
+							},
 						},
 						BuildPacks: []string{"java_buildpack"},
 						Path:       "build/libs/spring-music-1.0.jar",
@@ -1262,9 +1273,15 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 							"ruby_buildpack",
 							"java_buildpack",
 						},
-						Env: map[string]string{
-							"VAR1": "value1",
-							"VAR2": "value2",
+						Env: []EnvVar{
+							{
+								Name:  "VAR1",
+								Value: "value1",
+							},
+							{
+								Name:  "VAR2",
+								Value: "value2",
+							},
 						},
 						Routes: RouteSpec{
 							Routes: Routes{
@@ -1466,10 +1483,16 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 			}
 		}
 		Expect(s).To(HaveLen(c))
-		for k := range app.Env {
-			sid := app.Env[k]
+		copyEnvMap := make(map[string]string)
+		for _, e := range appCopy.Env {
+			copyEnvMap[e.Name] = e.Value
+		}
+
+		for _, envVar := range app.Env {
+			sid := envVar.Value
 			sid = sid[2 : len(sid)-1]
-			Expect(s[sid]).To(Equal(appCopy.Env[k]))
+
+			Expect(s[sid]).To(Equal(copyEnvMap[envVar.Name]))
 		}
 		if app.Docker.Username != "" {
 			suser := app.Docker.Username[2 : len(app.Docker.Username)-1]

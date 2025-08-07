@@ -6,7 +6,7 @@ type Application struct {
 	// Metadata captures the name, labels and annotations in the application.
 	Metadata `yaml:",inline" json:",inline" validate:"required"`
 	// Env captures the `env` field values in the CF application manifest.
-	Env map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
+	Env []EnvVar `yaml:"env,omitempty" json:"env,omitempty"`
 	// Routes represent the routes that are made available by the application.
 	Routes RouteSpec `yaml:"routes,inline,omitempty" json:"routes,inline,omitempty" validate:"omitempty"`
 	// Services captures the `services` field values in the CF application manifest.
@@ -36,6 +36,11 @@ type Application struct {
 	Path string `yaml:"path,omitempty" json:"path,omitempty" validate:"omitempty"`
 	// Feature represents a map of key/value pairs of the app feature names to boolean values indicating whether the feature is enabled or not
 	Features map[string]bool `yaml:"features,omitempty" json:"features,omitempty" validate:"omitempty"`
+}
+
+type EnvVar struct {
+	Name  string `yaml:"name" json:"name"`
+	Value string `yaml:"value" json:"value"`
 }
 
 type Services []ServiceSpec

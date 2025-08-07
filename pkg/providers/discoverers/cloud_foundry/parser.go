@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 
 	cfTypes "github.com/konveyor/asset-generation/internal/models"
@@ -257,6 +258,23 @@ func parseProcesses(cfProcs *cfTypes.AppManifestProcesses) (Processes, error) {
 	return procs, nil
 }
 
+func parseEnvVar(envMap map[string]string) []EnvVar {
+	var envList []EnvVar
+	for k, v := range envMap {
+		envList = append(envList, EnvVar{
+			Name:  k,
+			Value: v,
+		})
+	}
+
+	// Sort by Name to get predictable order
+	sort.Slice(envList, func(i, j int) bool {
+		return envList[i].Name < envList[j].Name
+	})
+
+	return envList
+}
+
 var parseCFApp = func(spaceName string, cfApp cfTypes.AppManifest) (Application, error) {
 	timeout := 60
 	if cfApp.Timeout != 0 && cfApp.Type == "" {
@@ -302,7 +320,7 @@ var parseCFApp = func(spaceName string, cfApp cfTypes.AppManifest) (Application,
 		},
 		Timeout:             timeout,
 		BuildPacks:          cfApp.Buildpacks,
-		Env:                 cfApp.Env,
+		Env:                 parseEnvVar(cfApp.Env),
 		Stack:               cfApp.Stack,
 		Services:            services,
 		Routes:              routeSpec,
