@@ -10,7 +10,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.38.0
-	helm.sh/helm/v3 v3.17.3
+	helm.sh/helm/v3 v3.17.4
 )
 
 require (
