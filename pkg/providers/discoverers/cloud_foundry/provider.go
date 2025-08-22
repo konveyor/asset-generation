@@ -418,17 +418,17 @@ func (c *CloudFoundryProvider) getProcesses(appGUID, lifecycle string) (*cfTypes
 			Command:                      safePtr(resourceProcess.Command, ""),
 			DiskQuota:                    strconv.Itoa(proc.DiskInMB),
 			HealthCheckType:              cfTypes.AppHealthCheckType(proc.HealthCheck.Type),
-			HealthCheckHTTPEndpoint:      parseProbeEndpoint(proc.HealthCheck.Data.Endpoint),
-			HealthCheckInvocationTimeout: uint(parseProbeTimeout(proc.HealthCheck.Data.InvocationTimeout)),
-			HealthCheckInterval:          uint(parseProbeInterval(proc.HealthCheck.Data.Interval)),
+			HealthCheckHTTPEndpoint:      parseProbeEndpoint(proc.HealthCheck.Data.Endpoint, ProbeType(proc.HealthCheck.Type)),
+			HealthCheckInvocationTimeout: uint(parseProbeInvocationTimeout(proc.HealthCheck.Data.InvocationTimeout, ProbeType(proc.HealthCheck.Type))),
+			HealthCheckInterval:          uint(parseProbeInterval(proc.HealthCheck.Data.Interval, ProbeType(proc.HealthCheck.Type))),
 			Instances:                    &procInstances,
 			LogRateLimitPerSecond:        strconv.Itoa(proc.LogRateLimitInBytesPerSecond),
 			Memory:                       strconv.Itoa(proc.MemoryInMB),
 			// Timeout not available
 			ReadinessHealthCheckType:         cfTypes.AppHealthCheckType(proc.ReadinessCheck.Type),
-			ReadinessHealthCheckHttpEndpoint: parseProbeEndpoint(proc.ReadinessCheck.Data.Endpoint),
-			ReadinessHealthInvocationTimeout: uint(parseProbeTimeout(proc.ReadinessCheck.Data.InvocationTimeout)),
-			ReadinessHealthCheckInterval:     uint(parseProbeInterval(proc.ReadinessCheck.Data.Interval)),
+			ReadinessHealthCheckHttpEndpoint: parseProbeEndpoint(proc.ReadinessCheck.Data.Endpoint, ProbeType(proc.ReadinessCheck.Type)),
+			ReadinessHealthInvocationTimeout: uint(parseProbeInvocationTimeout(proc.ReadinessCheck.Data.InvocationTimeout, ProbeType(proc.ReadinessCheck.Type))),
+			ReadinessHealthCheckInterval:     uint(parseProbeInterval(proc.ReadinessCheck.Data.Interval, ProbeType(proc.ReadinessCheck.Type))),
 			Lifecycle:                        lifecycle,
 		})
 	}
@@ -489,6 +489,7 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(spaceName string, a
 		return nil, err
 	}
 
+	c.cli.ServiceCredentialBindings.GetParameters(context.Background(), app.GUID)
 	// Sidecars
 	sidecars, err := c.getSidecars(app.GUID)
 	if err != nil {
