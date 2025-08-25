@@ -300,7 +300,7 @@ func (c *CloudFoundryProvider) discoverFromManifest(appName string) (*pTypes.Dis
 	// the original values
 	s := c.extractSensitiveInformation(d)
 	discoverResult.Secret = s
-	discoverResult.Content, err = StructToMap(d)
+	discoverResult.Content, err = structToMap(d)
 	if err != nil {
 		return nil, fmt.Errorf("error converting discovered Cloud Foundry application to map: %v", err)
 	}
@@ -328,7 +328,7 @@ func (c *CloudFoundryProvider) discoverFromLive(spaceName string, appName string
 	// the original values
 	s := c.extractSensitiveInformation(d)
 	discoverResult.Secret = s
-	discoverResult.Content, err = StructToMap(d)
+	discoverResult.Content, err = structToMap(d)
 	if err != nil {
 		return nil, err
 	}
@@ -414,17 +414,17 @@ func (c *CloudFoundryProvider) getProcesses(appGUID, lifecycle string) (*cfTypes
 			return nil, fmt.Errorf("error getting process %s: %v", proc.GUID, err)
 		}
 		appProcesses = append(appProcesses, cfTypes.AppManifestProcess{
-			Type:                         cfTypes.AppProcessType(proc.Type),
-			Command:                      safePtr(resourceProcess.Command, ""),
-			DiskQuota:                    strconv.Itoa(proc.DiskInMB),
-			HealthCheckType:              cfTypes.AppHealthCheckType(proc.HealthCheck.Type),
-			HealthCheckHTTPEndpoint:      parseProbeEndpoint(proc.HealthCheck.Data.Endpoint, ProbeType(proc.HealthCheck.Type)),
-			HealthCheckInvocationTimeout: uint(parseProbeInvocationTimeout(proc.HealthCheck.Data.InvocationTimeout, ProbeType(proc.HealthCheck.Type))),
-			HealthCheckInterval:          uint(parseProbeInterval(proc.HealthCheck.Data.Interval, ProbeType(proc.HealthCheck.Type))),
-			Instances:                    &procInstances,
-			LogRateLimitPerSecond:        strconv.Itoa(proc.LogRateLimitInBytesPerSecond),
-			Memory:                       strconv.Itoa(proc.MemoryInMB),
-			// Timeout not available
+			Type:                             cfTypes.AppProcessType(proc.Type),
+			Command:                          safePtr(resourceProcess.Command, ""),
+			DiskQuota:                        strconv.Itoa(proc.DiskInMB),
+			HealthCheckType:                  cfTypes.AppHealthCheckType(proc.HealthCheck.Type),
+			HealthCheckHTTPEndpoint:          parseProbeEndpoint(proc.HealthCheck.Data.Endpoint, ProbeType(proc.HealthCheck.Type)),
+			HealthCheckInvocationTimeout:     uint(parseProbeInvocationTimeout(proc.HealthCheck.Data.InvocationTimeout, ProbeType(proc.HealthCheck.Type))),
+			HealthCheckInterval:              uint(parseProbeInterval(proc.HealthCheck.Data.Interval, ProbeType(proc.HealthCheck.Type))),
+			Timeout:                          uint(parseHealthCheckTimeout(uint(*proc.HealthCheck.Data.Timeout), ProbeType(proc.HealthCheck.Type))),
+			Instances:                        &procInstances,
+			LogRateLimitPerSecond:            strconv.Itoa(proc.LogRateLimitInBytesPerSecond),
+			Memory:                           strconv.Itoa(proc.MemoryInMB),
 			ReadinessHealthCheckType:         cfTypes.AppHealthCheckType(proc.ReadinessCheck.Type),
 			ReadinessHealthCheckHttpEndpoint: parseProbeEndpoint(proc.ReadinessCheck.Data.Endpoint, ProbeType(proc.ReadinessCheck.Type)),
 			ReadinessHealthInvocationTimeout: uint(parseProbeInvocationTimeout(proc.ReadinessCheck.Data.InvocationTimeout, ProbeType(proc.ReadinessCheck.Type))),
