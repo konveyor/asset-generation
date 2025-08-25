@@ -374,7 +374,7 @@ var parseCFApp = func(spaceName string, cfApp cfTypes.AppManifest) (Application,
 		if err != nil {
 			return Application{}, err
 		}
-		if inlineProcess != nil {
+		if inlineProcess != nil && !containsProcess(cfApp.Processes, cfTypes.WebAppProcessType) {
 			app.Processes = append(app.Processes, *inlineProcess)
 		}
 	}

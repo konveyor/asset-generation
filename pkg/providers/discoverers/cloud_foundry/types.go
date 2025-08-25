@@ -23,8 +23,6 @@ type Application struct {
 	BuildPacks []string `yaml:"buildPacks,omitempty" json:"buildPacks,omitempty"`
 	// Docker captures the Docker specification in the CF application manifest.
 	Docker Docker `yaml:"docker,omitempty" json:"docker,omitempty" validate:"omitempty"`
-	// ProcessSpec embeds the process specification details, which are inlined and validated if present.
-	*ProcessSpecTemplate `yaml:",inline" json:",inline" validate:"omitempty"`
 	// Path informs Cloud Foundry the locatino of the directory in which it can find your app.
 	Path string `yaml:"path,omitempty" json:"path,omitempty" validate:"omitempty"`
 	// Feature represents a map of key/value pairs of the app feature names to boolean values indicating whether the feature is enabled or not

@@ -1310,6 +1310,43 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(app).To(BeEquivalentTo(&expected))
 				})
+				It("validates the discovery data of an app with two processes of type web, one inlined and the other one in the process field", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "multiple-web-processes"},
+						Routes: RouteSpec{
+							RandomRoute: true,
+						},
+						Processes: Processes{
+							{
+								Type: Web,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Command:   "start-web.sh",
+									DiskQuota: "512M",
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											Endpoint:          "/healthcheck",
+											InvocationTimeout: 10,
+											Type:              HTTPProbeType,
+											Interval:          30,
+										},
+										Timeout: 10,
+									},
+									ReadinessCheck: ProbeSpec{
+										Type: ProcessProbeType,
+									},
+									Instances:    3,
+									Memory:       "500M",
+									LogRateLimit: "16K",
+								},
+							},
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "multiple-web-processes", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+
 				It("validates the discovery data of an app with env, services, processes, routes and sidecars ", func() {
 					expected := Application{
 						Metadata: Metadata{
