@@ -47,7 +47,6 @@ applications:
         health-check-type: process
         instances: 2
         memory: 256M
-        timeout: 15
     sidecars:
       - name: authenticator
         process_types:

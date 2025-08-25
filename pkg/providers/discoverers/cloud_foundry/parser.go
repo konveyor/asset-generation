@@ -13,7 +13,7 @@ import (
 )
 
 // Generic helper for marshaling/unmarshaling between types
-func MarshalUnmarshal[T any](input interface{}) (T, error) {
+func marshalUnmarshal[T any](input interface{}) (T, error) {
 	var result T
 
 	b, err := json.Marshal(input)
@@ -31,24 +31,26 @@ const (
 	logRateLimit          = "16K"
 )
 
-func processProcessProbes(cfApp cfTypes.AppManifestProcess) (ProbeSpec, ProbeSpec) {
-	healthCheck := ParseHealthCheck(
-		cfApp.HealthCheckType,
-		cfApp.HealthCheckHTTPEndpoint,
-		cfApp.HealthCheckInterval,
-		cfApp.HealthCheckInvocationTimeout)
-	readinessCheck := ParseReadinessHealthCheck(
-		cfApp.ReadinessHealthCheckType,
-		cfApp.ReadinessHealthCheckHttpEndpoint,
-		cfApp.ReadinessHealthCheckInterval,
-		cfApp.ReadinessHealthInvocationTimeout)
+func processProcessProbes(cfProcess cfTypes.AppManifestProcess) (HealthCheckSpec, ProbeSpec) {
+	healthCheck := parseHealthCheck(
+		cfProcess.HealthCheckType,
+		cfProcess.HealthCheckHTTPEndpoint,
+		cfProcess.HealthCheckInterval,
+		cfProcess.HealthCheckInvocationTimeout,
+		cfProcess.Timeout)
+	readinessCheck := parseReadinessHealthCheck(
+		cfProcess.ReadinessHealthCheckType,
+		cfProcess.ReadinessHealthCheckHttpEndpoint,
+		cfProcess.ReadinessHealthCheckInterval,
+		cfProcess.ReadinessHealthInvocationTimeout,
+		healthCheck.Type)
 	return healthCheck, readinessCheck
 }
 func parseProcess(cfApp cfTypes.AppManifestProcess) (*ProcessSpec, error) {
 	if string(cfApp.Type) != string(Web) && string(cfApp.Type) != string(Worker) {
 		return nil, fmt.Errorf("unknown process type %s", cfApp.Type)
 	}
-	processSpec, err := MarshalUnmarshal[ProcessSpec](cfApp)
+	processSpec, err := marshalUnmarshal[ProcessSpec](cfApp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse inline spec: %w", err)
 	}
@@ -74,7 +76,7 @@ func parseProcess(cfApp cfTypes.AppManifestProcess) (*ProcessSpec, error) {
 
 func parseProcessTemplate(cfApp cfTypes.AppManifest) (*ProcessSpecTemplate, error) {
 	// Handle template process
-	template, err := MarshalUnmarshal[ProcessSpecTemplate](cfApp)
+	template, err := marshalUnmarshal[ProcessSpecTemplate](cfApp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse template spec: %w", err)
 	}
@@ -87,10 +89,12 @@ func parseProcessTemplate(cfApp cfTypes.AppManifest) (*ProcessSpecTemplate, erro
 	if cfApp.DiskQuota != "" {
 		template.DiskQuota = cfApp.DiskQuota
 	}
+	template.HealthCheck = parseHealthCheck(cfApp.HealthCheckType, cfApp.HealthCheckHTTPEndpoint, cfApp.HealthCheckInterval, cfApp.HealthCheckInvocationTimeout, cfApp.Timeout)
+	template.ReadinessCheck = parseReadinessHealthCheck(cfApp.ReadinessHealthCheckType, cfApp.ReadinessHealthCheckHttpEndpoint, cfApp.ReadinessHealthCheckInterval, cfApp.ReadinessHealthInvocationTimeout, template.HealthCheck.Type)
 	return &template, nil
 }
 
-func ParseRouteSpec(cfRoutes *cfTypes.AppManifestRoutes, randomRoute, noRoute bool) RouteSpec {
+func parseRouteSpec(cfRoutes *cfTypes.AppManifestRoutes, randomRoute, noRoute bool) RouteSpec {
 	if noRoute {
 		return RouteSpec{
 			NoRoute: noRoute,
@@ -101,11 +105,11 @@ func ParseRouteSpec(cfRoutes *cfTypes.AppManifestRoutes, randomRoute, noRoute bo
 	if cfRoutes == nil {
 		return routeSpec
 	}
-	routeSpec.Routes = ParseRoutes(*cfRoutes)
+	routeSpec.Routes = parseRoutes(*cfRoutes)
 	return routeSpec
 }
 
-func ParseRoutes(cfRoutes cfTypes.AppManifestRoutes) Routes {
+func parseRoutes(cfRoutes cfTypes.AppManifestRoutes) Routes {
 	if cfRoutes == nil {
 		return nil
 	}
@@ -135,15 +139,21 @@ func parseProbeType(cfType cfTypes.AppHealthCheckType, defaultType ProbeType) Pr
 }
 
 // parseProbeEndpoint returns the endpoint with a fallback to "/"
-func parseProbeEndpoint(cfEndpoint *string) string {
+func parseProbeEndpoint(cfEndpoint *string, cfType ProbeType) string {
+	if cfType != HTTPProbeType {
+		return ""
+	}
 	if cfEndpoint != nil && len(*cfEndpoint) > 0 {
 		return *cfEndpoint
 	}
 	return "/"
 }
 
-// parseProbeTimeout handles both uint and int types and returns timeout with fallback to 1
-func parseProbeTimeout[T uint | int](cfTimeout *T) int {
+// parseProbeInvocationTimeout handles both uint and int types and returns timeout with fallback to 1
+func parseProbeInvocationTimeout[T uint | int](cfTimeout *T, cftype ProbeType) int {
+	if cftype == ProcessProbeType {
+		return 0
+	}
 	if cfTimeout != nil && *cfTimeout != 0 {
 		return int(*cfTimeout)
 	}
@@ -151,29 +161,52 @@ func parseProbeTimeout[T uint | int](cfTimeout *T) int {
 }
 
 // parseProbeInterval handles both uint and int types and returns interval with fallback to 30
-func parseProbeInterval[T uint | int](cfInterval *T) int {
+func parseProbeInterval[T uint | int](cfInterval *T, cftype ProbeType) int {
+	if cftype == ProcessProbeType {
+		return 0
+	}
 	if cfInterval != nil && *cfInterval > 0 {
 		return int(*cfInterval)
 	}
 	return 30
 }
 
-func ParseHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfInterval uint, cfTimeout uint) ProbeSpec {
+func parseHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfInterval uint, cfInvocationTimeout uint, cfTimeout int) HealthCheckSpec {
+	p := parseProbeType(cfType, PortProbeType)
+
+	s := HealthCheckSpec{
+		ProbeSpec: ProbeSpec{
+			Type:              p,
+			Endpoint:          parseProbeEndpoint(&cfEndpoint, p),
+			InvocationTimeout: parseProbeInvocationTimeout(&cfInvocationTimeout, p),
+			Interval:          parseProbeInterval(&cfInterval, p),
+		},
+		Timeout: parseHealthCheckTimeout(&cfTimeout),
+	}
+	return s
+
+}
+
+func parseReadinessHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfInterval uint, cfTimeout uint, healthProbeType ProbeType) ProbeSpec {
+	if healthProbeType == ProcessProbeType {
+		return ProbeSpec{
+			Type: ProcessProbeType,
+		}
+	}
+	p := parseProbeType(cfType, ProcessProbeType)
 	return ProbeSpec{
-		Type:     parseProbeType(cfType, PortProbeType),
-		Endpoint: parseProbeEndpoint(&cfEndpoint),
-		Timeout:  parseProbeTimeout(&cfTimeout),
-		Interval: parseProbeInterval(&cfInterval),
+		Type:              p,
+		Endpoint:          parseProbeEndpoint(&cfEndpoint, p),
+		InvocationTimeout: parseProbeInvocationTimeout(&cfTimeout, p),
+		Interval:          parseProbeInterval(&cfInterval, p),
 	}
 }
 
-func ParseReadinessHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfInterval uint, cfTimeout uint) ProbeSpec {
-	return ProbeSpec{
-		Type:     parseProbeType(cfType, ProcessProbeType),
-		Endpoint: parseProbeEndpoint(&cfEndpoint),
-		Timeout:  parseProbeTimeout(&cfTimeout),
-		Interval: parseProbeInterval(&cfInterval),
+func parseHealthCheckTimeout(cfTimeout *int) int {
+	if cfTimeout == nil || *cfTimeout == 0 {
+		return 60
 	}
+	return int(*cfTimeout)
 }
 
 func parseSidecars(sidecars cfTypes.AppManifestSideCars) (Sidecars, error) {
@@ -236,7 +269,7 @@ func parseServices(services *cfTypes.AppManifestServices) (Services, error) {
 }
 
 func parseService(service cfTypes.AppManifestService) (*ServiceSpec, error) {
-	svc, err := MarshalUnmarshal[ServiceSpec](service)
+	svc, err := marshalUnmarshal[ServiceSpec](service)
 	if err != nil {
 		return nil, err
 	}
@@ -257,17 +290,25 @@ func parseProcesses(cfProcs *cfTypes.AppManifestProcesses) (Processes, error) {
 	return procs, nil
 }
 
-var parseCFApp = func(spaceName string, cfApp cfTypes.AppManifest) (Application, error) {
-	timeout := 60
-	if cfApp.Timeout != 0 && cfApp.Type == "" {
-		timeout = int(cfApp.Timeout)
+func containsProcess(processes *cfTypes.AppManifestProcesses, processType cfTypes.AppProcessType) bool {
+	if processes == nil {
+		return false
 	}
+	for _, p := range *processes {
+		if p.Type == processType {
+			return true
+		}
+	}
+	return false
+}
+
+var parseCFApp = func(spaceName string, cfApp cfTypes.AppManifest) (Application, error) {
 	services, err := parseServices(cfApp.Services)
 	if err != nil {
 		return Application{}, err
 	}
-	routeSpec := ParseRouteSpec(cfApp.Routes, cfApp.RandomRoute, cfApp.NoRoute)
-	docker, err := MarshalUnmarshal[Docker](cfApp.Docker)
+	routeSpec := parseRouteSpec(cfApp.Routes, cfApp.RandomRoute, cfApp.NoRoute)
+	docker, err := marshalUnmarshal[Docker](cfApp.Docker)
 
 	if err != nil {
 		return Application{}, err
@@ -300,18 +341,16 @@ var parseCFApp = func(spaceName string, cfApp cfTypes.AppManifest) (Application,
 			Labels:      labels,
 			Annotations: annotations,
 		},
-		Timeout:             timeout,
-		BuildPacks:          cfApp.Buildpacks,
-		Env:                 cfApp.Env,
-		Stack:               cfApp.Stack,
-		Services:            services,
-		Routes:              routeSpec,
-		Docker:              docker,
-		Sidecars:            sidecars,
-		Processes:           processes,
-		Features:            cfApp.Features,
-		Path:                cfApp.Path,
-		ProcessSpecTemplate: &ProcessSpecTemplate{Instances: defaultInstanceNumber},
+		BuildPacks: cfApp.Buildpacks,
+		Env:        cfApp.Env,
+		Stack:      cfApp.Stack,
+		Services:   services,
+		Routes:     routeSpec,
+		Docker:     docker,
+		Sidecars:   sidecars,
+		Processes:  processes,
+		Features:   cfApp.Features,
+		Path:       cfApp.Path,
 	}
 
 	if cfApp.Type == "" {
@@ -319,13 +358,17 @@ var parseCFApp = func(spaceName string, cfApp cfTypes.AppManifest) (Application,
 		if err != nil {
 			return Application{}, err
 		}
-		app.ProcessSpecTemplate = t
+		if !containsProcess(cfApp.Processes, cfTypes.WebAppProcessType) {
+			web := ProcessSpec{Type: Web, ProcessSpecTemplate: *t}
+			app.Processes = append(app.Processes, web)
+		}
 	} else {
 		inlineProcess, err := parseProcess(cfApp.AppManifestProcess)
 		if err != nil {
 			return Application{}, err
 		}
-		if inlineProcess != nil {
+		if inlineProcess != nil && ((inlineProcess.Type == Worker) ||
+			(inlineProcess.Type == Web && !containsProcess(cfApp.Processes, cfTypes.WebAppProcessType))) {
 			app.Processes = append(app.Processes, *inlineProcess)
 		}
 	}
@@ -360,7 +403,7 @@ func validateApplication(app Application) error {
 	return nil
 }
 
-func StructToMap(obj any) (map[string]any, error) {
+func structToMap(obj any) (map[string]any, error) {
 	var m map[string]any
 	b, err := json.Marshal(obj)
 	if err != nil {

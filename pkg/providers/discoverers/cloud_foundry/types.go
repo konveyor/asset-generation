@@ -19,19 +19,10 @@ type Application struct {
 	// The value is captured for information purposes because it has no relevance
 	// in Kubernetes.
 	Stack string `yaml:"stack,omitempty" json:"stack,omitempty"`
-	// Timeout specifies the maximum time allowed for an application to
-	// respond to readiness or health checks during startup.
-	// If the application does not respond within this time, the platform will mark
-	// the deployment as failed. The default value is 60 seconds and maximum to 180 seconds, but both values can be changed in the Cloud Foundry Controller.
-	// https://github.com/cloudfoundry/docs-dev-guide/blob/96f19d9d67f52ac7418c147d5ddaa79c957eec34/deploy-apps/large-app-deploy.html.md.erb#L35
-	// Default is 60 (seconds).
-	Timeout int `yaml:"timeout" json:"timeout" validate:"min=0,max=180"`
 	// BuildPacks capture the buildpacks defined in the CF application manifest.
 	BuildPacks []string `yaml:"buildPacks,omitempty" json:"buildPacks,omitempty"`
 	// Docker captures the Docker specification in the CF application manifest.
 	Docker Docker `yaml:"docker,omitempty" json:"docker,omitempty" validate:"omitempty"`
-	// ProcessSpec embeds the process specification details, which are inlined and validated if present.
-	*ProcessSpecTemplate `yaml:",inline" json:",inline" validate:"omitempty"`
 	// Path informs Cloud Foundry the locatino of the directory in which it can find your app.
 	Path string `yaml:"path,omitempty" json:"path,omitempty" validate:"omitempty"`
 	// Feature represents a map of key/value pairs of the app feature names to boolean values indicating whether the feature is enabled or not
@@ -96,8 +87,7 @@ type ProcessSpec struct {
 	// Type captures the `type` field in the Process specification.
 	// Accepted values are `web` or `worker`
 	Type ProcessType `yaml:"type" json:"type" validate:"required,oneof=web worker"`
-	// Timeout represents the time in seconds at which the health-check will report failure.
-	Timeout             int `yaml:"timeout,omitempty" json:"timeout,omitempty" validate:"omitempty"`
+
 	ProcessSpecTemplate `yaml:",inline" json:",inline" validate:"omitempty"`
 }
 
@@ -109,7 +99,7 @@ type ProcessSpecTemplate struct {
 	// Memory represents the amount of memory requested by the process.
 	Memory string `yaml:"memory,omitempty" json:"memory,omitempty" validate:"omitempty"`
 	// HealthCheck captures the health check information
-	HealthCheck ProbeSpec `yaml:"healthCheck,omitempty" json:"healthCheck,omitempty" validate:"omitempty"`
+	HealthCheck HealthCheckSpec `yaml:"healthCheck,omitempty" json:"healthCheck,omitempty" validate:"omitempty"`
 	// ReadinessCheck captures the readiness check information.
 	ReadinessCheck ProbeSpec `yaml:"readinessCheck,omitempty" json:"readinessCheck,omitempty" validate:"omitempty"`
 	// Instances represents the number of instances for this process to run.
@@ -140,14 +130,26 @@ const (
 
 type ProbeSpec struct {
 	// Endpoint represents the URL location where to perform the probe check.
-	Endpoint string `yaml:"endpoint" json:"endpoint" validate:"required"`
-	// Timeout represents the number of seconds in which the probe check can be considered as timedout.
+	Endpoint string `yaml:"endpoint" json:"endpoint" validate:"omitempty"`
+	// InvocationTimeout represents the number of seconds in which the probe check can be considered as timedout.
 	// https://docs.cloudfoundry.org/devguide/deploy-apps/manifest-attributes.html#timeout
-	Timeout int `yaml:"timeout" json:"timeout" validate:"required,min=0"`
+	InvocationTimeout int `yaml:"invocationTimeout" json:"invocationTimeout" validate:"omitempty,min=0"`
 	// Interval represents the number of seconds between probe checks.
-	Interval int `yaml:"interval" json:"interval" validate:"required,min=0"`
+	Interval int `yaml:"interval" json:"interval" validate:"omitempty,min=0"`
 	// Type specifies the type of health check to perform.
 	Type ProbeType `yaml:"type" json:"type" validate:"required,oneof=http process port"`
+}
+
+type HealthCheckSpec struct {
+	// Inherit the ProbeSpec struct
+	ProbeSpec `yaml:",inline" json:",inline" validate:"omitempty"`
+	// Timeout specifies the maximum time allowed for an application to
+	// respond to readiness or health checks during startup.
+	// If the application does not respond within this time, the platform will mark
+	// the deployment as failed. The default value is 60 seconds and maximum to 180 seconds, but both values can be changed in the Cloud Foundry Controller.
+	// https://github.com/cloudfoundry/docs-dev-guide/blob/96f19d9d67f52ac7418c147d5ddaa79c957eec34/deploy-apps/large-app-deploy.html.md.erb#L35
+	// Default is 60 (seconds).
+	Timeout int `yaml:"timeout" json:"timeout" validate:"min=0,max=180"`
 }
 
 type ProbeType string

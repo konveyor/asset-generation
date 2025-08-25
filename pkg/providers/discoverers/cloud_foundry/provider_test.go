@@ -517,6 +517,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						if expected.Processes == nil {
 							Expect(received.Processes).To(BeNil())
 						} else if !inline {
+							Expect(len(*received.Processes)).To(Equal(len(*expected.Processes)))
 							Expect([]cfTypes.AppManifestProcess(*received.Processes)).To(ContainElements([]cfTypes.AppManifestProcess(*expected.Processes)))
 						}
 					}
@@ -531,29 +532,25 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 							HealthCheckType:              cfTypes.Http,
 							HealthCheckHTTPEndpoint:      "/healthEndpoint",
 							HealthCheckInvocationTimeout: 100,
+							HealthCheckInterval:          120,
 							Instances:                    ptrTo(uint(2)),
 							LogRateLimitPerSecond:        "10",
 							Memory:                       "1024",
-							// Timeout:                          50, Timeout is not available at runtime
-							HealthCheckInterval:              120,
-							ReadinessHealthCheckType:         cfTypes.Process,
-							ReadinessHealthCheckHttpEndpoint: "/readinessCheck",
-							ReadinessHealthInvocationTimeout: 150,
-							ReadinessHealthCheckInterval:     70,
-							Lifecycle:                        "buildpack",
+							Timeout:                      50,
+							ReadinessHealthCheckType:     cfTypes.Process,
+							Lifecycle:                    "buildpack",
 						},
 						{
-							Type:                         cfTypes.WorkerAppProcessType,
-							Command:                      "/bin/echo foo bar",
-							HealthCheckType:              cfTypes.Port,
-							HealthCheckHTTPEndpoint:      "/healthz",
-							HealthCheckInvocationTimeout: 10,
-							Instances:                    ptrTo(uint(1)),
-							LogRateLimitPerSecond:        "70",
-							Memory:                       "2048",
-							DiskQuota:                    "200",
-							// Timeout:                          500,
+							Type:                             cfTypes.WorkerAppProcessType,
+							Command:                          "/bin/echo foo bar",
+							HealthCheckType:                  cfTypes.Port,
+							HealthCheckInvocationTimeout:     10,
 							HealthCheckInterval:              20,
+							Instances:                        ptrTo(uint(1)),
+							LogRateLimitPerSecond:            "70",
+							Memory:                           "2048",
+							DiskQuota:                        "200",
+							Timeout:                          500,
 							ReadinessHealthCheckType:         cfTypes.Http,
 							ReadinessHealthCheckHttpEndpoint: "/readinez",
 							ReadinessHealthInvocationTimeout: 10,
@@ -572,25 +569,21 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 							Instances:                    ptrTo(uint(2)),
 							LogRateLimitPerSecond:        "10",
 							Memory:                       "1024",
-							// Timeout:                          50, Timeout is not available at runtime
-							HealthCheckInterval:              120,
-							ReadinessHealthCheckType:         cfTypes.Process,
-							ReadinessHealthCheckHttpEndpoint: "/readinessCheck",
-							ReadinessHealthInvocationTimeout: 150,
-							ReadinessHealthCheckInterval:     70,
-							Lifecycle:                        "docker",
+							Timeout:                      50,
+							HealthCheckInterval:          120,
+							ReadinessHealthCheckType:     cfTypes.Process,
+							Lifecycle:                    "docker",
 						},
 						{
-							Type:                         cfTypes.WorkerAppProcessType,
-							Command:                      "/bin/echo foo bar",
-							HealthCheckType:              cfTypes.Port,
-							HealthCheckHTTPEndpoint:      "/healthz",
-							HealthCheckInvocationTimeout: 10,
-							Instances:                    ptrTo(uint(1)),
-							LogRateLimitPerSecond:        "70",
-							Memory:                       "2048",
-							DiskQuota:                    "200",
-							// Timeout:                          500,
+							Type:                             cfTypes.WorkerAppProcessType,
+							Command:                          "/bin/echo foo bar",
+							HealthCheckType:                  cfTypes.Port,
+							HealthCheckInvocationTimeout:     10,
+							Instances:                        ptrTo(uint(1)),
+							LogRateLimitPerSecond:            "70",
+							Memory:                           "2048",
+							DiskQuota:                        "200",
+							Timeout:                          500,
 							HealthCheckInterval:              20,
 							ReadinessHealthCheckType:         cfTypes.Http,
 							ReadinessHealthCheckHttpEndpoint: "/readinez",
@@ -610,13 +603,10 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 							Instances:                    ptrTo(uint(2)),
 							LogRateLimitPerSecond:        "10",
 							Memory:                       "1024",
-							// Timeout:                          50,
-							HealthCheckInterval:              120,
-							ReadinessHealthCheckType:         cfTypes.Process,
-							ReadinessHealthCheckHttpEndpoint: "/readinessCheck",
-							ReadinessHealthInvocationTimeout: 150,
-							ReadinessHealthCheckInterval:     70,
-							Lifecycle:                        "buildpack",
+							Timeout:                      50,
+							HealthCheckInterval:          120,
+							ReadinessHealthCheckType:     cfTypes.Process,
+							Lifecycle:                    "buildpack",
 						},
 					}, true),
 				)
@@ -656,21 +646,19 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						},
 						Processes: &cfTypes.AppManifestProcesses{
 							{
-								Type:                             cfTypes.WebAppProcessType,
-								Command:                          "/bin/echo hello world",
-								DiskQuota:                        "1000",
-								HealthCheckType:                  cfTypes.Http,
-								HealthCheckHTTPEndpoint:          "/healthEndpoint",
-								HealthCheckInvocationTimeout:     100,
-								Instances:                        ptrTo(uint(2)),
-								LogRateLimitPerSecond:            "10",
-								Memory:                           "1024",
-								HealthCheckInterval:              120,
-								ReadinessHealthCheckType:         cfTypes.Process,
-								ReadinessHealthCheckHttpEndpoint: "/readinessCheck",
-								ReadinessHealthInvocationTimeout: 150,
-								ReadinessHealthCheckInterval:     70,
-								Lifecycle:                        "docker",
+								Type:                         cfTypes.WebAppProcessType,
+								Command:                      "/bin/echo hello world",
+								DiskQuota:                    "1000",
+								HealthCheckType:              cfTypes.Http,
+								HealthCheckHTTPEndpoint:      "/healthEndpoint",
+								HealthCheckInvocationTimeout: 100,
+								Instances:                    ptrTo(uint(2)),
+								LogRateLimitPerSecond:        "10",
+								Memory:                       "1024",
+								HealthCheckInterval:          120,
+								ReadinessHealthCheckType:     cfTypes.Process,
+								Lifecycle:                    "docker",
+								Timeout:                      100,
 							},
 						},
 						Stack: "cfLinux65",
@@ -980,22 +968,19 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 									Instances:    2,
 									Memory:       "500M",
 									ReadinessCheck: ProbeSpec{
-										Endpoint: "/readiness",
-										Interval: 60,
-										Timeout:  10,
-										Type:     ProcessProbeType,
+										Type: ProcessProbeType,
 									},
-									HealthCheck: ProbeSpec{
-										Endpoint: "/health",
-										Interval: 90,
-										Timeout:  3,
-										Type:     PortProbeType,
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											Interval:          90,
+											InvocationTimeout: 3,
+											Type:              PortProbeType,
+										},
+										Timeout: 60,
 									},
 								},
 							},
 						},
-						Timeout:             60,
-						ProcessSpecTemplate: &ProcessSpecTemplate{Instances: 1},
 					}
 					processManifestPath := filepath.Join("test_data", "process_manifest", "manifest.yml")
 					app, err := provider.discoverFromManifestFile(processManifestPath)
@@ -1011,30 +996,26 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 							Username: "docker-registry-user"},
 						Processes: Processes{
 							{
-								Type:    Web,
-								Timeout: 10,
+								Type: Web,
 								ProcessSpecTemplate: ProcessSpecTemplate{
 									LogRateLimit: "16K",
 									Instances:    1,
 									Memory:       "500M",
 									DiskQuota:    "512M",
 									ReadinessCheck: ProbeSpec{
-										Endpoint: "/",
-										Interval: 30,
-										Timeout:  1,
-										Type:     ProcessProbeType,
+										Type: ProcessProbeType,
 									},
-									HealthCheck: ProbeSpec{
-										Endpoint: "/",
-										Interval: 30,
-										Timeout:  1,
-										Type:     PortProbeType,
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											Interval:          30,
+											InvocationTimeout: 1,
+											Type:              PortProbeType,
+										},
+										Timeout: 10,
 									},
 								},
 							},
 						},
-						Timeout:             60,
-						ProcessSpecTemplate: &ProcessSpecTemplate{Instances: 1},
 					}
 					processManifestPath := filepath.Join("test_data", "inline-process-with-type-only-manifest", "manifest.yml")
 					app, err := provider.discoverFromManifestFile(processManifestPath)
@@ -1043,10 +1024,27 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				})
 				It("validates the discovery data of an app with random route and path", func() {
 					expected := Application{
-						Metadata:            Metadata{Name: "hello-spring-cloud"},
-						ProcessSpecTemplate: &ProcessSpecTemplate{Instances: 1},
-						Path:                "target/hello-spring-cloud-0.0.1.BUILD-SNAPSHOT.jar",
-						Timeout:             60,
+						Metadata: Metadata{Name: "hello-spring-cloud"},
+						Processes: Processes{
+							{
+								Type: Web,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Instances: 1,
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											Interval:          30,
+											InvocationTimeout: 1,
+											Type:              PortProbeType,
+										},
+										Timeout: 60,
+									},
+									ReadinessCheck: ProbeSpec{
+										Type: ProcessProbeType,
+									},
+								},
+							},
+						},
+						Path: "target/hello-spring-cloud-0.0.1.BUILD-SNAPSHOT.jar",
 						Routes: RouteSpec{
 							RandomRoute: true,
 						},
@@ -1058,9 +1056,26 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				})
 				It("validates the discovery data of an app with only a service", func() {
 					expected := Application{
-						Metadata:            Metadata{Name: "sailspong"},
-						ProcessSpecTemplate: &ProcessSpecTemplate{Instances: 1},
-						Timeout:             60,
+						Metadata: Metadata{Name: "sailspong"},
+						Processes: Processes{
+							{
+								Type: Web,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Instances: 1,
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											Interval:          30,
+											InvocationTimeout: 1,
+											Type:              PortProbeType,
+										},
+										Timeout: 60,
+									},
+									ReadinessCheck: ProbeSpec{
+										Type: ProcessProbeType,
+									},
+								},
+							},
+						},
 						Services: Services{
 							{Name: "mysql"},
 						},
@@ -1073,12 +1088,27 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				It("validates the discovery data of an app with a service, command and path", func() {
 					expected := Application{
 						Metadata: Metadata{Name: "rails-sample"},
-						ProcessSpecTemplate: &ProcessSpecTemplate{
-							Instances: 1,
-							Command:   "bundle exec rake db:migrate && bundle exec rails s -p $PORT",
-							Memory:    "256M",
+						Processes: Processes{
+							{
+								Type: Web,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Instances: 1,
+									Command:   "bundle exec rake db:migrate && bundle exec rails s -p $PORT",
+									Memory:    "256M",
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											Interval:          30,
+											InvocationTimeout: 1,
+											Type:              PortProbeType,
+										},
+										Timeout: 60,
+									},
+									ReadinessCheck: ProbeSpec{
+										Type: ProcessProbeType,
+									},
+								},
+							},
 						},
-						Timeout: 60,
 						Routes: RouteSpec{
 							RandomRoute: true,
 						},
@@ -1095,13 +1125,28 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				It("validates the discovery data of an app with features", func() {
 					expected := Application{
 						Metadata: Metadata{Name: "app-features"},
-						ProcessSpecTemplate: &ProcessSpecTemplate{
-							Instances: 1,
+						Processes: Processes{
+							{
+								Type: Web,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Instances: 1,
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											Interval:          30,
+											InvocationTimeout: 1,
+											Type:              PortProbeType,
+										},
+										Timeout: 60,
+									},
+									ReadinessCheck: ProbeSpec{
+										Type: ProcessProbeType,
+									},
+								},
+							},
 						},
 						Routes: RouteSpec{
 							NoRoute: true,
 						},
-						Timeout: 60,
 						Features: map[string]bool{
 							"ssh":                      true,
 							"revisions":                true,
@@ -1117,16 +1162,31 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				It("validates the discovery data of an app with a sidecar", func() {
 					expected := Application{
 						Metadata: Metadata{Name: "sidecar-dependent-app"},
-						ProcessSpecTemplate: &ProcessSpecTemplate{
-							Instances: 1,
-							Memory:    "256M",
-							DiskQuota: "1G",
+						Processes: Processes{
+							{
+								Type: Web,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Instances: 1,
+									Memory:    "256M",
+									DiskQuota: "1G",
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											Interval:          30,
+											InvocationTimeout: 1,
+											Type:              PortProbeType,
+										},
+										Timeout: 60,
+									},
+									ReadinessCheck: ProbeSpec{
+										Type: ProcessProbeType,
+									},
+								},
+							},
 						},
 						Env: map[string]string{
 							"CONFIG_SERVER_PORT": "8082",
 						},
-						Stack:   "cflinuxfs3",
-						Timeout: 60,
+						Stack: "cflinuxfs3",
 						Sidecars: Sidecars{
 							{
 								Name:         "config-server",
@@ -1143,10 +1203,26 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				It("validates the discovery data of an app with service, route and protocol in route", func() {
 					expected := Application{
 						Metadata: Metadata{Name: "spring-music"},
-						ProcessSpecTemplate: &ProcessSpecTemplate{
-							Instances: 1,
-							Memory:    "1G",
-							DiskQuota: "1G",
+						Processes: Processes{
+							{
+								Type: Web,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Instances: 1,
+									Memory:    "1G",
+									DiskQuota: "1G",
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											Interval:          30,
+											InvocationTimeout: 1,
+											Type:              PortProbeType,
+										},
+										Timeout: 60,
+									},
+									ReadinessCheck: ProbeSpec{
+										Type: ProcessProbeType,
+									},
+								},
+							},
 						},
 						Env: map[string]string{
 							"JBP_CONFIG_SPRING_AUTO_RECONFIGURATION": "{enabled: false}",
@@ -1155,7 +1231,6 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						},
 						BuildPacks: []string{"java_buildpack"},
 						Path:       "build/libs/spring-music-1.0.jar",
-						Timeout:    60,
 						Routes: RouteSpec{
 							Routes: Routes{
 								{
@@ -1186,31 +1261,26 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				It("validates the discovery data of an app with multiple processes", func() {
 					expected := Application{
 						Metadata: Metadata{Name: "multiple-processes"},
-						ProcessSpecTemplate: &ProcessSpecTemplate{
-							Instances: 1,
-						},
-						Timeout: 60,
 						Routes: RouteSpec{
 							RandomRoute: true,
 						},
 						Processes: Processes{
 							{
-								Type:    Web,
-								Timeout: 10,
+								Type: Web,
 								ProcessSpecTemplate: ProcessSpecTemplate{
 									Command:   "start-web.sh",
 									DiskQuota: "512M",
-									HealthCheck: ProbeSpec{
-										Endpoint: "/healthcheck",
-										Timeout:  10,
-										Type:     HTTPProbeType,
-										Interval: 30,
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											Endpoint:          "/healthcheck",
+											InvocationTimeout: 10,
+											Type:              HTTPProbeType,
+											Interval:          30,
+										},
+										Timeout: 10,
 									},
 									ReadinessCheck: ProbeSpec{
-										Endpoint: "/",
-										Interval: 30,
-										Timeout:  1,
-										Type:     ProcessProbeType,
+										Type: ProcessProbeType,
 									},
 									Instances:    3,
 									Memory:       "500M",
@@ -1218,24 +1288,20 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 								},
 							},
 							{
-								Type:    Worker,
-								Timeout: 15,
+								Type: Worker,
 								ProcessSpecTemplate: ProcessSpecTemplate{
 									Command:   "start-worker.sh",
 									DiskQuota: "1G",
 									Instances: 2,
 									Memory:    "256M",
-									HealthCheck: ProbeSpec{
-										Type:     ProcessProbeType,
-										Endpoint: "/",
-										Interval: 30,
-										Timeout:  1,
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											Type: ProcessProbeType,
+										},
+										Timeout: 60,
 									},
 									ReadinessCheck: ProbeSpec{
-										Endpoint: "/",
-										Timeout:  1,
-										Interval: 30,
-										Type:     ProcessProbeType,
+										Type: ProcessProbeType,
 									},
 									LogRateLimit: "16K",
 								},
@@ -1247,6 +1313,99 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Expect(err).NotTo(HaveOccurred())
 					Expect(app).To(BeEquivalentTo(&expected))
 				})
+				It("validates the discovery data of an app with two processes of type web, one inlined and the other one in the process field", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "multiple-web-processes"},
+						Routes: RouteSpec{
+							RandomRoute: true,
+						},
+						Processes: Processes{
+							{
+								Type: Web,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Command:   "start-web.sh",
+									DiskQuota: "512M",
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											Endpoint:          "/healthcheck",
+											InvocationTimeout: 10,
+											Type:              HTTPProbeType,
+											Interval:          30,
+										},
+										Timeout: 10,
+									},
+									ReadinessCheck: ProbeSpec{
+										Type: ProcessProbeType,
+									},
+									Instances:    3,
+									Memory:       "500M",
+									LogRateLimit: "16K",
+								},
+							},
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "multiple-web-processes", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+
+				It("validates the discovery data of an app with one inline process of type worker and another one of type web in the processes slice", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "worker-inline-and-web-processes"},
+						Routes: RouteSpec{
+							RandomRoute: true,
+						},
+						Processes: Processes{
+							{
+								Type: Web,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Command:   "start-web.sh",
+									DiskQuota: "512M",
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											Endpoint:          "/healthcheck",
+											InvocationTimeout: 10,
+											Type:              HTTPProbeType,
+											Interval:          30,
+										},
+										Timeout: 10,
+									},
+									ReadinessCheck: ProbeSpec{
+										Type: ProcessProbeType,
+									},
+									Instances:    3,
+									Memory:       "500M",
+									LogRateLimit: "16K",
+								},
+							},
+							{
+								Type: Worker,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											InvocationTimeout: 1,
+											Type:              PortProbeType,
+											Interval:          30,
+										},
+										Timeout: 60,
+									},
+									ReadinessCheck: ProbeSpec{
+										Type: ProcessProbeType,
+									},
+									Instances:    1,
+									Memory:       "256M",
+									LogRateLimit: "16K",
+								},
+							},
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "worker-inline-and-web-processes", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+
 				It("validates the discovery data of an app with env, services, processes, routes and sidecars ", func() {
 					expected := Application{
 						Metadata: Metadata{
@@ -1294,28 +1453,23 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 							},
 						},
 						Stack: "cflinuxfs3",
-						ProcessSpecTemplate: &ProcessSpecTemplate{
-							Instances: 1,
-						},
-						Timeout: 120,
 						Processes: Processes{
 							{
-								Type:    Web,
-								Timeout: 10,
+								Type: Web,
 								ProcessSpecTemplate: ProcessSpecTemplate{
 									Command:   "start-web.sh",
 									DiskQuota: "512M",
-									HealthCheck: ProbeSpec{
-										Endpoint: "/healthcheck",
-										Timeout:  10,
-										Type:     HTTPProbeType,
-										Interval: 30,
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											Endpoint:          "/healthcheck",
+											InvocationTimeout: 10,
+											Type:              HTTPProbeType,
+											Interval:          30,
+										},
+										Timeout: 10,
 									},
 									ReadinessCheck: ProbeSpec{
-										Endpoint: "/",
-										Interval: 30,
-										Timeout:  1,
-										Type:     ProcessProbeType,
+										Type: ProcessProbeType,
 									},
 									Instances:    3,
 									Memory:       "500M",
@@ -1323,24 +1477,20 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 								},
 							},
 							{
-								Type:    Worker,
-								Timeout: 15,
+								Type: Worker,
 								ProcessSpecTemplate: ProcessSpecTemplate{
 									Command:   "start-worker.sh",
 									DiskQuota: "1G",
 									Instances: 2,
 									Memory:    "256M",
-									HealthCheck: ProbeSpec{
-										Type:     ProcessProbeType,
-										Endpoint: "/",
-										Interval: 30,
-										Timeout:  1,
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											Type: ProcessProbeType,
+										},
+										Timeout: 60,
 									},
 									ReadinessCheck: ProbeSpec{
-										Endpoint: "/",
-										Timeout:  1,
-										Interval: 30,
-										Type:     ProcessProbeType,
+										Type: ProcessProbeType,
 									},
 									LogRateLimit: "16K",
 								},

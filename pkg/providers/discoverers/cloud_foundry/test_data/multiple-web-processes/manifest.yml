@@ -1,6 +1,6 @@
 ---
 applications:
-- name: multiple-processes
+- name: multiple-web-processes
   instances: 1
   random-route: true
   processes:
@@ -13,9 +13,8 @@ applications:
     instances: 3
     memory: 500M
     timeout: 10
-  - type: worker
-    command: start-worker.sh
-    disk_quota: 1G
-    health-check-type: process
-    instances: 2
-    memory: 256M
+  type: web
+  command: start.sh
+  disk_quota: 1G
+  health-check-type: process
+  memory: 256M
