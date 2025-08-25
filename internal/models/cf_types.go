@@ -66,7 +66,7 @@ type AppManifestProcess struct {
 	Instances                        *uint              `yaml:"instances,omitempty"`
 	LogRateLimitPerSecond            string             `yaml:"log-rate-limit-per-second,omitempty"`
 	Memory                           string             `yaml:"memory,omitempty"`
-	Timeout                          uint               `yaml:"timeout,omitempty"`
+	Timeout                          int                `yaml:"timeout,omitempty"`
 	HealthCheckInterval              uint               `yaml:"health-check-interval,omitempty"`
 	ReadinessHealthCheckType         AppHealthCheckType `yaml:"readiness-health-check-type,omitempty"`
 	ReadinessHealthCheckHttpEndpoint string             `yaml:"readiness-health-check-http-endpoint,omitempty"`

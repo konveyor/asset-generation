@@ -171,7 +171,7 @@ func parseProbeInterval[T uint | int](cfInterval *T, cftype ProbeType) int {
 	return 30
 }
 
-func parseHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfInterval uint, cfInvocationTimeout uint, cfTimeout uint) HealthCheckSpec {
+func parseHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfInterval uint, cfInvocationTimeout uint, cfTimeout int) HealthCheckSpec {
 	p := parseProbeType(cfType, PortProbeType)
 
 	s := HealthCheckSpec{
@@ -181,7 +181,7 @@ func parseHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfIn
 			InvocationTimeout: parseProbeInvocationTimeout(&cfInvocationTimeout, p),
 			Interval:          parseProbeInterval(&cfInterval, p),
 		},
-		Timeout: parseHealthCheckTimeout(cfTimeout, p),
+		Timeout: parseHealthCheckTimeout(&cfTimeout, p),
 	}
 	return s
 
@@ -202,14 +202,14 @@ func parseReadinessHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint str
 	}
 }
 
-func parseHealthCheckTimeout(cfTimeout uint, p ProbeType) int {
+func parseHealthCheckTimeout(cfTimeout *int, p ProbeType) int {
 	if p == ProcessProbeType {
 		return 0
 	}
-	if cfTimeout == 0 {
+	if cfTimeout == nil || *cfTimeout == 0 {
 		return 60
 	}
-	return int(cfTimeout)
+	return int(*cfTimeout)
 }
 
 func parseSidecars(sidecars cfTypes.AppManifestSideCars) (Sidecars, error) {
