@@ -1348,6 +1348,62 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Expect(app).To(BeEquivalentTo(&expected))
 				})
 
+				It("validates the discovery data of an app with one inline process of type worker and another one of type web in the processes slice", func() {
+					expected := Application{
+						Metadata: Metadata{Name: "worker-inline-and-web-processes"},
+						Routes: RouteSpec{
+							RandomRoute: true,
+						},
+						Processes: Processes{
+							{
+								Type: Web,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									Command:   "start-web.sh",
+									DiskQuota: "512M",
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											Endpoint:          "/healthcheck",
+											InvocationTimeout: 10,
+											Type:              HTTPProbeType,
+											Interval:          30,
+										},
+										Timeout: 10,
+									},
+									ReadinessCheck: ProbeSpec{
+										Type: ProcessProbeType,
+									},
+									Instances:    3,
+									Memory:       "500M",
+									LogRateLimit: "16K",
+								},
+							},
+							{
+								Type: Worker,
+								ProcessSpecTemplate: ProcessSpecTemplate{
+									HealthCheck: HealthCheckSpec{
+										ProbeSpec: ProbeSpec{
+											InvocationTimeout: 1,
+											Type:              PortProbeType,
+											Interval:          30,
+										},
+										Timeout: 60,
+									},
+									ReadinessCheck: ProbeSpec{
+										Type: ProcessProbeType,
+									},
+									Instances:    1,
+									Memory:       "256M",
+									LogRateLimit: "16K",
+								},
+							},
+						},
+					}
+					processManifestPath := filepath.Join("test_data", "worker-inline-and-web-processes", "manifest.yml")
+					app, err := provider.discoverFromManifestFile(processManifestPath)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(app).To(BeEquivalentTo(&expected))
+				})
+
 				It("validates the discovery data of an app with env, services, processes, routes and sidecars ", func() {
 					expected := Application{
 						Metadata: Metadata{
