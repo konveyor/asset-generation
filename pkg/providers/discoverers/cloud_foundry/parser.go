@@ -181,7 +181,7 @@ func parseHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint string, cfIn
 			InvocationTimeout: parseProbeInvocationTimeout(&cfInvocationTimeout, p),
 			Interval:          parseProbeInterval(&cfInterval, p),
 		},
-		Timeout: parseHealthCheckTimeout(&cfTimeout, p),
+		Timeout: parseHealthCheckTimeout(&cfTimeout),
 	}
 	return s
 
@@ -202,10 +202,7 @@ func parseReadinessHealthCheck(cfType cfTypes.AppHealthCheckType, cfEndpoint str
 	}
 }
 
-func parseHealthCheckTimeout(cfTimeout *int, p ProbeType) int {
-	if p == ProcessProbeType {
-		return 0
-	}
+func parseHealthCheckTimeout(cfTimeout *int) int {
 	if cfTimeout == nil || *cfTimeout == 0 {
 		return 60
 	}

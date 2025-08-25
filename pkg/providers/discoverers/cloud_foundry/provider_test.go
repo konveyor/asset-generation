@@ -1297,6 +1297,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 										ProbeSpec: ProbeSpec{
 											Type: ProcessProbeType,
 										},
+										Timeout: 60,
 									},
 									ReadinessCheck: ProbeSpec{
 										Type: ProcessProbeType,
@@ -1485,6 +1486,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 										ProbeSpec: ProbeSpec{
 											Type: ProcessProbeType,
 										},
+										Timeout: 60,
 									},
 									ReadinessCheck: ProbeSpec{
 										Type: ProcessProbeType,

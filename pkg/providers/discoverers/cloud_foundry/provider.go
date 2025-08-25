@@ -421,7 +421,7 @@ func (c *CloudFoundryProvider) getProcesses(appGUID, lifecycle string) (*cfTypes
 			HealthCheckHTTPEndpoint:          parseProbeEndpoint(proc.HealthCheck.Data.Endpoint, ProbeType(proc.HealthCheck.Type)),
 			HealthCheckInvocationTimeout:     uint(parseProbeInvocationTimeout(proc.HealthCheck.Data.InvocationTimeout, ProbeType(proc.HealthCheck.Type))),
 			HealthCheckInterval:              uint(parseProbeInterval(proc.HealthCheck.Data.Interval, ProbeType(proc.HealthCheck.Type))),
-			Timeout:                          parseHealthCheckTimeout(proc.HealthCheck.Data.Timeout, ProbeType(proc.HealthCheck.Type)),
+			Timeout:                          parseHealthCheckTimeout(proc.HealthCheck.Data.Timeout),
 			Instances:                        &procInstances,
 			LogRateLimitPerSecond:            strconv.Itoa(proc.LogRateLimitInBytesPerSecond),
 			Memory:                           strconv.Itoa(proc.MemoryInMB),
@@ -489,6 +489,7 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(spaceName string, a
 		return nil, err
 	}
 
+	c.cli.ServiceCredentialBindings.GetParameters(context.Background(), app.GUID)
 	// Sidecars
 	sidecars, err := c.getSidecars(app.GUID)
 	if err != nil {
