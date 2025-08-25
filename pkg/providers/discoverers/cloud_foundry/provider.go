@@ -489,7 +489,6 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(spaceName string, a
 		return nil, err
 	}
 
-	c.cli.ServiceCredentialBindings.GetParameters(context.Background(), app.GUID)
 	// Sidecars
 	sidecars, err := c.getSidecars(app.GUID)
 	if err != nil {
