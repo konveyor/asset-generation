@@ -518,6 +518,33 @@ Commercial support is available at
     nginx   started           web:1/1     nginx.bosh-lite.com
     ```
 
+# Reboot Process
+Normally the development environment does not survive through rebooting the host, however it is possible to preserve the environment so it is not necessary to redeploy.
+
+To prepare install xmlstarlet:
+
+```bash
+sudo dnf install xmlstarlet
+```
+
+Before rebooting:
+
+```bash
+export VMUUID=$(VBoxManage list vms | grep vm- | awk -F '[{}]' '{ print $2 }' )
+VBoxManage controlvm vm-$VMUUID savestate
+```
+
+After rebooting:
+
+```bash
+export VMUUID=$(VBoxManage list vms | grep vm- | awk -F '[{}]' '{ print $2 }' )
+xmlstarlet edit --inplace -N s=http://www.virtualbox.org/ \
+  -u "s:VirtualBox/s:Machine/s:Hardware/s:StorageControllers/s:StorageController[@type='AHCI']/s:AttachedDevice[@port=2]/@hotpluggable" \
+  -v "true" VirtualBox\ VMs/vm-$VMUUID/vm-$VMUUID.vbox
+VBoxManage startvm vm-$VMUUID --type headless
+sudo ip route add 10.244.0.0/16 via 192.168.56.6
+```
+
 # Troubleshooting
 ## ❌ Can't create VMs?
 
