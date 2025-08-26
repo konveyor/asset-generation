@@ -320,7 +320,7 @@ func (c *CloudFoundryProvider) discoverFromManifest(appName string) (*pTypes.Dis
 	// the original values
 	s := c.extractSensitiveInformation(d)
 	discoverResult.Secret = s
-	discoverResult.Content, err = StructToMap(d)
+	discoverResult.Content, err = structToMap(d)
 	if err != nil {
 		return nil, fmt.Errorf("error converting discovered Cloud Foundry application to map: %v", err)
 	}
@@ -348,7 +348,7 @@ func (c *CloudFoundryProvider) discoverFromLive(spaceName string, appName string
 	// the original values
 	s := c.extractSensitiveInformation(d)
 	discoverResult.Secret = s
-	discoverResult.Content, err = StructToMap(d)
+	discoverResult.Content, err = structToMap(d)
 	if err != nil {
 		return nil, err
 	}
@@ -434,21 +434,21 @@ func (c *CloudFoundryProvider) getProcesses(appGUID, lifecycle string) (*cfTypes
 			return nil, fmt.Errorf("error getting process %s: %v", proc.GUID, err)
 		}
 		appProcesses = append(appProcesses, cfTypes.AppManifestProcess{
-			Type:                         cfTypes.AppProcessType(proc.Type),
-			Command:                      safePtr(resourceProcess.Command, ""),
-			DiskQuota:                    strconv.Itoa(proc.DiskInMB),
-			HealthCheckType:              cfTypes.AppHealthCheckType(proc.HealthCheck.Type),
-			HealthCheckHTTPEndpoint:      parseProbeEndpoint(proc.HealthCheck.Data.Endpoint),
-			HealthCheckInvocationTimeout: uint(parseProbeTimeout(proc.HealthCheck.Data.InvocationTimeout)),
-			HealthCheckInterval:          uint(parseProbeInterval(proc.HealthCheck.Data.Interval)),
-			Instances:                    &procInstances,
-			LogRateLimitPerSecond:        strconv.Itoa(proc.LogRateLimitInBytesPerSecond),
-			Memory:                       strconv.Itoa(proc.MemoryInMB),
-			// Timeout not available
+			Type:                             cfTypes.AppProcessType(proc.Type),
+			Command:                          safePtr(resourceProcess.Command, ""),
+			DiskQuota:                        strconv.Itoa(proc.DiskInMB),
+			HealthCheckType:                  cfTypes.AppHealthCheckType(proc.HealthCheck.Type),
+			HealthCheckHTTPEndpoint:          parseProbeEndpoint(proc.HealthCheck.Data.Endpoint, ProbeType(proc.HealthCheck.Type)),
+			HealthCheckInvocationTimeout:     uint(parseProbeInvocationTimeout(proc.HealthCheck.Data.InvocationTimeout, ProbeType(proc.HealthCheck.Type))),
+			HealthCheckInterval:              uint(parseProbeInterval(proc.HealthCheck.Data.Interval, ProbeType(proc.HealthCheck.Type))),
+			Timeout:                          parseHealthCheckTimeout(proc.HealthCheck.Data.Timeout),
+			Instances:                        &procInstances,
+			LogRateLimitPerSecond:            strconv.Itoa(proc.LogRateLimitInBytesPerSecond),
+			Memory:                           strconv.Itoa(proc.MemoryInMB),
 			ReadinessHealthCheckType:         cfTypes.AppHealthCheckType(proc.ReadinessCheck.Type),
-			ReadinessHealthCheckHttpEndpoint: parseProbeEndpoint(proc.ReadinessCheck.Data.Endpoint),
-			ReadinessHealthInvocationTimeout: uint(parseProbeTimeout(proc.ReadinessCheck.Data.InvocationTimeout)),
-			ReadinessHealthCheckInterval:     uint(parseProbeInterval(proc.ReadinessCheck.Data.Interval)),
+			ReadinessHealthCheckHttpEndpoint: parseProbeEndpoint(proc.ReadinessCheck.Data.Endpoint, ProbeType(proc.ReadinessCheck.Type)),
+			ReadinessHealthInvocationTimeout: uint(parseProbeInvocationTimeout(proc.ReadinessCheck.Data.InvocationTimeout, ProbeType(proc.ReadinessCheck.Type))),
+			ReadinessHealthCheckInterval:     uint(parseProbeInterval(proc.ReadinessCheck.Data.Interval, ProbeType(proc.ReadinessCheck.Type))),
 			Lifecycle:                        lifecycle,
 		})
 	}
@@ -509,6 +509,7 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(spaceName string, a
 		return nil, err
 	}
 
+	c.cli.ServiceCredentialBindings.GetParameters(context.Background(), app.GUID)
 	// Sidecars
 	sidecars, err := c.getSidecars(app.GUID)
 	if err != nil {
