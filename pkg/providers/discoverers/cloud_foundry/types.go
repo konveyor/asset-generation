@@ -126,6 +126,8 @@ const (
 	Web ProcessType = "web"
 	// Worker represents a `worker` application type
 	Worker ProcessType = "worker"
+	// Task represents a `task` sidecar for an application
+	Task ProcessType = "task"
 )
 
 type ProbeSpec struct {

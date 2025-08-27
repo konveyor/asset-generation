@@ -19,3 +19,7 @@ applications:
     health-check-type: process
     instances: 2
     memory: 256M
+  - type: task
+    command: run-task.sh
+    instances: 0
+    memory: 128M
