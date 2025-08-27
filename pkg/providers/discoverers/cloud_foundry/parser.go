@@ -47,6 +47,9 @@ func processProcessProbes(cfProcess cfTypes.AppManifestProcess) (HealthCheckSpec
 	return healthCheck, readinessCheck
 }
 func parseProcess(cfApp cfTypes.AppManifestProcess) (*ProcessSpec, error) {
+	if string(cfApp.Type) == string(Task) {
+		return nil, nil
+	}
 	if string(cfApp.Type) != string(Web) && string(cfApp.Type) != string(Worker) {
 		return nil, fmt.Errorf("unknown process type %s", cfApp.Type)
 	}
@@ -284,6 +287,9 @@ func parseProcesses(cfProcs *cfTypes.AppManifestProcesses) (Processes, error) {
 		p, err := parseProcess(proc)
 		if err != nil {
 			return nil, err
+		}
+		if p == nil {
+			continue
 		}
 		procs = append(procs, *p)
 	}
