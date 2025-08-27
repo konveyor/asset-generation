@@ -15,6 +15,7 @@ type AppProcessType string
 const (
 	WebAppProcessType    AppProcessType = "web"
 	WorkerAppProcessType AppProcessType = "worker"
+	TaskAppProcessType   AppProcessType = "task"
 )
 
 type AppRouteProtocol string
