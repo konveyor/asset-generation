@@ -1743,6 +1743,56 @@ applications: []`
 		})
 	})
 
+	When("validating the discovery manifest marshalled structure", func() {
+		Context("validating route defaults are omitted in YAML", func() {
+			It("omits noRoute/randomRoute/routes when unset", func() {
+				app := Application{
+					Metadata: Metadata{Name: "app-routes"},
+					// Routes left at zero-value: NoRoute=false, RandomRoute=false, Routes=nil
+				}
+				b, err := yaml.Marshal(app)
+				Expect(err).NotTo(HaveOccurred())
+				// Expect only name, no route-related keys
+				Expect(b).To(MatchYAML(`name: app-routes`))
+			})
+		})
+		Context("validating health fields are omitted with default values for YAML", func() {
+			It("omits the fields when unset", func() {
+				app := Application{
+					Metadata: Metadata{
+						Name: "app",
+					},
+					Processes: Processes{
+						{
+							Type: Web,
+							ProcessSpecTemplate: ProcessSpecTemplate{
+								HealthCheck: HealthCheckSpec{
+									ProbeSpec: ProbeSpec{
+										Type: ProcessProbeType,
+									},
+									Timeout: 60,
+								},
+								ReadinessCheck: ProbeSpec{
+									Type: ProcessProbeType,
+								},
+							},
+						},
+					},
+				}
+				b, err := yaml.Marshal(app)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(b).To(MatchYAML(`name: app
+processes:
+  - type: web
+    healthCheck:
+      timeout: 60
+      type: process
+    readinessCheck:
+      type: process
+`))
+			})
+		})
+	})
 })
 
 func MapToStruct(m map[string]any, obj *Application) error {
