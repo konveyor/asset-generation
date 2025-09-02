@@ -35,7 +35,7 @@ type Sidecars []SidecarSpec
 
 type Docker struct {
 	// Image represents the pullspect where the container image is located.
-	Image string `yaml:"image" json:"image" validate:"required"`
+	Image string `yaml:"image,omitempty" json:"image,omitempty" validate:"required"`
 	// Username captures the username to authenticate against the container registry.
 	Username string `yaml:"username,omitempty" json:"username,omitempty"`
 }
@@ -132,12 +132,12 @@ const (
 
 type ProbeSpec struct {
 	// Endpoint represents the URL location where to perform the probe check.
-	Endpoint string `yaml:"endpoint" json:"endpoint" validate:"omitempty"`
+	Endpoint string `yaml:"endpoint,omitempty" json:"endpoint,omitempty" validate:"omitempty"`
 	// InvocationTimeout represents the number of seconds in which the probe check can be considered as timedout.
 	// https://docs.cloudfoundry.org/devguide/deploy-apps/manifest-attributes.html#timeout
-	InvocationTimeout int `yaml:"invocationTimeout" json:"invocationTimeout" validate:"omitempty,min=0"`
+	InvocationTimeout int `yaml:"invocationTimeout,omitempty" json:"invocationTimeout,omitempty" validate:"omitempty,min=0"`
 	// Interval represents the number of seconds between probe checks.
-	Interval int `yaml:"interval" json:"interval" validate:"omitempty,min=0"`
+	Interval int `yaml:"interval,omitempty" json:"interval,omitempty" validate:"omitempty,min=0"`
 	// Type specifies the type of health check to perform.
 	Type ProbeType `yaml:"type" json:"type" validate:"required,oneof=http process port"`
 }
@@ -151,7 +151,7 @@ type HealthCheckSpec struct {
 	// the deployment as failed. The default value is 60 seconds and maximum to 180 seconds, but both values can be changed in the Cloud Foundry Controller.
 	// https://github.com/cloudfoundry/docs-dev-guide/blob/96f19d9d67f52ac7418c147d5ddaa79c957eec34/deploy-apps/large-app-deploy.html.md.erb#L35
 	// Default is 60 (seconds).
-	Timeout int `yaml:"timeout" json:"timeout" validate:"min=0,max=180"`
+	Timeout int `yaml:"timeout,omitempty" json:"timeout,omitempty" validate:"min=0,max=180"`
 }
 
 type ProbeType string

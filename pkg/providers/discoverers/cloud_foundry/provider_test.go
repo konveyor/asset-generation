@@ -1743,6 +1743,42 @@ applications: []`
 		})
 	})
 
+	_ = When("validating the discovery manifest marshalled structure", func() {
+		It("validates that the health fields are omited with default values for YAML", func() {
+			app := Application{
+				Metadata: Metadata{
+					Name: "app",
+				},
+				Processes: Processes{
+					{
+						Type: Web,
+						ProcessSpecTemplate: ProcessSpecTemplate{
+							HealthCheck: HealthCheckSpec{
+								ProbeSpec: ProbeSpec{
+									Type: ProcessProbeType,
+								},
+								Timeout: 60,
+							},
+							ReadinessCheck: ProbeSpec{
+								Type: ProcessProbeType,
+							},
+						},
+					},
+				},
+			}
+			b, err := yaml.Marshal(app)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(b).To(MatchYAML(`name: app
+processes:
+  - type: web
+    healthCheck:
+      timeout: 60
+      type: process
+    readinessCheck:
+      type: process
+`))
+		})
+	})
 })
 
 func MapToStruct(m map[string]any, obj *Application) error {
