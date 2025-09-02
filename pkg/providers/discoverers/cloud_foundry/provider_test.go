@@ -1756,6 +1756,31 @@ applications: []`
 				Expect(b).To(MatchYAML(`name: app-routes`))
 			})
 		})
+
+		Context("validating that only default values are included in an app with only name", func() {
+			It("marshals only mandatory defaults for a minimal app", func() {
+				nopLogger := logr.New(logr.Discard().GetSink())
+				provider := &CloudFoundryProvider{
+					logger: &nopLogger,
+				}
+				app, err := provider.discoverFromManifestFile(filepath.Join("test_data", "basic-app", "manifest.yml"))
+				Expect(err).To(BeNil())
+				out, err := yaml.Marshal(app)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(out).To(MatchYAML(`name: basic-app
+processes:
+    - type: web
+      healthCheck:
+        invocationTimeout: 1
+        interval: 30
+        type: port
+        timeout: 60
+      readinessCheck:
+        type: process
+      instances: 1
+`))
+			})
+		})
 		Context("validating health fields are omitted with default values for YAML", func() {
 			It("omits the fields when unset", func() {
 				app := Application{
