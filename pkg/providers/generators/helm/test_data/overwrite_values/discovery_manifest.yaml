@@ -1,0 +1,4 @@
+manifest:
+    name: app2
+    processes:
+        - type: web

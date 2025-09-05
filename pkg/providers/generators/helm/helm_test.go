@@ -14,18 +14,15 @@ import (
 var _ = Describe("Helm command", func() {
 
 	const (
-		testDiscoverPath = "./test_data/discover.yaml"
-		chartDir         = "./test_data/"
+		testDiscoverPath    = "./test_data/discover.yaml"
+		chartDir            = "./test_data/"
+		overwriteValuesPath = "./test_data/overwrite_values/discovery_manifest.yaml"
 	)
 
 	When("validating the execution when generating templates", func() {
 
-		DescribeTable("when generating the manifests", func(cfg helm.Config, additionalValues map[string]any, expectedManifests map[string]string) {
-			values := loadValues(testDiscoverPath, additionalValues)
-			if cfg.Values == nil {
-				cfg.Values = make(map[string]any)
-			}
-			maps.Copy(cfg.Values, values)
+		DescribeTable("when generating the manifests", func(cfg helm.Config, discoverPath string, expectedManifests map[string]string) {
+			cfg.Values = loadValues(discoverPath, cfg.Values)
 			generator := helm.New(cfg)
 			generatedManifests, err := generator.Generate()
 			Expect(err).NotTo(HaveOccurred())
@@ -33,15 +30,29 @@ var _ = Describe("Helm command", func() {
 			for k, expectedManifest := range expectedManifests {
 				gManifest, ok := generatedManifests[k]
 				Expect(ok).To(BeTrue())
-				Expect(gManifest).To(Equal(expectedManifest))
+				Expect(gManifest).To(MatchYAML(expectedManifest))
 			}
 
 		},
+			Entry("generates the manifests for a K8s chart using a discovery manifest that overwrites one of the root keys and validates that when merging the extra values with the chart, only the matching leaves are overwritten",
+				helm.Config{
+					ChartPath:                 path.Join(chartDir, "overwrite_values"),
+					SkipRenderNonK8SManifests: true,
+				}, overwriteValuesPath, map[string]string{"overwrite_values/templates/deployment.yaml": `---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: app2-web
+  labels:
+    space: default-space
+    version: "1.0.0"
+spec: {}
+`}),
 			Entry("generates the manifests for a K8s chart using the discover manifest as input",
 				helm.Config{
 					ChartPath:                 path.Join(chartDir, "k8s_only"),
 					SkipRenderNonK8SManifests: true,
-				}, nil, map[string]string{"k8s_only/templates/configmap.yaml": `apiVersion: v1
+				}, testDiscoverPath, map[string]string{"k8s_only/templates/configmap.yaml": `apiVersion: v1
 data:
   chartName: hello world!
 kind: ConfigMap
@@ -52,7 +63,8 @@ metadata:
 				helm.Config{
 					ChartPath:                 path.Join(chartDir, "with_values_in_chart"),
 					SkipRenderNonK8SManifests: true,
-				}, map[string]any{"foo": map[string]any{"bar": "bar.foo"}, "name": "replaced"},
+					Values:                    map[string]any{"foo": map[string]any{"bar": "bar.foo"}, "name": "replaced"},
+				}, testDiscoverPath,
 				map[string]string{"with_values_in_chart/templates/configmap.yaml": `apiVersion: v1
 data:
   chartName: bar.foo
@@ -64,7 +76,8 @@ metadata:
 				helm.Config{
 					ChartPath:                 path.Join(chartDir, "k8s_only"),
 					SkipRenderNonK8SManifests: true,
-				}, map[string]any{"extra": map[string]any{"value": "Lorem Ipsum"}},
+					Values:                    map[string]any{"extra": map[string]any{"value": "Lorem Ipsum"}},
+				}, testDiscoverPath,
 				map[string]string{"k8s_only/templates/configmap.yaml": `apiVersion: v1
 data:
   chartName: hello world!
@@ -77,11 +90,11 @@ metadata:
 				helm.Config{
 					ChartPath:              path.Join(chartDir, "k8s_only"),
 					SkipRenderK8SManifests: true,
-				}, nil, map[string]string{}),
+				}, testDiscoverPath, map[string]string{}),
 			Entry("generates both non-K8s and K8s manifests in a chart that contains both type of templates with the discover manifest as input",
 				helm.Config{
 					ChartPath: path.Join(chartDir, "mixed_templates"),
-				}, nil, map[string]string{"mixed_templates/templates/configmap.yaml": `apiVersion: v1
+				}, testDiscoverPath, map[string]string{"mixed_templates/templates/configmap.yaml": `apiVersion: v1
 data:
   chartName: hello world!
 kind: ConfigMap
@@ -94,7 +107,8 @@ RUN echo hello world!`}),
 			Entry("with a chart with mixed templates and overriding the variable in the values.yaml",
 				helm.Config{
 					ChartPath: path.Join(chartDir, "mixed_templates"),
-				}, map[string]any{"foo": map[string]any{"bar": "bar.foo"}},
+					Values:    map[string]any{"foo": map[string]any{"bar": "bar.foo"}},
+				}, testDiscoverPath,
 				map[string]string{"mixed_templates/templates/configmap.yaml": `apiVersion: v1
 data:
   chartName: bar.foo
@@ -107,7 +121,8 @@ RUN echo bar.foo`}),
 			Entry("with a chart with mixed templates and adding a new variable that is captured in the template",
 				helm.Config{
 					ChartPath: path.Join(chartDir, "mixed_templates"),
-				}, map[string]any{"extra": map[string]any{"value": "Lorem Ipsum"}},
+					Values:    map[string]any{"extra": map[string]any{"value": "Lorem Ipsum"}},
+				}, testDiscoverPath,
 				map[string]string{"mixed_templates/templates/configmap.yaml": `apiVersion: v1
 data:
   chartName: hello world!
@@ -123,7 +138,8 @@ RUN echo Lorem Ipsum
 			Entry("with a chart with mixed templates with multiple variables as input",
 				helm.Config{
 					ChartPath: path.Join(chartDir, "mixed_templates"),
-				}, map[string]any{"extra": map[string]any{"value": "Lorem Ipsum"}, "foo": map[string]any{"bar": "bar foo"}},
+					Values:    map[string]any{"extra": map[string]any{"value": "Lorem Ipsum"}, "foo": map[string]any{"bar": "bar foo"}},
+				}, testDiscoverPath,
 				map[string]string{"mixed_templates/templates/configmap.yaml": `apiVersion: v1
 data:
   chartName: bar foo
@@ -140,7 +156,7 @@ RUN echo Lorem Ipsum
 				helm.Config{
 					ChartPath:              path.Join(chartDir, "mixed_templates"),
 					SkipRenderK8SManifests: true,
-				}, nil, map[string]string{"mixed_templates/files/konveyor/Dockerfile": `FROM python:3
+				}, testDiscoverPath, map[string]string{"mixed_templates/files/konveyor/Dockerfile": `FROM python:3
 
 RUN echo hello world!`}),
 			Entry("Skip generating both non and K8s manifests",
@@ -148,7 +164,7 @@ RUN echo hello world!`}),
 					ChartPath:                 path.Join(chartDir, "mixed_templates"),
 					SkipRenderK8SManifests:    true,
 					SkipRenderNonK8SManifests: true,
-				}, nil, map[string]string{}),
+				}, testDiscoverPath, map[string]string{}),
 		)
 	})
 

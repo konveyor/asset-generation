@@ -39,7 +39,11 @@ func (p *helmProvider) Generate() (map[string]string, error) {
 	if chart.Values == nil {
 		chart.Values = make(map[string]any)
 	}
-	maps.Copy(chart.Values, p.cfg.Values)
+	chart.Values, err = chartutil.CoalesceValues(chart, p.cfg.Values)
+	if err != nil {
+		return nil, err
+	}
+
 	rendered := make(map[string]string)
 	if !p.cfg.SkipRenderK8SManifests {
 		rendered, err = generateK8sTemplates(*chart)
