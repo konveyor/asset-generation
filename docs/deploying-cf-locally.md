@@ -557,6 +557,9 @@ As an alternative to SSH tunneling, you can use iptables rules for persistent po
 6. Login to CF:
 
     ```bash
+    # If you have credentials:
+    cf login -a https://api.bosh-lite.com --skip-ssl-validation -u admin -p "<ADMIN_PASSWORD>"
+    # Alternatively, expose CredHub (port 8844) and retrieve the password as shown in the earlier section.
     cf login -a https://api.bosh-lite.com --skip-ssl-validation -u admin -p "$CF_ADMIN_PASSWORD"
     ```
 
