@@ -473,6 +473,9 @@ Commercial support is available at
 ```
 
 # Connect to a remote Cloud Foundry instance
+
+**Option A: SSH Tunnel**
+
 1. Update `/etc/hosts` on Your Local Machine
 
     Add the following lines to your `/etc/hosts` file:
@@ -483,7 +486,7 @@ Commercial support is available at
     127.0.0.1 uaa.bosh-lite.com
     ```
 
-1. Set up ssh tunnel
+2. Set up ssh tunnel
    * Share you _**public**_ ssh key with the remote system admin.
    * Once access is granted, verify your SSH connection:
 
@@ -507,7 +510,57 @@ Commercial support is available at
     > The `-N` flag tells SSH not to execute a remote command.<br/>
     > The `-v` flag enables verbose output for debugging.
 
-1. Verify Access to the Remote Cloud Foundry Instance
+**Option B: iptables rules (persistent across reboots)**
+
+As an alternative to SSH tunneling, you can use iptables rules for persistent port forwarding:
+
+1. Login to the VM that has CF deployed:
+
+    ```bash
+    ssh <user_remote>@<remote_server_address> -i <path_to/private/sshkey>
+    ```
+
+2. Set up the NAT rules to redirect traffic:
+
+    ```bash
+    sudo iptables -t nat -A PREROUTING -p tcp --dport 443 -j DNAT --to-destination 10.244.0.131:443
+    sudo iptables -t nat -A PREROUTING -p tcp --dport 8443 -j DNAT --to-destination 10.244.0.34:443
+    sudo iptables -t nat -A PREROUTING -p tcp --dport 8444 -j DNAT --to-destination 10.244.0.131:443
+    sudo iptables -t nat -A POSTROUTING -d 10.244.0.0/16 -j MASQUERADE
+    ```
+
+3. Enable IP forwarding in the kernel:
+
+    ```bash
+    sudo sysctl -w net.ipv4.ip_forward=1
+    ```
+
+4. Make IP forwarding persistent across reboots:
+
+    ```bash
+    echo "net.ipv4.ip_forward = 1" | sudo tee -a /etc/sysctl.conf
+    sudo sysctl -p
+    ```
+
+    > 💡 Note: This iptables approach provides persistent routing that survives reboots, unlike SSH tunnels which need to be re-established. However, you'll still need SSH access to the remote server for the initial setup.
+
+5. Update your local machine /etc/hosts file: 
+    
+    Add the following lines to your local machine's `/etc/hosts` file (replace `<VM_IP>` with the actual IP of the VM that has CF installed):
+
+    ```bash
+    <VM_IP> api.bosh-lite.com
+    <VM_IP> login.bosh-lite.com
+    <VM_IP> uaa.bosh-lite.com
+    ```
+
+6. Login to CF:
+
+    ```bash
+    cf login -a https://api.bosh-lite.com --skip-ssl-validation -u admin -p "$CF_ADMIN_PASSWORD"
+    ```
+
+ Verify Access to the Remote Cloud Foundry Instance
   Open a new terminal on your local machine and check access to the remote CF instance
 
     ```bash
