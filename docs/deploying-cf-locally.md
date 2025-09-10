@@ -543,8 +543,10 @@ As an alternative to SSH tunneling, you can use iptables rules for persistent po
     ```
 
     > Note: Only the sysctl change is persistent here. iptables rules are NOT persistent by default.
-    > To persist them,
-    >  - Install iptables-services and save rules: `sudo dnf install -y iptables-services && sudo iptables-save | sudo tee /etc/sysconfig/iptables && sudo systemctl enable --now iptables`
+    > To persist them, choose one:
+    > * firewalld (recommended on Fedora/nftables): translate rules to `firewall-cmd` (e.g., `--add-forward-port`, `--add-masquerade`) with `--permanent`, then `firewall-cmd --reload`.
+    > * iptables-services (replaces firewalld): `sudo dnf install -y iptables-services && sudo iptables-save | sudo tee /etc/sysconfig/iptables && sudo systemctl enable --now iptables`
+    > * systemd unit: apply your iptables commands on boot.
 
 5. Update your local machine /etc/hosts file: 
     
