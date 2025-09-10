@@ -487,7 +487,7 @@ Commercial support is available at
     ```
 
 2. Set up ssh tunnel
-   * Share you _**public**_ ssh key with the remote system admin.
+   * Share your _**public**_ ssh key with the remote system admin.
    * Once access is granted, verify your SSH connection:
 
       ```bash
@@ -527,6 +527,12 @@ As an alternative to SSH tunneling, you can use iptables rules for persistent po
     sudo iptables -t nat -A PREROUTING -p tcp --dport 8443 -j DNAT --to-destination 10.244.0.34:443
     sudo iptables -t nat -A PREROUTING -p tcp --dport 8444 -j DNAT --to-destination 10.244.0.131:443
     sudo iptables -t nat -A POSTROUTING -d 10.244.0.0/16 -j MASQUERADE
+    
+    # Enable forwarded traffic via filter table
+    sudo iptables -A FORWARD -p tcp -d 10.244.0.131 --dport 443 \
+      -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+    sudo iptables -A FORWARD \
+      -m state --state ESTABLISHED,RELATED -j ACCEPT
     ```
 
 3. Enable IP forwarding in the kernel:
