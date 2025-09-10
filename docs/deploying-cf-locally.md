@@ -560,8 +560,8 @@ As an alternative to SSH tunneling, you can use iptables rules for persistent po
     cf login -a https://api.bosh-lite.com --skip-ssl-validation -u admin -p "$CF_ADMIN_PASSWORD"
     ```
 
- Verify Access to the Remote Cloud Foundry Instance
-  Open a new terminal on your local machine and check access to the remote CF instance
+7. Verify Access to the Remote Cloud Foundry Instance
+   Open a new terminal on your local machine and check access to the remote CF instance
 
     ```bash
     ➜ cf apps
