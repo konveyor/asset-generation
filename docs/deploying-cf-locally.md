@@ -542,7 +542,9 @@ As an alternative to SSH tunneling, you can use iptables rules for persistent po
     sudo sysctl -p
     ```
 
-    > 💡 Note: This iptables approach provides persistent routing that survives reboots, unlike SSH tunnels which need to be re-established. However, you'll still need SSH access to the remote server for the initial setup.
+    > Note: Only the sysctl change is persistent here. iptables rules are NOT persistent by default.
+    > To persist them,
+    >  - Install iptables-services and save rules: `sudo dnf install -y iptables-services && sudo iptables-save | sudo tee /etc/sysconfig/iptables && sudo systemctl enable --now iptables`
 
 5. Update your local machine /etc/hosts file: 
     
@@ -554,7 +556,7 @@ As an alternative to SSH tunneling, you can use iptables rules for persistent po
     <VM_IP> uaa.bosh-lite.com
     ```
 
-6. Login to CF:
+6. Login to CF: 
 
     ```bash
     # If you have credentials:
