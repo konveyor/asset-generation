@@ -30,6 +30,7 @@ type Config struct {
 	ManifestPath       string         `json:"manifest_path" yaml:"manifest_path"`
 	CloudFoundryConfig *config.Config `json:"cloud_foundry_config,omitempty" yaml:"cloud_foundry_config,omitempty"`
 	SpaceNames         []string       `json:"space_names" yaml:"space_names"`
+	OrgNames           []string       `json:"org_names" yaml:"org_names"`
 	// Cloud Foundry transient client
 	Client *client.Client `json:"-" yaml:"-"`
 }
@@ -79,10 +80,18 @@ func (c *CloudFoundryProvider) getClient() (*client.Client, error) {
 	return cf, nil
 }
 
-// ListApps retrieves a list of application names from the specified Cloud
-// Foundry space.
-// It returns a map where the keys are space names and the values are slices of
-// application names.
+// ListApps retrieves a list of applications from Cloud Foundry.
+// For live discovery: returns a map keyed by organization names, with values
+// containing AppReference slices for all apps across all spaces in that org.
+// For local manifests: returns a map keyed by "local" (as org name), with values
+// containing AppReference slices for all apps across all spaces found in manifests.
+//
+// Example return structure:
+//
+//	map[string][]any{
+//	  "org1": []any{AppReference{OrgName: "org1", SpaceName: "space1", AppName: "app1"}, ...},
+//	  "org2": []any{AppReference{OrgName: "org2", SpaceName: "space2", AppName: "app2"}, ...},
+//	}
 func (c *CloudFoundryProvider) ListApps() (map[string][]any, error) {
 	if !isLiveDiscover(c.cfg) {
 		apps, err := c.listAppsFromLocalManifests()
@@ -95,6 +104,7 @@ func (c *CloudFoundryProvider) ListApps() (map[string][]any, error) {
 }
 
 type AppReference struct {
+	OrgName   string `json:"orgName"`
 	SpaceName string `json:"spaceName"`
 	AppName   string `json:"appName"`
 }
@@ -107,10 +117,11 @@ func (c *CloudFoundryProvider) Discover(RawData any) (*pTypes.DiscoverResult, er
 	if c.cfg.ManifestPath != "" {
 		return c.discoverFromManifest(input.AppName)
 	}
-	return c.discoverFromLive(input.SpaceName, input.AppName)
+	return c.discoverFromLive(input.OrgName, input.SpaceName, input.AppName)
 }
 
 // listAppsFromLocalManifests handles discovery of apps by reading local manifest files.
+// Returns a map keyed by "local" (as org name) for consistency with live discovery.
 func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string][]any, error) {
 	c.logger.Info("Using manifest path for Cloud Foundry local discover", "manifest_path", c.cfg.ManifestPath)
 	isDirResult, err := isDir(c.cfg.ManifestPath)
@@ -118,17 +129,18 @@ func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string][]any, e
 		return nil, fmt.Errorf("error checking if path is directory %s: %v", c.cfg.ManifestPath, err)
 	}
 
+	var apps []AppReference
+
 	if isDirResult {
 		files, err := os.ReadDir(c.cfg.ManifestPath)
 		if err != nil {
 			return nil, fmt.Errorf("error reading directory %s: %v", c.cfg.ManifestPath, err)
 		}
 
-		var apps []AppReference
 		for _, file := range files {
 			filePath := filepath.Join(c.cfg.ManifestPath, file.Name())
 
-			appName, err := c.getAppNameFromManifest(filePath)
+			appName, spaceName, err := c.getAppNameAndSpaceFromManifest(filePath)
 			if err != nil {
 				c.logger.Info("error processing manifest file", "file_path", filePath, "error", err)
 				continue
@@ -137,43 +149,59 @@ func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string][]any, e
 				c.logger.Info("manifest file does not contain an app name", "file_path", filePath)
 				continue
 			}
-			c.logger.Info("found app name in manifest file", "app_name", appName, "file_path", filePath)
-			apps = append(apps, AppReference{AppName: appName})
+			c.logger.Info("found app in manifest file", "app_name", appName, "space_name", spaceName, "file_path", filePath)
+			apps = append(apps, AppReference{
+				OrgName:   "local",
+				SpaceName: spaceName,
+				AppName:   appName,
+			})
 		}
-		return map[string][]any{"local": toAnySlice(apps)}, nil
 	} else {
-		appName, err := c.getAppNameFromManifest(c.cfg.ManifestPath)
+		appName, spaceName, err := c.getAppNameAndSpaceFromManifest(c.cfg.ManifestPath)
 		if err != nil {
 			return nil, fmt.Errorf("error processing manifest file %s: %v", c.cfg.ManifestPath, err)
 		}
 		if appName == "" {
 			return nil, fmt.Errorf("no app name found in manifest file %s", c.cfg.ManifestPath)
 		}
-		return map[string][]any{"local": {AppReference{AppName: appName}}}, nil
+		apps = append(apps, AppReference{
+			OrgName:   "local",
+			SpaceName: spaceName,
+			AppName:   appName,
+		})
 	}
+
+	// Return all apps under "local" org for consistency with live discovery
+	// Return empty map if no apps found
+	if len(apps) == 0 {
+		return map[string][]any{}, nil
+	}
+	return map[string][]any{"local": toAnySlice(apps)}, nil
 }
 
-func (c *CloudFoundryProvider) getAppNameFromManifest(filePath string) (string, error) {
+// getAppNameAndSpaceFromManifest extracts the app name and space name from a manifest file.
+// Returns (appName, spaceName, error). SpaceName defaults to "local" if not specified in manifest.
+func (c *CloudFoundryProvider) getAppNameAndSpaceFromManifest(filePath string) (string, string, error) {
 	info, err := os.Stat(filePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to stat file %q: %v", filePath, err)
+		return "", "", fmt.Errorf("failed to stat file %q: %v", filePath, err)
 	}
 	if info.IsDir() {
 		c.logger.Info("Skipping directory", "path", filePath)
-		return "", nil
+		return "", "", nil
 	}
 
 	// Check file extension for YAML
 	if !hasYAMLExtension(filePath) {
 		c.logger.Info("Skipping non-YAML file", "path", filePath)
-		return "", nil
+		return "", "", nil
 	}
 
 	c.logger.Info("Processing file.", "filename", filePath)
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read manifest file %q: %v", filePath, err)
+		return "", "", fmt.Errorf("failed to read manifest file %q: %v", filePath, err)
 	}
 
 	var manifest cfTypes.AppManifest
@@ -181,52 +209,149 @@ func (c *CloudFoundryProvider) getAppNameFromManifest(filePath string) (string, 
 		c.logger.Info("Failed to parse as single application manifest, will try Cloud Foundry manifest format", "file_path", filePath, "error", err)
 	} else if manifest.Name != "" {
 		c.logger.Info("Successfully parsed single application manifest", "file_path", filePath, "app_name", manifest.Name)
-		return manifest.Name, nil
+		return manifest.Name, "local", nil
 	}
 	c.logger.Info("Single application manifest parsed but no app name found, trying Cloud Foundry manifest format", "file_path", filePath)
 
 	var cfManifest cfTypes.CloudFoundryManifest
 	if err := yaml.Unmarshal(data, &cfManifest); err != nil {
-		return "", fmt.Errorf("failed to unmarshal YAML: %v", err)
+		return "", "", fmt.Errorf("failed to unmarshal YAML: %v", err)
 	}
 	if len(cfManifest.Applications) == 0 {
-		return "", fmt.Errorf("no applications found in %s", filePath)
+		return "", "", fmt.Errorf("no applications found in %s", filePath)
 	}
 
 	c.logger.Info("Successfully parsed Cloud Foundry manifest", "file_path", filePath, "application_count", len(cfManifest.Applications))
 
 	app, err := parseCFApp(cfManifest.Space, *cfManifest.Applications[0])
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	if app.Name == "" {
 		c.logger.Info("Cloud Foundry manifest parsed but application has no name", "file_path", filePath)
-		return "", fmt.Errorf("no applications found in %s", filePath)
+		return "", "", fmt.Errorf("no applications found in %s", filePath)
 	}
 
-	c.logger.Info("Successfully extracted application name from Cloud Foundry manifest", "file_path", filePath, "app_name", app.Name)
-	return app.Name, nil
+	spaceName := cfManifest.Space
+	if spaceName == "" {
+		spaceName = "local"
+	}
+
+	c.logger.Info("Successfully extracted application name from Cloud Foundry manifest", "file_path", filePath, "app_name", app.Name, "space", spaceName)
+	return app.Name, spaceName, nil
 }
 
 // listAppsFromCloudFoundry handles discovery of apps by querying the Cloud Foundry API.
+// Returns a map keyed by organization name, with values containing all apps across all spaces in that org.
 func (c *CloudFoundryProvider) listAppsFromCloudFoundry() (map[string][]any, error) {
-	appList := make(map[string][]any, len(c.cfg.SpaceNames))
-	for _, spaceName := range c.cfg.SpaceNames {
-		c.logger.Info("Analyzing space", "space_name", spaceName)
-		apps, err := c.listAppsBySpaceName(spaceName)
-		if err != nil {
-			return nil, fmt.Errorf("error listing Cloud Foundry apps for space %s: %v", spaceName, err)
-		}
-		c.logger.Info("Apps discovered", "count", len(apps))
+	appListByOrg := make(map[string][]any, len(c.cfg.OrgNames))
 
-		appsInSpace := make([]AppReference, 0, len(apps))
-		for _, app := range apps {
-			appsInSpace = append(appsInSpace, AppReference{SpaceName: spaceName, AppName: app.Name})
-		}
-		appList[spaceName] = toAnySlice(appsInSpace)
+	// Get all organizations by their names
+	orgs, err := c.getOrgsByNames(c.cfg.OrgNames)
+	if err != nil {
+		return nil, fmt.Errorf("error getting organizations: %v", err)
 	}
-	return appList, nil
+
+	if len(orgs) == 0 {
+		c.logger.Info("No organizations found matching the provided names", "org_names", c.cfg.OrgNames)
+		return appListByOrg, nil
+	}
+
+	// Get all spaces filtered by org GUIDs and space names in a single API call
+	spaces, err := c.getSpacesByNamesAndOrgs(c.cfg.SpaceNames, orgs)
+	if err != nil {
+		return nil, fmt.Errorf("error getting spaces: %v", err)
+	}
+
+	c.logger.Info("Discovered spaces", "count", len(spaces), "orgs", len(orgs))
+
+	// Group spaces by organization for easier lookup
+	spacesByOrgGUID := make(map[string][]*resource.Space)
+	for _, space := range spaces {
+		orgGUID := space.Relationships.Organization.Data.GUID
+		spacesByOrgGUID[orgGUID] = append(spacesByOrgGUID[orgGUID], space)
+	}
+
+	// Process each organization
+	for _, org := range orgs {
+		c.logger.Info("Analyzing organization", "org", org.Name)
+
+		orgSpaces := spacesByOrgGUID[org.GUID]
+
+		// If specific spaces were requested, check which ones exist in this org
+		if len(c.cfg.SpaceNames) > 0 {
+			foundSpaceNames := make(map[string]bool)
+			for _, space := range orgSpaces {
+				foundSpaceNames[space.Name] = true
+			}
+
+			// Warn about missing spaces
+			for _, requestedSpace := range c.cfg.SpaceNames {
+				if !foundSpaceNames[requestedSpace] {
+					c.logger.Info("Skipping space because it doesn't exist in this organization",
+						"space", requestedSpace, "org", org.Name)
+				}
+			}
+		}
+
+		// Process apps in each space of this org
+		for _, space := range orgSpaces {
+			if err := c.processAppsInSpace(org, space, appListByOrg); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return appListByOrg, nil
+}
+
+// validateOrgAndSpace validates that the organization and space resources are properly initialized.
+// Returns an error if any required fields are missing.
+func validateOrgAndSpace(org *resource.Organization, space *resource.Space) error {
+	if org == nil {
+		return fmt.Errorf("organization cannot be nil")
+	}
+	if space == nil {
+		return fmt.Errorf("space cannot be nil")
+	}
+	if org.GUID == "" {
+		return fmt.Errorf("organization GUID cannot be empty")
+	}
+	if space.GUID == "" {
+		return fmt.Errorf("space GUID cannot be empty")
+	}
+	return nil
+}
+
+// processAppsInSpace processes and adds apps from a space to the appListByOrg.
+// The org and space are required. Apps are added to the list keyed by organization name.
+func (c *CloudFoundryProvider) processAppsInSpace(org *resource.Organization, space *resource.Space, appListByOrg map[string][]any) error {
+	if err := validateOrgAndSpace(org, space); err != nil {
+		return err
+	}
+
+	apps, err := c.listAppsBySpace(space, org.GUID)
+	if err != nil {
+		return fmt.Errorf("error listing Cloud Foundry apps for space %s: %v", space.Name, err)
+	}
+
+	c.logger.Info("Apps discovered", "count", len(apps), "org_name", org.Name, "space_name", space.Name)
+
+	for _, app := range apps {
+		if app == nil {
+			c.logger.Info("Skipping nil app reference")
+			continue
+		}
+		appRef := AppReference{
+			OrgName:   org.Name,
+			SpaceName: space.Name,
+			AppName:   app.Name,
+		}
+		appListByOrg[org.Name] = append(appListByOrg[org.Name], appRef)
+	}
+
+	return nil
 }
 
 // extractSensitiveInformation captures the sensitive information (e.g. credentials) found in the service's credentials,
@@ -292,7 +417,7 @@ func (c *CloudFoundryProvider) discoverFromManifest(appName string) (*pTypes.Dis
 		for _, file := range files {
 			filePath := filepath.Join(c.cfg.ManifestPath, file.Name())
 
-			name, err := c.getAppNameFromManifest(filePath)
+			name, spaceName, err := c.getAppNameAndSpaceFromManifest(filePath)
 			if err != nil {
 				c.logger.Info("error processing manifest file", "file_path", filePath, "error", err)
 				continue
@@ -305,7 +430,7 @@ func (c *CloudFoundryProvider) discoverFromManifest(appName string) (*pTypes.Dis
 				continue
 			}
 			manifestFile = filePath
-			c.logger.Info("found app name in manifest file", "app_name", appName, "file_path", manifestFile)
+			c.logger.Info("found app in manifest file", "app_name", appName, "space_name", spaceName, "file_path", manifestFile)
 			break
 		}
 	} else {
@@ -328,7 +453,7 @@ func (c *CloudFoundryProvider) discoverFromManifest(appName string) (*pTypes.Dis
 	return &discoverResult, nil
 }
 
-func (c *CloudFoundryProvider) discoverFromLive(spaceName string, appName string) (*pTypes.DiscoverResult, error) {
+func (c *CloudFoundryProvider) discoverFromLive(orgName string, spaceName string, appName string) (*pTypes.DiscoverResult, error) {
 	var discoverResult pTypes.DiscoverResult
 
 	if appName == "" {
@@ -340,7 +465,7 @@ func (c *CloudFoundryProvider) discoverFromLive(spaceName string, appName string
 
 	c.logger.Info("Starting live Cloud Foundry discovery for app", "app_name", appName)
 
-	d, err := c.discoverFromLiveAPI(spaceName, appName)
+	d, err := c.discoverFromLiveAPI(orgName, spaceName, appName)
 	if err != nil {
 		return nil, err
 	}
@@ -403,8 +528,8 @@ func (c *CloudFoundryProvider) discoverFromManifestFile(filePath string) (*Appli
 // If the output folder is provided, it writes the manifest to a file in the
 // output folder with the name "manifest_<space_name>_<app_name>.yaml".
 // If the output folder is not provided, it returns a list of applications.
-func (c *CloudFoundryProvider) discoverFromLiveAPI(spaceName string, appName string) (*Application, error) {
-	cfManifests, err := c.generateCFManifestFromLiveAPI(spaceName, appName)
+func (c *CloudFoundryProvider) discoverFromLiveAPI(orgName string, spaceName string, appName string) (*Application, error) {
+	cfManifests, err := c.generateCFManifestFromLiveAPI(orgName, spaceName, appName)
 	if err != nil {
 		return nil, err
 	}
@@ -483,12 +608,12 @@ func (c *CloudFoundryProvider) getRoutes(appGUID string) (*cfTypes.AppManifestRo
 	}
 	return &appRoutes, nil
 }
-func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(spaceName string, appName string) (*cfTypes.AppManifest, error) {
+func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(orgName string, spaceName string, appName string) (*cfTypes.AppManifest, error) {
 
 	c.logger.Info("Analyzing application", "app_name", appName)
 
 	// Retrieve app in space and app name
-	app, err := c.getAppBySpaceAndAppName(spaceName, appName)
+	app, err := c.getAppByOrgAndSpaceAndAppName(orgName, spaceName, appName)
 	if err != nil {
 		return nil, err
 	}
@@ -626,23 +751,97 @@ func getServicesFromApplicationEnvironment(env map[string]json.RawMessage) (*cfT
 	return &appServices, nil
 }
 
-func (c *CloudFoundryProvider) getSpaceByName(spaceName string) (*resource.Space, error) {
+func (c *CloudFoundryProvider) getSpaceByNameInOrg(spaceName string, orgGUID string) (*resource.Space, error) {
 	spaceOpts := client.NewSpaceListOptions()
 	spaceOpts.Names.EqualTo(spaceName)
+	spaceOpts.OrganizationGUIDs.EqualTo(orgGUID)
 	remoteSpace, err := c.cli.Spaces.First(context.Background(), spaceOpts)
 	if err != nil {
-		return nil, fmt.Errorf("error finding Cloud Foundry space for name '%s': %v", spaceName, err)
+		return nil, fmt.Errorf("error finding Cloud Foundry space for name '%s' in organization '%s': %v", spaceName, orgGUID, err)
+	}
+	if remoteSpace == nil {
+		return nil, fmt.Errorf("Cloud Foundry API returned nil space for name '%s' in organization '%s'", spaceName, orgGUID)
+	}
+	if remoteSpace.GUID == "" {
+		return nil, fmt.Errorf("Cloud Foundry space '%s' has empty GUID", spaceName)
 	}
 	return remoteSpace, nil
 }
 
-func (c *CloudFoundryProvider) listAppsBySpaceName(spaceName string) ([]*resource.App, error) {
-	space, err := c.getSpaceByName(spaceName)
-	if err != nil {
-		return nil, fmt.Errorf("error getting space for space name %s: %v", spaceName, err)
+// getSpacesByNamesAndOrgs retrieves multiple spaces filtered by space names and organizations in a single API call.
+// This leverages the CF API's ability to filter by multiple organization_guids and space names simultaneously.
+func (c *CloudFoundryProvider) getSpacesByNamesAndOrgs(spaceNames []string, orgs []*resource.Organization) ([]*resource.Space, error) {
+	if len(orgs) == 0 {
+		return nil, fmt.Errorf("no organizations provided")
 	}
+
+	// Extract org GUIDs for the API call
+	orgGUIDs := make([]string, 0, len(orgs))
+	for _, org := range orgs {
+		orgGUIDs = append(orgGUIDs, org.GUID)
+	}
+
+	spaceOpts := client.NewSpaceListOptions()
+	// If spaceNames is empty, list all spaces in the orgs (no name filter)
+	if len(spaceNames) > 0 {
+		spaceOpts.Names.EqualTo(spaceNames...)
+	} else {
+		c.logger.Info("No space filter provided, listing all spaces in organizations", "org_count", len(orgs))
+	}
+	spaceOpts.OrganizationGUIDs.EqualTo(orgGUIDs...)
+	spaces, err := c.cli.Spaces.ListAll(context.Background(), spaceOpts)
+	if err != nil {
+		return nil, fmt.Errorf("error listing Cloud Foundry spaces: %v", err)
+	}
+
+	return spaces, nil
+}
+
+func (c *CloudFoundryProvider) getOrgByName(orgName string) (*resource.Organization, error) {
+	orgOpts := client.NewOrganizationListOptions()
+	orgOpts.Names.EqualTo(orgName)
+	remoteOrg, err := c.cli.Organizations.First(context.Background(), orgOpts)
+	if err != nil {
+		return nil, fmt.Errorf("error finding Cloud Foundry organization for name '%s': %v", orgName, err)
+	}
+	if remoteOrg == nil {
+		return nil, fmt.Errorf("Cloud Foundry API returned nil organization for name '%s'", orgName)
+	}
+	if remoteOrg.GUID == "" {
+		return nil, fmt.Errorf("Cloud Foundry organization '%s' has empty GUID", orgName)
+	}
+	return remoteOrg, nil
+}
+
+// getOrgsByNames retrieves multiple organizations by their names in a single API call.
+func (c *CloudFoundryProvider) getOrgsByNames(orgNames []string) ([]*resource.Organization, error) {
+	orgOpts := client.NewOrganizationListOptions()
+	// If orgNames is empty, list all organizations (no name filter)
+	if len(orgNames) > 0 {
+		orgOpts.Names.EqualTo(orgNames...)
+	}
+	orgs, err := c.cli.Organizations.ListAll(context.Background(), orgOpts)
+	if err != nil {
+		return nil, fmt.Errorf("error listing Cloud Foundry organizations: %v", err)
+	}
+
+	return orgs, nil
+}
+
+func (c *CloudFoundryProvider) listAppsBySpace(space *resource.Space, orgID string) ([]*resource.App, error) {
+	if space == nil {
+		return nil, fmt.Errorf("space cannot be nil")
+	}
+	if space.GUID == "" {
+		return nil, fmt.Errorf("space GUID cannot be empty for space: %s", space.Name)
+	}
+	if orgID == "" {
+		return nil, fmt.Errorf("organization GUID cannot be empty")
+	}
+
 	appsOpt := client.NewAppListOptions()
 	appsOpt.SpaceGUIDs.EqualTo(space.GUID)
+	appsOpt.OrganizationGUIDs.EqualTo(orgID)
 	apps, err := c.cli.Applications.ListAll(context.Background(), appsOpt)
 	if err != nil {
 		return nil, fmt.Errorf("error listing Cloud Foundry apps for space name %s: %v", space.Name, err)
@@ -650,23 +849,31 @@ func (c *CloudFoundryProvider) listAppsBySpaceName(spaceName string) ([]*resourc
 	return apps, nil
 }
 
-func (c *CloudFoundryProvider) getAppBySpaceAndAppName(spaceName string, appName string) (*resource.App, error) {
-	space, err := c.getSpaceByName(spaceName)
+func (c *CloudFoundryProvider) getAppByOrgAndSpaceAndAppName(orgName string, spaceName string, appName string) (*resource.App, error) {
+	org, err := c.getOrgByName(orgName)
 	if err != nil {
 		return nil, err
 	}
+
+	space, err := c.getSpaceByNameInOrg(spaceName, org.GUID)
+	if err != nil {
+		return nil, err
+	}
+
 	appsOpt := client.NewAppListOptions()
 	appsOpt.Names.EqualTo(appName)
 	appsOpt.SpaceGUIDs.EqualTo(space.GUID)
+	appsOpt.OrganizationGUIDs.EqualTo(org.GUID)
+
 	app, err := c.cli.Applications.ListAll(context.Background(), appsOpt)
 	if err != nil {
 		return nil, fmt.Errorf("error listing Cloud Foundry apps: %s", err)
 	}
 	if len(app) == 0 {
-		return nil, fmt.Errorf("no application found with GUID %s", appName)
+		return nil, fmt.Errorf("no application found with name %s in org %s and space %s", appName, orgName, spaceName)
 	}
 	if len(app) > 1 {
-		return nil, fmt.Errorf("multiple applications found with GUID %s", appName)
+		return nil, fmt.Errorf("multiple applications found with name %s in org %s and space %s", appName, orgName, spaceName)
 	}
 	return app[0], nil
 }

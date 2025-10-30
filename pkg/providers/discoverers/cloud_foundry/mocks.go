@@ -208,6 +208,13 @@ func (m *mockApplication) space() *testutil.JSONResource {
 	return m.resMap["space"].(*testutil.JSONResource)
 }
 
+func (m *mockApplication) organization() *testutil.JSONResource {
+	if _, ok := m.resMap["organization"]; !ok {
+		m.resMap["organization"] = m.g.Organization()
+	}
+	return m.resMap["organization"].(*testutil.JSONResource)
+}
+
 func (m *mockApplication) route(route models.AppManifestRoute) resource.Route {
 
 	testRoute := m.g.Route()
@@ -327,8 +334,10 @@ func (m *mockApplication) setupMockRoutes() []testutil.MockRoute {
 	var routes []testutil.MockRoute
 
 	routes = append(routes,
-		m.generateMockRoute("/v3/apps", m.g.Paged([]string{m.application().JSON}), "names="+m.application().Name+"&"+pagingQueryString+"&space_guids="+m.space().GUID),
-		m.generateMockRoute("/v3/spaces", m.g.Paged([]string{m.space().JSON}), "names="+m.space().Name+"&"+pagingQueryString),
+		m.generateMockRoute("/v3/apps", m.g.Paged([]string{m.application().JSON}), "names="+m.application().Name+"&organization_guids="+m.organization().GUID+"&"+pagingQueryString+"&space_guids="+m.space().GUID),
+		m.generateMockRoute("/v3/organizations", m.g.Paged([]string{m.organization().JSON}), "names="+m.organization().Name+"&"+pagingQueryString),
+		m.generateMockRoute("/v3/spaces", m.g.Paged([]string{m.space().JSON}), "names="+m.space().Name+"&organization_guids="+m.organization().GUID+"&"+pagingQueryString),
+		m.generateMockRoute("/v3/organizations/"+m.organization().GUID, m.g.Single(m.organization().JSON), ""),
 		m.generateMockRoute(fmt.Sprintf(v3apps+m.application().GUID), m.g.Single(m.application().JSON), ""),
 		m.generateMockRoute(fmt.Sprintf(v3apps+m.application().GUID+"/env"), m.g.Single(m.env().JSON), ""),
 		m.generateMockRoute(fmt.Sprintf(v3apps+m.application().GUID+"/processes"), m.g.Paged(m.processes()), pagingQueryString),
