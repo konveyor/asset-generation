@@ -50,6 +50,8 @@ type ClientProvider interface {
 	GetClient() (*client.Client, error)
 }
 
+// New creates a new CloudFoundryProvider instance with the given configuration.
+// If CloudFoundryConfig is provided, it initializes the Cloud Foundry client for live discovery.
 func New(cfg *Config, logger *logr.Logger, conceal bool) (*CloudFoundryProvider, error) {
 	var err error
 	cp := CloudFoundryProvider{
@@ -66,6 +68,8 @@ func New(cfg *Config, logger *logr.Logger, conceal bool) (*CloudFoundryProvider,
 	return &cp, nil
 }
 
+// getClient initializes and returns a Cloud Foundry client.
+// If a client already exists in the config, it returns that instance.
 func (c *CloudFoundryProvider) getClient() (*client.Client, error) {
 	if c.cfg.Client != nil {
 		return c.cfg.Client, nil
@@ -103,12 +107,15 @@ func (c *CloudFoundryProvider) ListApps() (map[string][]any, error) {
 	return c.listAppsFromCloudFoundry()
 }
 
+// AppReference represents a discovered application with its organizational context.
 type AppReference struct {
 	OrgName   string `json:"orgName"`
 	SpaceName string `json:"spaceName"`
 	AppName   string `json:"appName"`
 }
 
+// Discover extracts detailed application information from the provided raw data.
+// For live discovery, it queries the Cloud Foundry API. For local discovery, it reads manifest files.
 func (c *CloudFoundryProvider) Discover(RawData any) (*pTypes.DiscoverResult, error) {
 	input, ok := RawData.(AppReference)
 	if !ok {
@@ -381,10 +388,13 @@ func (c CloudFoundryProvider) extractSensitiveInformation(app *Application) map[
 	return m
 }
 
+// isLiveDiscover determines if the provider should perform live discovery from Cloud Foundry API.
+// Returns true if no manifest path is specified, indicating live discovery mode.
 func isLiveDiscover(cfg *Config) bool {
 	return cfg.ManifestPath == ""
 }
 
+// isDir checks if the given path points to a directory.
 func isDir(path string) (bool, error) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -392,11 +402,15 @@ func isDir(path string) (bool, error) {
 	}
 	return info.IsDir(), nil
 }
+
+// hasYAMLExtension checks if the given filename has a YAML file extension (.yaml or .yml).
 func hasYAMLExtension(filename string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
 	return ext == ".yaml" || ext == ".yml"
 }
 
+// discoverFromManifest discovers application information from local manifest files.
+// It searches for a manifest file matching the given app name and extracts its details.
 func (c *CloudFoundryProvider) discoverFromManifest(appName string) (*pTypes.DiscoverResult, error) {
 	var discoverResult pTypes.DiscoverResult
 
@@ -453,6 +467,8 @@ func (c *CloudFoundryProvider) discoverFromManifest(appName string) (*pTypes.Dis
 	return &discoverResult, nil
 }
 
+// discoverFromLive discovers application information from the live Cloud Foundry API.
+// It retrieves detailed configuration for the specified organization, space, and application.
 func (c *CloudFoundryProvider) discoverFromLive(orgName string, spaceName string, appName string) (*pTypes.DiscoverResult, error) {
 	var discoverResult pTypes.DiscoverResult
 
@@ -542,6 +558,8 @@ func (c *CloudFoundryProvider) discoverFromLiveAPI(orgName string, spaceName str
 	return &discoveredApp, nil
 }
 
+// getProcesses retrieves process information for the specified Cloud Foundry application.
+// Returns process configurations including health checks, memory, and disk quotas.
 func (c *CloudFoundryProvider) getProcesses(appGUID, lifecycle string) (*cfTypes.AppManifestProcesses, error) {
 	processes, err := c.cli.Processes.ListForAppAll(context.Background(), appGUID, nil)
 	if err != nil {
@@ -580,6 +598,8 @@ func (c *CloudFoundryProvider) getProcesses(appGUID, lifecycle string) (*cfTypes
 	return &appProcesses, nil
 }
 
+// getRoutes retrieves route information for the specified Cloud Foundry application.
+// Returns route configurations including URLs, protocols, and options.
 func (c *CloudFoundryProvider) getRoutes(appGUID string) (*cfTypes.AppManifestRoutes, error) {
 	routeOpts := client.NewRouteListOptions()
 	routes, err := c.cli.Routes.ListForAppAll(context.Background(), appGUID, routeOpts)
@@ -608,6 +628,9 @@ func (c *CloudFoundryProvider) getRoutes(appGUID string) (*cfTypes.AppManifestRo
 	}
 	return &appRoutes, nil
 }
+
+// generateCFManifestFromLiveAPI generates a Cloud Foundry manifest by querying the live API.
+// It retrieves complete application configuration including processes, routes, services, and sidecars.
 func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(orgName string, spaceName string, appName string) (*cfTypes.AppManifest, error) {
 
 	c.logger.Info("Analyzing application", "app_name", appName)
@@ -677,6 +700,8 @@ func (c *CloudFoundryProvider) generateCFManifestFromLiveAPI(orgName string, spa
 
 }
 
+// getDockerSpecification retrieves Docker configuration for the specified application.
+// Returns Docker image information if the application uses Docker lifecycle, otherwise returns nil.
 func (c *CloudFoundryProvider) getDockerSpecification(app resource.App) (*cfTypes.AppManifestDocker, error) {
 
 	docker := cfTypes.AppManifestDocker{}
@@ -691,6 +716,8 @@ func (c *CloudFoundryProvider) getDockerSpecification(app resource.App) (*cfType
 	return &docker, nil
 }
 
+// getSidecars retrieves sidecar configurations for the specified Cloud Foundry application.
+// Returns sidecar information including name, command, memory, and associated process types.
 func (c *CloudFoundryProvider) getSidecars(appGUID string) (*cfTypes.AppManifestSideCars, error) {
 	list, err := c.cli.Sidecars.ListForAppAll(context.Background(), appGUID, nil)
 	if err != nil {
@@ -725,6 +752,8 @@ type appVCAPServiceAttributes struct {
 	Credentials json.RawMessage `json:"credentials,omitempty"`
 }
 
+// getServicesFromApplicationEnvironment extracts service bindings from the application's VCAP_SERVICES environment variable.
+// Returns service configurations including names, binding names, and credentials.
 func getServicesFromApplicationEnvironment(env map[string]json.RawMessage) (*cfTypes.AppManifestServices, error) {
 	appServices := cfTypes.AppManifestServices{}
 	vcap, ok := env[vcapServices]
@@ -751,6 +780,8 @@ func getServicesFromApplicationEnvironment(env map[string]json.RawMessage) (*cfT
 	return &appServices, nil
 }
 
+// getSpaceByNameInOrg retrieves a space by name within a specific organization.
+// Returns an error if the space is not found or has invalid data.
 func (c *CloudFoundryProvider) getSpaceByNameInOrg(spaceName string, orgGUID string) (*resource.Space, error) {
 	spaceOpts := client.NewSpaceListOptions()
 	spaceOpts.Names.EqualTo(spaceName)
@@ -797,6 +828,8 @@ func (c *CloudFoundryProvider) getSpacesByNamesAndOrgs(spaceNames []string, orgs
 	return spaces, nil
 }
 
+// getOrgByName retrieves an organization by name from Cloud Foundry.
+// Returns an error if the organization is not found or has invalid data.
 func (c *CloudFoundryProvider) getOrgByName(orgName string) (*resource.Organization, error) {
 	orgOpts := client.NewOrganizationListOptions()
 	orgOpts.Names.EqualTo(orgName)
@@ -828,6 +861,8 @@ func (c *CloudFoundryProvider) getOrgsByNames(orgNames []string) ([]*resource.Or
 	return orgs, nil
 }
 
+// listAppsBySpace retrieves all applications within a specified space.
+// Requires both the space resource and organization GUID.
 func (c *CloudFoundryProvider) listAppsBySpace(space *resource.Space, orgID string) ([]*resource.App, error) {
 	if space == nil {
 		return nil, fmt.Errorf("space cannot be nil")
@@ -849,6 +884,8 @@ func (c *CloudFoundryProvider) listAppsBySpace(space *resource.Space, orgID stri
 	return apps, nil
 }
 
+// getAppByOrgAndSpaceAndAppName retrieves a specific application by organization, space, and application name.
+// Returns an error if multiple applications are found or if the application doesn't exist.
 func (c *CloudFoundryProvider) getAppByOrgAndSpaceAndAppName(orgName string, spaceName string, appName string) (*resource.App, error) {
 	org, err := c.getOrgByName(orgName)
 	if err != nil {
@@ -878,6 +915,8 @@ func (c *CloudFoundryProvider) getAppByOrgAndSpaceAndAppName(orgName string, spa
 	return app[0], nil
 }
 
+// safePtr safely dereferences a pointer and returns its value.
+// If the pointer is nil, returns the provided default value.
 func safePtr[T any](ptr *T, defaultVal T) T {
 	if ptr != nil {
 		return *ptr
@@ -885,6 +924,8 @@ func safePtr[T any](ptr *T, defaultVal T) T {
 	return defaultVal
 }
 
+// toAnySlice converts a typed slice to a slice of any.
+// This is useful for generic slice conversions required by interface definitions.
 func toAnySlice[T any](input []T) []any {
 	result := make([]any, len(input))
 	for i, v := range input {
