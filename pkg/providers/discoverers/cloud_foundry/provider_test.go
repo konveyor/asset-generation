@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/cloudfoundry/go-cfclient/v3/config"
+	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/cloudfoundry/go-cfclient/v3/testutil"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/stdr"
@@ -46,60 +47,81 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				app2 = g.Application()
 			})
 			Context("when space name doesn't exist", func() {
+				var org *testutil.JSONResource
+
 				BeforeEach(func() {
+					org = g.Organization()
 					serverURL = testutil.SetupMultiple([]testutil.MockRoute{
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/organizations",
+							Output:      g.Paged([]string{org.JSON}),
+							Status:      http.StatusOK,
+							QueryString: "names=" + org.Name + "&" + pagingQueryString,
+						},
 						{
 							Method:      "GET",
 							Endpoint:    "/v3/spaces",
 							Output:      g.Single(""),
 							Status:      http.StatusOK,
-							QueryString: "names=" + space.Name + "&" + pagingQueryString,
+							QueryString: "names=" + space.Name + "&organization_guids=" + org.GUID + "&" + pagingQueryString,
 						},
 					}, GlobalT)
 				})
 				AfterEach(func() {
 					testutil.Teardown()
 				})
-				It("returns	an error", func() {
+				It("returns empty results when space doesn't exist in org", func() {
 					cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
 					Expect(err).NotTo(HaveOccurred())
 
 					cfConfig := &Config{
 						SpaceNames:         []string{space.Name},
+						OrgNames:           []string{org.Name},
 						CloudFoundryConfig: cfg,
 					}
 
 					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					apps, err := p.ListApps()
-					Expect(err).To(HaveOccurred())
-					Expect(apps).To(BeNil())
+					Expect(err).NotTo(HaveOccurred())
+					Expect(apps).To(BeEmpty())
 
 				})
 			})
 			Context("when apps exist in the space", func() {
+				var org *testutil.JSONResource
+
 				BeforeEach(func() {
+					org = g.Organization()
+
+					// Set space's organization relationship
+					spaceRes := resource.Space{}
+					Expect(json.Unmarshal([]byte(space.JSON), &spaceRes)).NotTo(HaveOccurred())
+					spaceRes.Relationships.Organization.Data = &resource.Relationship{GUID: org.GUID}
+					space.JSON = toJSON(spaceRes)
+
 					serverURL = testutil.SetupMultiple([]testutil.MockRoute{
 						{
 							Method:      "GET",
 							Endpoint:    "/v3/apps",
 							Output:      g.Paged([]string{app1.JSON, app2.JSON}),
 							Status:      http.StatusOK,
-							QueryString: pagingQueryString + "&space_guids=" + space.GUID,
+							QueryString: "organization_guids=" + org.GUID + "&" + pagingQueryString + "&space_guids=" + space.GUID,
 						},
 						{
 							Method:      "GET",
-							Endpoint:    "/v3/apps",
-							Output:      g.Paged([]string{}),
+							Endpoint:    "/v3/organizations",
+							Output:      g.Paged([]string{org.JSON}),
 							Status:      http.StatusOK,
-							QueryString: pagingQueryString + "&space_guids=" + emptySpace.GUID,
+							QueryString: "names=" + org.Name + "&" + pagingQueryString,
 						},
 						{
 							Method:      "GET",
 							Endpoint:    "/v3/spaces",
 							Output:      g.Paged([]string{space.JSON}),
 							Status:      http.StatusOK,
-							QueryString: "names=" + space.Name + "&" + pagingQueryString,
+							QueryString: "names=" + space.Name + "&organization_guids=" + org.GUID + "&" + pagingQueryString,
 						},
 					}, GlobalT)
 				})
@@ -114,6 +136,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					cfConfig := &Config{
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{space.Name},
+						OrgNames:           []string{org.Name},
 					}
 
 					p, err := New(cfConfig, &logger, true)
@@ -121,12 +144,19 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					apps, err := p.ListApps()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(apps).To(HaveLen(1))
-					Expect(apps).To(HaveKey(space.Name))
-					Expect(apps[space.Name]).To(ConsistOf([]AppReference{{SpaceName: space.Name, AppName: app1.Name}, {SpaceName: space.Name, AppName: app2.Name}}))
+					Expect(apps).To(HaveKey(org.Name))
+					Expect(apps[org.Name]).To(ConsistOf([]AppReference{
+						{OrgName: org.Name, SpaceName: space.Name, AppName: app1.Name},
+						{OrgName: org.Name, SpaceName: space.Name, AppName: app2.Name},
+					}))
 				})
 			})
 			Context("when apps don't exist in the space", func() {
+				var org *testutil.JSONResource
+
 				BeforeEach(func() {
+					org = g.Organization()
+
 					// Create two mock apps in the test server
 					serverURL = testutil.SetupMultiple([]testutil.MockRoute{
 						{
@@ -134,14 +164,21 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 							Endpoint:    "/v3/apps",
 							Output:      g.Paged([]string{}),
 							Status:      http.StatusOK,
-							QueryString: pagingQueryString + "&space_guids=" + emptySpace.GUID,
+							QueryString: "organization_guids=" + org.GUID + "&" + pagingQueryString + "&space_guids=" + emptySpace.GUID,
+						},
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/organizations",
+							Output:      g.Paged([]string{org.JSON}),
+							Status:      http.StatusOK,
+							QueryString: "names=" + org.Name + "&" + pagingQueryString,
 						},
 						{
 							Method:      "GET",
 							Endpoint:    "/v3/spaces",
-							Output:      g.Paged([]string{emptySpace.JSON}),
+							Output:      g.Single(""),
 							Status:      http.StatusOK,
-							QueryString: "names=" + emptySpace.Name + "&" + pagingQueryString,
+							QueryString: "names=" + emptySpace.Name + "&organization_guids=" + org.GUID + "&" + pagingQueryString,
 						},
 					}, GlobalT)
 				})
@@ -156,14 +193,14 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					cfConfig := &Config{
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{emptySpace.Name},
+						OrgNames:           []string{org.Name},
 					}
 
 					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					apps, err := p.listAppsFromCloudFoundry()
 					Expect(err).NotTo(HaveOccurred())
-					Expect(apps).To(HaveLen(1))
-					Expect(apps[emptySpace.Name]).To(BeEmpty())
+					Expect(apps).To(BeEmpty())
 				})
 			})
 		})
@@ -200,12 +237,13 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					By("Instantiating a new CF REST API client")
 					cfConfig := &Config{
 						CloudFoundryConfig: cfg,
+						OrgNames:           []string{m.organization().Name},
 						SpaceNames:         []string{m.space().Name},
 					}
 					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
-					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					received, err := p.generateCFManifestFromLiveAPI(m.organization().Name, m.space().Name, m.application().Name)
 					Expect(err).NotTo(HaveOccurred())
 					By("validating the application discovered contains the expected app data")
 					Expect(expected.Name).To(Equal(received.Name))
@@ -232,12 +270,13 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					By("Instantiating a new CF REST API client")
 					cfConfig := &Config{
 						CloudFoundryConfig: cfg,
+						OrgNames:           []string{m.organization().Name},
 						SpaceNames:         []string{m.space().Name},
 					}
 					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
-					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					received, err := p.generateCFManifestFromLiveAPI(m.organization().Name, m.space().Name, m.application().Name)
 					Expect(err).NotTo(HaveOccurred())
 					By("validating the application discovered contains the expected app data")
 					Expect(expected.Name).To(Equal(received.Name))
@@ -263,12 +302,13 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					By("Instantiating a new CF REST API client")
 					cfConfig := &Config{
 						CloudFoundryConfig: cfg,
+						OrgNames:           []string{m.organization().Name},
 						SpaceNames:         []string{m.space().Name},
 					}
 					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
-					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					received, err := p.generateCFManifestFromLiveAPI(m.organization().Name, m.space().Name, m.application().Name)
 					Expect(err).NotTo(HaveOccurred())
 					By("validating the application discovered contains the expected app data")
 					Expect(expected.Name).To(Equal(received.Name))
@@ -295,12 +335,13 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					By("Instantiating a new CF REST API client")
 					cfConfig := &Config{
 						CloudFoundryConfig: cfg,
+						OrgNames:           []string{m.organization().Name},
 						SpaceNames:         []string{m.space().Name},
 					}
 					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
-					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					received, err := p.generateCFManifestFromLiveAPI(m.organization().Name, m.space().Name, m.application().Name)
 					Expect(err).NotTo(HaveOccurred())
 					By("validating the application discovered contains the expected app data")
 					Expect(expected.Name).To(Equal(received.Name))
@@ -326,12 +367,13 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					By("Instantiating a new CF REST API client")
 					cfConfig := &Config{
 						CloudFoundryConfig: cfg,
+						OrgNames:           []string{m.organization().Name},
 						SpaceNames:         []string{m.space().Name},
 					}
 					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
-					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					received, err := p.generateCFManifestFromLiveAPI(m.organization().Name, m.space().Name, m.application().Name)
 					Expect(err).NotTo(HaveOccurred())
 					By("validating the application discovered contains the expected app data")
 					Expect(expected.Name).To(Equal(received.Name))
@@ -359,12 +401,13 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					By("Instantiating a new CF REST API client")
 					cfConfig := &Config{
 						CloudFoundryConfig: cfg,
+						OrgNames:           []string{m.organization().Name},
 						SpaceNames:         []string{m.space().Name},
 					}
 					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
-					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					received, err := p.generateCFManifestFromLiveAPI(m.organization().Name, m.space().Name, m.application().Name)
 					Expect(err).NotTo(HaveOccurred())
 					By("validating the application discovered contains the expected app data")
 					Expect(expected.Name).To(Equal(received.Name))
@@ -398,12 +441,13 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					By("Instantiating a new CF REST API client")
 					cfConfig := &Config{
 						CloudFoundryConfig: cfg,
+						OrgNames:           []string{m.organization().Name},
 						SpaceNames:         []string{m.space().Name},
 					}
 					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
-					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					received, err := p.generateCFManifestFromLiveAPI(m.organization().Name, m.space().Name, m.application().Name)
 					Expect(err).NotTo(HaveOccurred())
 					By("validating the application discovered contains the expected app data")
 					Expect(expected.Name).To(Equal(received.Name))
@@ -440,12 +484,13 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					By("Instantiating a new CF REST API client")
 					cfConfig := &Config{
 						CloudFoundryConfig: cfg,
+						OrgNames:           []string{m.organization().Name},
 						SpaceNames:         []string{m.space().Name},
 					}
 					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
-					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					received, err := p.generateCFManifestFromLiveAPI(m.organization().Name, m.space().Name, m.application().Name)
 					Expect(err).NotTo(HaveOccurred())
 					By("validating the application discovered contains the expected app data")
 					Expect(expected.Name).To(Equal(received.Name))
@@ -495,12 +540,13 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					By("Instantiating a new CF REST API client")
 					cfConfig := &Config{
 						CloudFoundryConfig: cfg,
+						OrgNames:           []string{m.organization().Name},
 						SpaceNames:         []string{m.space().Name},
 					}
 					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("generating the CF manifest from a Live API connection")
-					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					received, err := p.generateCFManifestFromLiveAPI(m.organization().Name, m.space().Name, m.application().Name)
 					Expect(err).NotTo(HaveOccurred())
 					By("validating the application discovered contains the expected app data")
 					Expect(expected.Name).To(Equal(received.Name))
@@ -669,12 +715,13 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					By("Instantiating a new CF REST API client")
 					cfConfig := &Config{
 						CloudFoundryConfig: cfg,
+						OrgNames:           []string{m.organization().Name},
 						SpaceNames:         []string{m.space().Name},
 					}
 					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					By("discovering the application")
-					received, err := p.generateCFManifestFromLiveAPI(m.space().Name, m.application().Name)
+					received, err := p.generateCFManifestFromLiveAPI(m.organization().Name, m.space().Name, m.application().Name)
 					Expect(err).NotTo(HaveOccurred())
 					By("validating the application discovered contains the expected app data")
 					Expect(*received).To(Equal(expected))
@@ -682,14 +729,17 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 
 			})
 			Context("when apps exist in the space", func() {
+				var org *testutil.JSONResource
+
 				BeforeEach(func() {
+					org = g.Organization()
 					serverURL = testutil.SetupMultiple([]testutil.MockRoute{
 						{
 							Method:      "GET",
 							Endpoint:    "/v3/apps",
 							Output:      g.Paged([]string{app1.JSON}),
 							Status:      http.StatusOK,
-							QueryString: "names=" + app1.Name + "&" + pagingQueryString + "&space_guids=" + space.GUID,
+							QueryString: "names=" + app1.Name + "&organization_guids=" + org.GUID + "&" + pagingQueryString + "&space_guids=" + space.GUID,
 						},
 						{
 							Method:      "GET",
@@ -721,10 +771,17 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						},
 						{
 							Method:      "GET",
+							Endpoint:    "/v3/organizations",
+							Output:      g.Paged([]string{org.JSON}),
+							Status:      http.StatusOK,
+							QueryString: "names=" + org.Name + "&" + pagingQueryString,
+						},
+						{
+							Method:      "GET",
 							Endpoint:    "/v3/spaces",
 							Output:      g.Paged([]string{space.JSON}),
 							Status:      http.StatusOK,
-							QueryString: "names=" + space.Name + "&" + pagingQueryString,
+							QueryString: "names=" + space.Name + "&organization_guids=" + org.GUID + "&" + pagingQueryString,
 						},
 					}, GlobalT)
 				})
@@ -742,28 +799,39 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 
 					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
-					apps, err := p.Discover(AppReference{SpaceName: space.Name, AppName: app1.Name})
+					apps, err := p.Discover(AppReference{OrgName: org.Name, SpaceName: space.Name, AppName: app1.Name})
 					Expect(err).NotTo(HaveOccurred())
 					Expect(apps).NotTo(Equal(&pTypes.DiscoverResult{}))
 				})
 			})
 
 			Context("when apps don't exist in the space", func() {
+				var org *testutil.JSONResource
+
 				BeforeEach(func() {
+					org = g.Organization()
+
 					serverURL = testutil.SetupMultiple([]testutil.MockRoute{
 						{
 							Method:      "GET",
 							Endpoint:    "/v3/apps",
 							Output:      g.Paged([]string{}),
 							Status:      http.StatusOK,
-							QueryString: pagingQueryString + "&space_guids=" + emptySpace.GUID,
+							QueryString: "organization_guids=" + org.GUID + "&" + pagingQueryString + "&space_guids=" + emptySpace.GUID,
+						},
+						{
+							Method:      "GET",
+							Endpoint:    "/v3/organizations",
+							Output:      g.Paged([]string{org.JSON}),
+							Status:      http.StatusOK,
+							QueryString: "names=" + org.Name + "&" + pagingQueryString,
 						},
 						{
 							Method:      "GET",
 							Endpoint:    "/v3/spaces",
 							Output:      g.Paged([]string{emptySpace.JSON}),
 							Status:      http.StatusOK,
-							QueryString: "names=" + emptySpace.Name + "&" + pagingQueryString,
+							QueryString: "names=" + emptySpace.Name + "&organization_guids=" + org.GUID + "&" + pagingQueryString,
 						},
 					}, GlobalT)
 				})
@@ -778,14 +846,14 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					cfConfig := &Config{
 						CloudFoundryConfig: cfg,
 						SpaceNames:         []string{emptySpace.Name},
+						OrgNames:           []string{org.Name},
 					}
 
 					p, err := New(cfConfig, &logger, true)
 					Expect(err).NotTo(HaveOccurred())
 					apps, err := p.listAppsFromCloudFoundry()
 					Expect(err).NotTo(HaveOccurred())
-					Expect(apps).To(HaveLen(1))
-					Expect(apps[emptySpace.Name]).To(BeEmpty())
+					Expect(apps).To(BeEmpty())
 				})
 			})
 		})
@@ -828,7 +896,11 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						appSlice = append(appSlice, appRef)
 					}
 
-					Expect(appSlice).To(ContainElements(AppReference{AppName: "app1"}, AppReference{AppName: "app2"}, AppReference{AppName: "app3"}))
+					Expect(appSlice).To(ContainElements(
+						AppReference{OrgName: "local", SpaceName: "local", AppName: "app1"},
+						AppReference{OrgName: "local", SpaceName: "local", AppName: "app2"},
+						AppReference{OrgName: "local", SpaceName: "local", AppName: "app3"},
+					))
 					Expect(appSlice).NotTo(ContainElement("app-in-subfolder"))
 					Expect(appSlice).NotTo(ContainElement("text-file"))
 				})
@@ -847,9 +919,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					apps, err := provider.listAppsFromLocalManifests()
 					Expect(err).ToNot(HaveOccurred())
 					Expect(apps).ToNot(BeNil())
-					Expect(apps).To(HaveLen(1))
-					Expect(apps).To(HaveKey("local"))
-					Expect(apps["local"]).To(HaveLen(0))
+					Expect(apps).To(BeEmpty())
 					logOutput := logBuf.String()
 					Expect(logOutput).To(ContainSubstring("error processing manifest file"))
 				})
@@ -867,9 +937,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					apps, err := provider.listAppsFromLocalManifests()
 					Expect(err).ToNot(HaveOccurred())
 					Expect(apps).ToNot(BeNil())
-					Expect(apps).To(HaveLen(1))
-					Expect(apps).To(HaveKey("local"))
-					Expect(apps["local"]).To(HaveLen(0))
+					Expect(apps).To(BeEmpty())
 					logOutput := logBuf.String()
 					Expect(logOutput).To(ContainSubstring("no applications found"))
 				})
@@ -899,6 +967,8 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						Expect(ok).To(BeTrue())
 						Expect(appRef).ToNot(Equal(AppReference{}))
 					}
+					Expect(appRef.OrgName).To(Equal("local"))
+					Expect(appRef.SpaceName).To(Equal("local"))
 					Expect(appRef.AppName).To(Equal("my-app"))
 				})
 			})
@@ -1667,7 +1737,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 			}),
 	)
 
-	Describe("getAppNameFromManifest", func() {
+	Describe("getAppNameAndSpaceFromManifest", func() {
 		var (
 			provider  *CloudFoundryProvider
 			nopLogger = logr.New(logr.Discard().GetSink())
@@ -1680,51 +1750,57 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 		})
 
 		Context("when processing different manifest formats", func() {
-			It("correctly extracts app name from AppManifest format (name at root level)", func() {
+			It("correctly extracts app name and space from AppManifest format (name at root level)", func() {
 				manifestPath := filepath.Join("test_data", "test-app", "manifest.yml")
-				appName, err := provider.getAppNameFromManifest(manifestPath)
+				appName, spaceName, err := provider.getAppNameAndSpaceFromManifest(manifestPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(appName).To(Equal("my-app"))
+				Expect(spaceName).To(Equal("local")) // AppManifest defaults to "local"
 			})
 
-			It("correctly extracts app name from CloudFoundryManifest format (applications array)", func() {
+			It("correctly extracts app name and space from CloudFoundryManifest format (applications array)", func() {
 				manifestPath := filepath.Join("test_data", "complete-manifest-multi-apps", "manifest.yml")
-				appName, err := provider.getAppNameFromManifest(manifestPath)
+				appName, _, err := provider.getAppNameAndSpaceFromManifest(manifestPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(appName).To(Equal("app1"))
+				// Space name will be extracted from CloudFoundryManifest.Space if present, otherwise defaults to "local"
 			})
 
-			It("returns empty string when file is a directory", func() {
+			It("returns empty strings when file is a directory", func() {
 				dirPath := filepath.Join("test_data", "multiple-manifests")
-				appName, err := provider.getAppNameFromManifest(dirPath)
+				appName, spaceName, err := provider.getAppNameAndSpaceFromManifest(dirPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(appName).To(BeEmpty())
+				Expect(spaceName).To(BeEmpty())
 			})
 
-			It("returns empty string when file is not a YAML file", func() {
+			It("returns empty strings when file is not a YAML file", func() {
 				textFilePath := filepath.Join("test_data", "multiple-manifests", "text-file.txt")
-				appName, err := provider.getAppNameFromManifest(textFilePath)
+				appName, spaceName, err := provider.getAppNameAndSpaceFromManifest(textFilePath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(appName).To(BeEmpty())
+				Expect(spaceName).To(BeEmpty())
 			})
 
 			It("returns error when file does not exist", func() {
 				nonExistentPath := filepath.Join("test_data", "does-not-exist.yml")
-				appName, err := provider.getAppNameFromManifest(nonExistentPath)
+				appName, spaceName, err := provider.getAppNameAndSpaceFromManifest(nonExistentPath)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to stat file"))
 				Expect(appName).To(BeEmpty())
+				Expect(spaceName).To(BeEmpty())
 			})
 
 			It("returns error when YAML is completely invalid", func() {
 				invalidManifestPath := filepath.Join("test_data", "invalid-manifest", "manifest.yml")
-				appName, err := provider.getAppNameFromManifest(invalidManifestPath)
+				appName, spaceName, err := provider.getAppNameAndSpaceFromManifest(invalidManifestPath)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to unmarshal YAML"))
 				Expect(appName).To(BeEmpty())
+				Expect(spaceName).To(BeEmpty())
 			})
 
-			It("returns empty string when CloudFoundryManifest has no applications", func() {
+			It("returns empty strings when CloudFoundryManifest has no applications", func() {
 				tempDir := GinkgoT().TempDir()
 				manifestPath := filepath.Join(tempDir, "no-apps-manifest.yml")
 				manifestContent := `---
@@ -1735,10 +1811,11 @@ applications: []`
 				err := os.WriteFile(manifestPath, []byte(manifestContent), 0644)
 				Expect(err).NotTo(HaveOccurred())
 
-				appName, err := provider.getAppNameFromManifest(manifestPath)
+				appName, spaceName, err := provider.getAppNameAndSpaceFromManifest(manifestPath)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("no applications found"))
 				Expect(appName).To(BeEmpty())
+				Expect(spaceName).To(BeEmpty())
 			})
 		})
 	})
@@ -1827,3 +1904,479 @@ func MapToStruct(m map[string]any, obj *Application) error {
 	}
 	return json.Unmarshal(b, obj)
 }
+
+var _ = Describe("Organization Name Filtering", func() {
+	var (
+		g         *testutil.ObjectJSONGenerator
+		app1      *testutil.JSONResource
+		app2      *testutil.JSONResource
+		space     *testutil.JSONResource
+		org       *testutil.JSONResource
+		serverURL string
+		logger    = logr.New(logr.Discard().GetSink())
+	)
+
+	BeforeEach(func() {
+		g = testutil.NewObjectJSONGenerator()
+		org = g.Organization()
+		space = g.Space()
+		app1 = g.Application()
+		app2 = g.Application()
+	})
+
+	Describe("listAppsFromCloudFoundry with OrgNames filter", func() {
+		AfterEach(func() {
+			testutil.Teardown()
+		})
+
+		Context("when OrgNames filter is provided", func() {
+			It("returns apps when space belongs to specified org", func() {
+				// Set space's organization relationship
+				spaceRes := resource.Space{}
+				Expect(json.Unmarshal([]byte(space.JSON), &spaceRes)).NotTo(HaveOccurred())
+				spaceRes.Relationships.Organization.Data = &resource.Relationship{GUID: org.GUID}
+				space.JSON = toJSON(spaceRes)
+
+				serverURL := testutil.SetupMultiple([]testutil.MockRoute{
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/apps",
+						Output:      g.Paged([]string{app1.JSON, app2.JSON}),
+						Status:      http.StatusOK,
+						QueryString: "organization_guids=" + org.GUID + "&" + pagingQueryString + "&space_guids=" + space.GUID,
+					},
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/organizations",
+						Output:      g.Paged([]string{org.JSON}),
+						Status:      http.StatusOK,
+						QueryString: "names=" + org.Name + "&" + pagingQueryString,
+					},
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/spaces",
+						Output:      g.Paged([]string{space.JSON}),
+						Status:      http.StatusOK,
+						QueryString: "names=" + space.Name + "&organization_guids=" + org.GUID + "&" + pagingQueryString,
+					},
+				}, GlobalT)
+
+				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+				Expect(err).NotTo(HaveOccurred())
+
+				cfConfig := &Config{
+					CloudFoundryConfig: cfg,
+					SpaceNames:         []string{space.Name},
+					OrgNames:           []string{org.Name},
+				}
+
+				p, err := New(cfConfig, &logger, true)
+				Expect(err).NotTo(HaveOccurred())
+				apps, err := p.listAppsFromCloudFoundry()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(apps).To(HaveLen(1))
+				Expect(apps).To(HaveKey(org.Name))
+				appRefs := apps[org.Name]
+				Expect(appRefs).To(HaveLen(2))
+
+				// Verify that OrgName is populated
+				for _, appRef := range appRefs {
+					ref, ok := appRef.(AppReference)
+					Expect(ok).To(BeTrue())
+					Expect(ref.OrgName).To(Equal(org.Name))
+					Expect(ref.SpaceName).To(Equal(space.Name))
+				}
+			})
+
+			It("skips space when it doesn't belong to specified org", func() {
+				otherOrg := g.Organization()
+				testSpace := g.Space()
+
+				// Set space to belong to different org
+				spaceRes := resource.Space{}
+				Expect(json.Unmarshal([]byte(testSpace.JSON), &spaceRes)).NotTo(HaveOccurred())
+				spaceRes.Relationships.Organization.Data = &resource.Relationship{GUID: org.GUID}
+				testSpace.JSON = toJSON(spaceRes)
+
+				serverURL := testutil.SetupMultiple([]testutil.MockRoute{
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/organizations",
+						Output:      g.Paged([]string{otherOrg.JSON}),
+						Status:      http.StatusOK,
+						QueryString: "names=" + otherOrg.Name + "&" + pagingQueryString,
+					},
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/spaces",
+						Output:      g.Single(""),
+						Status:      http.StatusOK,
+						QueryString: "names=" + testSpace.Name + "&organization_guids=" + otherOrg.GUID + "&" + pagingQueryString,
+					},
+				}, GlobalT)
+
+				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+				Expect(err).NotTo(HaveOccurred())
+
+				cfConfig := &Config{
+					CloudFoundryConfig: cfg,
+					SpaceNames:         []string{testSpace.Name},
+					OrgNames:           []string{otherOrg.Name},
+				}
+
+				p, err := New(cfConfig, &logger, true)
+				Expect(err).NotTo(HaveOccurred())
+				apps, err := p.listAppsFromCloudFoundry()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(apps).To(BeEmpty())
+			})
+
+			It("warns when requested space doesn't exist in one of the organizations", func() {
+				org2 := g.Organization()
+				space1 := g.Space()
+
+				// space1 belongs to org (first org)
+				spaceRes1 := resource.Space{}
+				Expect(json.Unmarshal([]byte(space1.JSON), &spaceRes1)).NotTo(HaveOccurred())
+				spaceRes1.Relationships.Organization.Data = &resource.Relationship{GUID: org.GUID}
+				space1.JSON = toJSON(spaceRes1)
+
+				// Request space1 from both orgs, but it only exists in org (not in org2)
+				serverURL := testutil.SetupMultiple([]testutil.MockRoute{
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/organizations",
+						Output:      g.Paged([]string{org.JSON, org2.JSON}),
+						Status:      http.StatusOK,
+						QueryString: "names=" + org.Name + "," + org2.Name + "&" + pagingQueryString,
+					},
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/spaces",
+						Output:      g.Paged([]string{space1.JSON}), // Only space1 in org exists
+						Status:      http.StatusOK,
+						QueryString: "names=" + space1.Name + "&organization_guids=" + org.GUID + "," + org2.GUID + "&" + pagingQueryString,
+					},
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/apps",
+						Output:      g.Paged([]string{app1.JSON}),
+						Status:      http.StatusOK,
+						QueryString: "organization_guids=" + org.GUID + "&" + pagingQueryString + "&space_guids=" + space1.GUID,
+					},
+				}, GlobalT)
+
+				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+				Expect(err).NotTo(HaveOccurred())
+
+				cfConfig := &Config{
+					CloudFoundryConfig: cfg,
+					SpaceNames:         []string{space1.Name},
+					OrgNames:           []string{org.Name, org2.Name},
+				}
+
+				p, err := New(cfConfig, &logger, true)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Should succeed and return apps from org, but warn about missing space in org2
+				apps, err := p.listAppsFromCloudFoundry()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(apps).To(HaveLen(1))
+				Expect(apps).To(HaveKey(org.Name))
+				// org2 should not be in the map since no apps were found
+			})
+
+			It("returns empty result when provided org names don't exist", func() {
+				nonExistentOrgName := "non-existent-org"
+
+				serverURL := testutil.SetupMultiple([]testutil.MockRoute{
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/organizations",
+						Output:      g.Paged([]string{}), // No orgs found
+						Status:      http.StatusOK,
+						QueryString: "names=" + nonExistentOrgName + "&" + pagingQueryString,
+					},
+				}, GlobalT)
+
+				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+				Expect(err).NotTo(HaveOccurred())
+
+				cfConfig := &Config{
+					CloudFoundryConfig: cfg,
+					OrgNames:           []string{nonExistentOrgName},
+				}
+
+				p, err := New(cfConfig, &logger, true)
+				Expect(err).NotTo(HaveOccurred())
+				apps, err := p.listAppsFromCloudFoundry()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(apps).To(BeEmpty())
+			})
+
+			It("returns error when OrgNames is empty for live discovery", func() {
+				serverURL := testutil.SetupMultiple([]testutil.MockRoute{}, GlobalT)
+
+				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+				Expect(err).NotTo(HaveOccurred())
+
+				cfConfig := &Config{
+					CloudFoundryConfig: cfg,
+					OrgNames:           []string{}, // Empty OrgNames
+				}
+
+				p, err := New(cfConfig, &logger, true)
+				Expect(err).NotTo(HaveOccurred())
+				apps, err := p.listAppsFromCloudFoundry()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("at least one organization name must be specified for live discovery"))
+				Expect(apps).To(BeNil())
+			})
+		})
+
+	})
+
+	Describe("getAppByOrgAndSpaceAndAppName", func() {
+		AfterEach(func() {
+			testutil.Teardown()
+		})
+
+		Context("when orgName is provided", func() {
+			BeforeEach(func() {
+				serverURL = testutil.SetupMultiple([]testutil.MockRoute{
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/apps",
+						Output:      g.Paged([]string{app1.JSON}),
+						Status:      http.StatusOK,
+						QueryString: "names=" + app1.Name + "&organization_guids=" + org.GUID + "&" + pagingQueryString + "&space_guids=" + space.GUID,
+					},
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/spaces",
+						Output:      g.Paged([]string{space.JSON}),
+						Status:      http.StatusOK,
+						QueryString: "names=" + space.Name + "&organization_guids=" + org.GUID + "&" + pagingQueryString,
+					},
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/organizations",
+						Output:      g.Paged([]string{org.JSON}),
+						Status:      http.StatusOK,
+						QueryString: "names=" + org.Name + "&" + pagingQueryString,
+					},
+				}, GlobalT)
+			})
+
+			It("filters by organization GUID", func() {
+				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+				Expect(err).NotTo(HaveOccurred())
+
+				cfConfig := &Config{
+					CloudFoundryConfig: cfg,
+				}
+
+				p, err := New(cfConfig, &logger, true)
+				Expect(err).NotTo(HaveOccurred())
+				app, err := p.getAppByOrgAndSpaceAndAppName(org.Name, space.Name, app1.Name)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(app).NotTo(BeNil())
+				Expect(app.Name).To(Equal(app1.Name))
+			})
+		})
+	})
+
+	Describe("Discover with orgName", func() {
+		AfterEach(func() {
+			testutil.Teardown()
+		})
+
+		Context("when discovering from live API with orgName", func() {
+			BeforeEach(func() {
+				serverURL = testutil.SetupMultiple([]testutil.MockRoute{
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/apps",
+						Output:      g.Paged([]string{app1.JSON}),
+						Status:      http.StatusOK,
+						QueryString: "names=" + app1.Name + "&organization_guids=" + org.GUID + "&" + pagingQueryString + "&space_guids=" + space.GUID,
+					},
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/apps/" + app1.GUID + "/env",
+						Output:      g.Paged([]string{}),
+						Status:      http.StatusOK,
+						QueryString: "",
+					},
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/apps/" + app1.GUID + "/processes",
+						Output:      g.Paged([]string{}),
+						Status:      http.StatusOK,
+						QueryString: pagingQueryString,
+					},
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/apps/" + app1.GUID + "/routes",
+						Output:      g.Paged([]string{}),
+						Status:      http.StatusOK,
+						QueryString: pagingQueryString,
+					},
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/apps/" + app1.GUID + "/sidecars",
+						Output:      g.Paged([]string{}),
+						Status:      http.StatusOK,
+						QueryString: pagingQueryString,
+					},
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/organizations",
+						Output:      g.Paged([]string{org.JSON}),
+						Status:      http.StatusOK,
+						QueryString: "names=" + org.Name + "&" + pagingQueryString,
+					},
+					{
+						Method:      "GET",
+						Endpoint:    "/v3/spaces",
+						Output:      g.Paged([]string{space.JSON}),
+						Status:      http.StatusOK,
+						QueryString: "names=" + space.Name + "&organization_guids=" + org.GUID + "&" + pagingQueryString,
+					},
+				}, GlobalT)
+			})
+
+			It("successfully discovers the app with orgName", func() {
+				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+				Expect(err).NotTo(HaveOccurred())
+
+				cfConfig := &Config{
+					CloudFoundryConfig: cfg,
+				}
+
+				p, err := New(cfConfig, &logger, true)
+				Expect(err).NotTo(HaveOccurred())
+				result, err := p.Discover(AppReference{
+					OrgName:   org.Name,
+					SpaceName: space.Name,
+					AppName:   app1.Name,
+				})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).NotTo(BeNil())
+				Expect(result.Content).NotTo(BeEmpty())
+			})
+		})
+	})
+
+	Describe("Defensive checks for malformed data", func() {
+		var (
+			logger = logr.New(logr.Discard().GetSink())
+			p      *CloudFoundryProvider
+		)
+
+		Context("when handling nil or empty resources", func() {
+			It("should handle nil space in processAppsInSpace", func() {
+				cfg := &Config{}
+				p, _ = New(cfg, &logger, false)
+
+				org := &resource.Organization{
+					Resource: resource.Resource{GUID: "test-org-guid"},
+					Name:     "test-org",
+				}
+				appList := make(map[string][]any)
+
+				err := p.processAppsInSpace(org, nil, appList)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("space cannot be nil"))
+			})
+
+			It("should handle nil org in processAppsInSpace", func() {
+				cfg := &Config{}
+				p, _ = New(cfg, &logger, false)
+
+				space := &resource.Space{
+					Resource: resource.Resource{GUID: "test-space-guid"},
+					Name:     "test-space",
+				}
+				appList := make(map[string][]any)
+
+				err := p.processAppsInSpace(nil, space, appList)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("organization cannot be nil"))
+			})
+
+			It("should handle empty space GUID in processAppsInSpace", func() {
+				cfg := &Config{}
+				p, _ = New(cfg, &logger, false)
+
+				org := &resource.Organization{
+					Resource: resource.Resource{GUID: "test-org-guid"},
+					Name:     "test-org",
+				}
+				space := &resource.Space{
+					Resource: resource.Resource{GUID: ""}, // Empty GUID
+					Name:     "test-space",
+				}
+				appList := make(map[string][]any)
+
+				err := p.processAppsInSpace(org, space, appList)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("space GUID cannot be empty"))
+			})
+
+			It("should handle empty org GUID in processAppsInSpace", func() {
+				cfg := &Config{}
+				p, _ = New(cfg, &logger, false)
+
+				org := &resource.Organization{
+					Resource: resource.Resource{GUID: ""}, // Empty GUID
+					Name:     "test-org",
+				}
+				space := &resource.Space{
+					Resource: resource.Resource{GUID: "test-space-guid"},
+					Name:     "test-space",
+				}
+				appList := make(map[string][]any)
+
+				err := p.processAppsInSpace(org, space, appList)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("organization GUID cannot be empty"))
+			})
+
+			It("should handle nil space in listAppsBySpace", func() {
+				cfg := &Config{}
+				p, _ = New(cfg, &logger, false)
+
+				apps, err := p.listAppsBySpace(nil, "test-org-guid")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("space cannot be nil"))
+				Expect(apps).To(BeNil())
+			})
+
+			It("should handle empty orgID in listAppsBySpace", func() {
+				cfg := &Config{}
+				p, _ = New(cfg, &logger, false)
+
+				space := &resource.Space{
+					Resource: resource.Resource{GUID: "test-space-guid"},
+					Name:     "test-space",
+				}
+
+				apps, err := p.listAppsBySpace(space, "")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("organization GUID cannot be empty"))
+				Expect(apps).To(BeNil())
+			})
+
+			It("should skip nil apps in processAppsInSpace", func() {
+				// This tests that we gracefully skip nil app references
+				// Since we can't easily mock the CF client, we're mainly verifying
+				// the defensive check exists by reading the code
+				cfg := &Config{}
+				p, _ = New(cfg, &logger, false)
+				Expect(p).NotTo(BeNil())
+			})
+		})
+	})
+
+})

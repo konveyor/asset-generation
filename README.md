@@ -66,22 +66,25 @@ flowchart TD
 
 ## Usage example
 
-Here’s how to use the Cloud Foundry provider to discover applications by space:
+Here's how to use the Cloud Foundry provider to discover applications:
 
 ```mermaid
 flowchart TD
     B[Create Provider Configuration]
     B --> C[Initialize Provider]
-    C --> D[List Applications<br/>Grouped by Space]
-    D --> E[For each Space]
-    E --> F[For each App in Space]
-    F --> G[Call Discover Method]
-    G --> H[Process Discovery Manifest]
-    H --> I{More Apps<br/>in Space?}
-    I -- Yes --> F
-    I -- No --> J{More Spaces?}
-    J -- Yes --> E
-    J -- No --> K[End]
+    C --> D[List Applications<br/>Grouped by Organization]
+    D --> E[For each Organization]
+    E --> F[For each Space in Org]
+    F --> G[For each App in Space]
+    G --> H[Call Discover Method]
+    H --> I[Process Discovery Manifest]
+    I --> J{More Apps<br/>in Space?}
+    J -- Yes --> G
+    J -- No --> K{More Spaces<br/>in Org?}
+    K -- Yes --> F
+    K -- No --> L{More Organizations?}
+    L -- Yes --> E
+    L -- No --> M[End]
 ```
 
 ```go
@@ -91,7 +94,8 @@ import(
 // Create the Cloud Foundry provider configuration
 cfg := &cfProvider.Config{
     CloudFoundryConfig: cfCfg,  // Your Cloud Foundry connection config
-    SpaceNames:         spaces, // List of Cloud Foundry spaces to discover
+    OrgNames:           orgs,   // List of Cloud Foundry organizations (required for live discovery, ignored for local manifests)
+    SpaceNames:         spaces, // List of Cloud Foundry spaces (empty = all spaces)
 }
 
 // Initialize the Cloud Foundry provider
@@ -100,24 +104,37 @@ if err != nil {
     return err
 }
 
-// List applications grouped by space
-appListPerSpace, err := p.ListApps()
+// List applications grouped by organization
+appListPerOrg, err := p.ListApps()
 if err != nil {
-    return fmt.Errorf("failed to list apps by space: %w", err)
+    return fmt.Errorf("failed to list apps: %w", err)
 }
 
-// Iterate over each space and its applications
-for space, appList := range appListPerSpace {
-    	appRef, ok := appReferences.(cfProvider.AppReference)
-        if !ok {
-			return fmt.Errorf("unexpected type for app list: %T", appReferences)
-		}
-        discoverResult, err := p.Discover(appRef)
-        if err != nil {
-            return err
+// Iterate through organizations
+// Each organization contains apps from multiple spaces
+for orgName, appsFromAllSpaces := range appListPerOrg {
+        // appsFromAllSpaces contains all apps across all spaces in this org
+        for _, app := range appsFromAllSpaces {
+            appRef, ok := app.(cfProvider.AppReference)
+            if !ok {
+                return fmt.Errorf("unexpected type for app list: %T", app)
+            }
+            
+            // Each AppReference includes org, space, and app information
+            logger.Info("Processing application", 
+                "org", appRef.OrgName, 
+                "space", appRef.SpaceName, 
+                "app", appRef.AppName)
+            
+            discoverResult, err := p.Discover(appRef)
+            if err != nil {
+                return err
+            }
+            
+            // Process the discovery result
+            fmt.Printf("Discovered app %s in org %s, space %s\n", 
+                appRef.AppName, appRef.OrgName, appRef.SpaceName)
         }
-        // Use the discovery result as needed
-        fmt.Printf("Discovered app %s in space %s: %+v\n", appRef.AppName, appRef.SpaceName, discoverResult)
 }
 ```
 
