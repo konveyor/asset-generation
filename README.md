@@ -94,7 +94,7 @@ import(
 // Create the Cloud Foundry provider configuration
 cfg := &cfProvider.Config{
     CloudFoundryConfig: cfCfg,  // Your Cloud Foundry connection config
-    OrgNames:           orgs,   // List of Cloud Foundry organizations (empty = all orgs)
+    OrgNames:           orgs,   // List of Cloud Foundry organizations (required for live discovery, ignored for local manifests)
     SpaceNames:         spaces, // List of Cloud Foundry spaces (empty = all spaces)
 }
 

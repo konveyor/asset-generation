@@ -252,6 +252,11 @@ func (c *CloudFoundryProvider) getAppNameAndSpaceFromManifest(filePath string) (
 // listAppsFromCloudFoundry handles discovery of apps by querying the Cloud Foundry API.
 // Returns a map keyed by organization name, with values containing all apps across all spaces in that org.
 func (c *CloudFoundryProvider) listAppsFromCloudFoundry() (map[string][]any, error) {
+	// For live discovery, at least one organization must be specified
+	if len(c.cfg.OrgNames) == 0 {
+		return nil, fmt.Errorf("at least one organization name must be specified for live discovery")
+	}
+
 	appListByOrg := make(map[string][]any, len(c.cfg.OrgNames))
 
 	// Get all organizations by their names

@@ -2113,6 +2113,25 @@ var _ = Describe("Organization Name Filtering", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(apps).To(BeEmpty())
 			})
+
+			It("returns error when OrgNames is empty for live discovery", func() {
+				serverURL := testutil.SetupMultiple([]testutil.MockRoute{}, GlobalT)
+
+				cfg, err := config.New(serverURL, config.Token("", "fake-refresh-token"), config.SkipTLSValidation())
+				Expect(err).NotTo(HaveOccurred())
+
+				cfConfig := &Config{
+					CloudFoundryConfig: cfg,
+					OrgNames:           []string{}, // Empty OrgNames
+				}
+
+				p, err := New(cfConfig, &logger, true)
+				Expect(err).NotTo(HaveOccurred())
+				apps, err := p.listAppsFromCloudFoundry()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("at least one organization name must be specified for live discovery"))
+				Expect(apps).To(BeNil())
+			})
 		})
 
 	})
