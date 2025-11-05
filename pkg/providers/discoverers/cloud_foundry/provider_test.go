@@ -884,8 +884,8 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				It("returns app names from manifests in the directory (ignoring subfolders and non-yaml files)", func() {
 					apps, err := provider.listAppsFromLocalManifests()
 					Expect(err).NotTo(HaveOccurred())
-					Expect(apps).To(HaveKey("local"))
-					localApps, ok := apps["local"]
+					Expect(apps).To(HaveKey(defaultLocalOrg))
+					localApps, ok := apps[defaultLocalOrg]
 					Expect(ok).To(BeTrue())
 
 					appSlice := make([]AppReference, 0)
@@ -897,9 +897,9 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					}
 
 					Expect(appSlice).To(ContainElements(
-						AppReference{OrgName: "local", SpaceName: "local", AppName: "app1"},
-						AppReference{OrgName: "local", SpaceName: "local", AppName: "app2"},
-						AppReference{OrgName: "local", SpaceName: "local", AppName: "app3"},
+						AppReference{OrgName: defaultLocalOrg, SpaceName: defaultLocalSpace, AppName: "app1"},
+						AppReference{OrgName: defaultLocalOrg, SpaceName: defaultLocalSpace, AppName: "app2"},
+						AppReference{OrgName: defaultLocalOrg, SpaceName: defaultLocalSpace, AppName: "app3"},
 					))
 					Expect(appSlice).NotTo(ContainElement("app-in-subfolder"))
 					Expect(appSlice).NotTo(ContainElement("text-file"))
@@ -957,7 +957,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					apps, err := provider.listAppsFromLocalManifests()
 					Expect(err).NotTo(HaveOccurred())
 
-					localApp, ok := apps["local"]
+					localApp, ok := apps[defaultLocalOrg]
 					Expect(ok).To(BeTrue())
 					Expect(localApp).To(HaveLen(1))
 
@@ -967,8 +967,68 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						Expect(ok).To(BeTrue())
 						Expect(appRef).ToNot(Equal(AppReference{}))
 					}
-					Expect(appRef.OrgName).To(Equal("local"))
-					Expect(appRef.SpaceName).To(Equal("local"))
+					Expect(appRef.OrgName).To(Equal(defaultLocalOrg))
+					Expect(appRef.SpaceName).To(Equal(defaultLocalSpace))
+					Expect(appRef.AppName).To(Equal("my-app"))
+				})
+			})
+
+			Context("when OrgNames is empty", func() {
+				It("defaults to 'local' as the organization name", func() {
+					provider := &CloudFoundryProvider{
+						cfg: &Config{
+							ManifestPath: filepath.Join("./test_data", "test-app", "manifest.yml"),
+						},
+						logger: &nopLogger,
+					}
+
+					apps, err := provider.listAppsFromLocalManifests()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(apps).NotTo(BeNil())
+					Expect(apps).To(HaveKey(defaultLocalOrg))
+
+					localApp, ok := apps[defaultLocalOrg]
+					Expect(ok).To(BeTrue())
+					Expect(localApp).To(HaveLen(1))
+
+					appRef, ok := localApp[0].(AppReference)
+					Expect(ok).To(BeTrue())
+					Expect(appRef.OrgName).To(Equal(defaultLocalOrg))
+					Expect(appRef.SpaceName).To(Equal(defaultLocalSpace))
+					Expect(appRef.AppName).To(Equal("my-app"))
+				})
+			})
+
+			Context("when OrgNames is provided for local discovery", func() {
+				It("ignores user-provided org names and uses 'local' instead", func() {
+					provider := &CloudFoundryProvider{
+						cfg: &Config{
+							ManifestPath: filepath.Join("./test_data", "test-app", "manifest.yml"),
+							OrgNames:     []string{"user-provided-org", "another-org"},
+						},
+						logger: &nopLogger,
+					}
+
+					apps, err := provider.listAppsFromLocalManifests()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(apps).NotTo(BeNil())
+
+					// Should NOT have user-provided org names
+					Expect(apps).NotTo(HaveKey("user-provided-org"))
+					Expect(apps).NotTo(HaveKey("another-org"))
+
+					// Should ONLY have "local" as org name
+					Expect(apps).To(HaveKey(defaultLocalOrg))
+					Expect(apps).To(HaveLen(1))
+
+					localApp, ok := apps[defaultLocalOrg]
+					Expect(ok).To(BeTrue())
+					Expect(localApp).To(HaveLen(1))
+
+					appRef, ok := localApp[0].(AppReference)
+					Expect(ok).To(BeTrue())
+					Expect(appRef.OrgName).To(Equal(defaultLocalOrg))
+					Expect(appRef.SpaceName).To(Equal(defaultLocalSpace))
 					Expect(appRef.AppName).To(Equal("my-app"))
 				})
 			})
@@ -1755,7 +1815,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				appName, spaceName, err := provider.getAppNameAndSpaceFromManifest(manifestPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(appName).To(Equal("my-app"))
-				Expect(spaceName).To(Equal("local")) // AppManifest defaults to "local"
+				Expect(spaceName).To(Equal(defaultLocalSpace)) // AppManifest defaults to defaultLocalSpace
 			})
 
 			It("correctly extracts app name and space from CloudFoundryManifest format (applications array)", func() {
@@ -1763,7 +1823,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 				appName, _, err := provider.getAppNameAndSpaceFromManifest(manifestPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(appName).To(Equal("app1"))
-				// Space name will be extracted from CloudFoundryManifest.Space if present, otherwise defaults to "local"
+				// Space name will be extracted from CloudFoundryManifest.Space if present, otherwise defaults to defaultLocalSpace
 			})
 
 			It("returns empty strings when file is a directory", func() {
@@ -2129,7 +2189,7 @@ var _ = Describe("Organization Name Filtering", func() {
 				Expect(err).NotTo(HaveOccurred())
 				apps, err := p.listAppsFromCloudFoundry()
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("at least one organization name must be specified for live discovery"))
+				Expect(err.Error()).To(ContainSubstring("at least one organization name must be specified"))
 				Expect(apps).To(BeNil())
 			})
 		})

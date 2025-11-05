@@ -22,8 +22,10 @@ import (
 )
 
 const (
-	vcapServices string = "VCAP_SERVICES"
-	credentials  string = "credentials"
+	vcapServices      string = "VCAP_SERVICES"
+	credentials       string = "credentials"
+	defaultLocalOrg   string = "local"
+	defaultLocalSpace string = "local"
 )
 
 type Config struct {
@@ -130,6 +132,9 @@ func (c *CloudFoundryProvider) Discover(RawData any) (*pTypes.DiscoverResult, er
 // listAppsFromLocalManifests handles discovery of apps by reading local manifest files.
 // Returns a map keyed by "local" (as org name) for consistency with live discovery.
 func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string][]any, error) {
+	// Default to "local" org name for local discovery
+	orgName := defaultLocalOrg
+
 	c.logger.Info("Using manifest path for Cloud Foundry local discover", "manifest_path", c.cfg.ManifestPath)
 	isDirResult, err := isDir(c.cfg.ManifestPath)
 	if err != nil {
@@ -158,7 +163,7 @@ func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string][]any, e
 			}
 			c.logger.Info("found app in manifest file", "app_name", appName, "space_name", spaceName, "file_path", filePath)
 			apps = append(apps, AppReference{
-				OrgName:   "local",
+				OrgName:   orgName,
 				SpaceName: spaceName,
 				AppName:   appName,
 			})
@@ -172,7 +177,7 @@ func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string][]any, e
 			return nil, fmt.Errorf("no app name found in manifest file %s", c.cfg.ManifestPath)
 		}
 		apps = append(apps, AppReference{
-			OrgName:   "local",
+			OrgName:   orgName,
 			SpaceName: spaceName,
 			AppName:   appName,
 		})
@@ -183,7 +188,7 @@ func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string][]any, e
 	if len(apps) == 0 {
 		return map[string][]any{}, nil
 	}
-	return map[string][]any{"local": toAnySlice(apps)}, nil
+	return map[string][]any{orgName: toAnySlice(apps)}, nil
 }
 
 // getAppNameAndSpaceFromManifest extracts the app name and space name from a manifest file.
@@ -216,7 +221,7 @@ func (c *CloudFoundryProvider) getAppNameAndSpaceFromManifest(filePath string) (
 		c.logger.Info("Failed to parse as single application manifest, will try Cloud Foundry manifest format", "file_path", filePath, "error", err)
 	} else if manifest.Name != "" {
 		c.logger.Info("Successfully parsed single application manifest", "file_path", filePath, "app_name", manifest.Name)
-		return manifest.Name, "local", nil
+		return manifest.Name, defaultLocalSpace, nil
 	}
 	c.logger.Info("Single application manifest parsed but no app name found, trying Cloud Foundry manifest format", "file_path", filePath)
 
@@ -242,7 +247,7 @@ func (c *CloudFoundryProvider) getAppNameAndSpaceFromManifest(filePath string) (
 
 	spaceName := cfManifest.Space
 	if spaceName == "" {
-		spaceName = "local"
+		spaceName = defaultLocalSpace
 	}
 
 	c.logger.Info("Successfully extracted application name from Cloud Foundry manifest", "file_path", filePath, "app_name", app.Name, "space", spaceName)
@@ -252,9 +257,8 @@ func (c *CloudFoundryProvider) getAppNameAndSpaceFromManifest(filePath string) (
 // listAppsFromCloudFoundry handles discovery of apps by querying the Cloud Foundry API.
 // Returns a map keyed by organization name, with values containing all apps across all spaces in that org.
 func (c *CloudFoundryProvider) listAppsFromCloudFoundry() (map[string][]any, error) {
-	// For live discovery, at least one organization must be specified
 	if len(c.cfg.OrgNames) == 0 {
-		return nil, fmt.Errorf("at least one organization name must be specified for live discovery")
+		return nil, fmt.Errorf("at least one organization name must be specified")
 	}
 
 	appListByOrg := make(map[string][]any, len(c.cfg.OrgNames))
