@@ -42,6 +42,20 @@ And it can be removed with
 sudo grubby --update-kernel=ALL --remove-args="kvm.enable_virt_at_load=0"
 ```
 
+### Alternate DNS.
+VirtualBox is supposed to provide a functioning DNS server on address 10.0.2.1 for VMs on the NatNetwork, but it does not function reliably, if at all. To workaround this we can provide DNS on the interface we will use to access the VM.
+
+```bash
+echo -ne '[Resolve]\nDNSStubListenerExtra=192.168.56.1\n' | sudo tee /etc/systemd/resolved.conf
+sudo systemctl restart systemd-resolved
+
+sudo firewall-cmd --new-zone=vboxnet --permanent
+sudo firewall-cmd --reload
+sudo firewall-cmd --zone=vboxnet --change-interface=vboxnet0
+sudo firewall-cmd --zone=vboxnet --add-service=dns
+sudo firewall-cmd --runtime-to-permanent
+```
+
 ### Update and Install VirtualBox
 ```bash
 sudo dnf -y update
@@ -77,13 +91,15 @@ mv ./bosh-cli-7.9.8-linux-amd64 ~/.local/bin/bosh
 
 ```bash
 git clone https://github.com/cloudfoundry/bosh-deployment ~/workspace/bosh-deployment
+pushd ~/workspace/bosh-deployment; git reset --hard 4e030b34f3ea6dae68262346c2c45dbd55f02499; popd
 mkdir -p ~/deployments/vbox
 cd ~/deployments/vbox
 ```
 
-By default a VM with 4 CPU and 6GB of RAM will be deployed. This can be adjusted if desired, for example:
+We need to override the default DNS server. And by default a VM with 4 CPU and 6GB of RAM will be deployed. This can be adjusted if desired, for example:
 
 ```bash
+yq e '.[0].value.dns=[ "192.168.56.1" ]' -i ~/workspace/bosh-deployment/virtualbox/outbound-network.yml
 yq e '.[2].value.cpus=16' -i ~/workspace/bosh-deployment/virtualbox/cpi.yml
 yq e '.[2].value.memory=16384' -i ~/workspace/bosh-deployment/virtualbox/cpi.yml
 ```
@@ -201,6 +217,7 @@ bosh -e vbox update-runtime-config ~/workspace/bosh-deployment/runtime-configs/d
 ```bash
 git clone https://github.com/cloudfoundry/cf-deployment.git ~/cf-deployment
 cd ~/cf-deployment
+git reset --hard v51.2.0
 ```
 
 To ensure you're using the latest precompiled stemcell version, first check which version is referenced in the `operations/use-compiled-releases.yml` file:
