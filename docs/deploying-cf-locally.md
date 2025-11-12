@@ -52,7 +52,7 @@ sudo systemctl restart systemd-resolved
 sudo firewall-cmd --new-zone=vboxnet --permanent
 sudo firewall-cmd --reload
 sudo firewall-cmd --zone=vboxnet --change-interface=vboxnet0
-sudo firewall-cmd --zone vboxnet --add-service dns
+sudo firewall-cmd --zone=vboxnet --add-service=dns
 sudo firewall-cmd --runtime-to-permanent
 ```
 
@@ -91,6 +91,7 @@ mv ./bosh-cli-7.9.8-linux-amd64 ~/.local/bin/bosh
 
 ```bash
 git clone https://github.com/cloudfoundry/bosh-deployment ~/workspace/bosh-deployment
+pushd ~/workspace/bosh-deployment; git reset --hard 4e030b34f3ea6dae68262346c2c45dbd55f02499; popd
 mkdir -p ~/deployments/vbox
 cd ~/deployments/vbox
 ```
@@ -216,6 +217,7 @@ bosh -e vbox update-runtime-config ~/workspace/bosh-deployment/runtime-configs/d
 ```bash
 git clone https://github.com/cloudfoundry/cf-deployment.git ~/cf-deployment
 cd ~/cf-deployment
+git reset --hard v51.2.0
 ```
 
 To ensure you're using the latest precompiled stemcell version, first check which version is referenced in the `operations/use-compiled-releases.yml` file:
