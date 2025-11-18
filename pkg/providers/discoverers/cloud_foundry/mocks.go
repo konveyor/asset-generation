@@ -84,13 +84,18 @@ func (m *mockApplication) services() map[string]json.RawMessage {
 	if m.app.Services == nil {
 		return svcs
 	}
-	vcap := map[string]appVCAPServiceAttributes{}
+	vcap := map[string][]appVCAPServiceAttributes{}
 	for _, svc := range *m.app.Services {
 		var creds json.RawMessage
 		if svc.Parameters != nil {
 			creds = json.RawMessage(toJSON(svc.Parameters))
 		}
-		vcap[svc.Name] = appVCAPServiceAttributes{Name: svc.BindingName, Credentials: creds}
+		serviceLabel := svc.Name
+		vcap[serviceLabel] = append(vcap[serviceLabel], appVCAPServiceAttributes{
+			InstanceName: svc.Name,
+			BindingName:  svc.BindingName,
+			Credentials:  creds,
+		})
 	}
 	svcs[vcapServices] = json.RawMessage(toJSON(vcap))
 	m.resMap["services"] = svcs

@@ -461,13 +461,11 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 					Entry("discovers an app with no services value and empty value", &cfTypes.AppManifestServices{}),
 					Entry("discovers an app with services defined", &cfTypes.AppManifestServices{
 						{
-							Name:        "service_1",
-							BindingName: "binding_service_1",
-							Parameters:  map[string]interface{}{"credentials": `{"username":"anonymous","password":"P@ssW0rd"}`, "plan": "xlarge"},
+							Name:       "service_1",
+							Parameters: map[string]interface{}{"credentials": `{"username":"anonymous","password":"P@ssW0rdTEST"}`, "plan": "xlarge"},
 						},
 						{
-							Name:        "service_2",
-							BindingName: "binding_service_2",
+							Name: "service_2",
 						},
 					}),
 				)
@@ -675,10 +673,9 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						},
 						Services: &cfTypes.AppManifestServices{
 							{
-								Name:        "service_A",
-								BindingName: "binding_service_A",
+								Name: "service_A",
 								Parameters: map[string]interface{}{
-									"credentials": `{"username":"anonymous","password":"P@ssW0rd"}`,
+									"credentials": `{"username":"anonymous","password":"P@ssW0rdTEST"}`,
 								},
 							},
 						},
@@ -1790,7 +1787,7 @@ var _ = Describe("CloudFoundry Provider", Ordered, func() {
 						Name:        "sendgrid",
 						BindingName: "mysendgrid",
 						Parameters: map[string]interface{}{
-							"credentials": `{"hostname": "smtp.sendgrid.net","username": "QvsXMbJ3rK","password": "HCHMOYluTv"}`,
+							"credentials": `{"hostname": "smtp.sendgrid.net","username": "QvsXMbJ3rK","password": "HCHMOYluTvTEST"}`,
 						},
 					},
 				},
@@ -2435,6 +2432,220 @@ var _ = Describe("Organization Name Filtering", func() {
 				cfg := &Config{}
 				p, _ = New(cfg, &logger, false)
 				Expect(p).NotTo(BeNil())
+			})
+		})
+
+		Describe("getServicesFromApplicationEnvironment", func() {
+			Context("when VCAP_SERVICES contains service bindings", func() {
+				It("should correctly parse VCAP_SERVICES with array structure", func() {
+					vcapJSON := `{
+					"user-provided": [
+						{
+							"binding_guid": "f4559e41-9380-4411-b5b7-5c7565ce560b",
+							"binding_name": null,
+							"credentials": {
+								"uri": "postgres://postgres:password@192.168.1.206:5432/my_project"
+							},
+							"instance_guid": "05d56996-9c55-4779-9bfe-d216441f7297",
+							"instance_name": "postgres01",
+							"label": "user-provided",
+							"name": "postgres01"
+						}
+					]
+				}`
+
+					env := map[string]json.RawMessage{
+						"VCAP_SERVICES": json.RawMessage(vcapJSON),
+					}
+
+					services, err := getServicesFromApplicationEnvironment(env)
+
+					Expect(err).NotTo(HaveOccurred())
+					Expect(services).NotTo(BeNil())
+					Expect(*services).To(HaveLen(1))
+					Expect((*services)[0].Name).To(Equal("postgres01"))
+					Expect((*services)[0].Parameters).To(HaveKey("uri"))
+				})
+
+				It("should handle multiple service types with multiple instances", func() {
+					vcapJSON := `{
+					"postgres": [
+						{
+							"instance_name": "my-postgres-db",
+							"credentials": {
+								"host": "localhost",
+								"port": 5432
+							}
+						}
+					],
+					"redis": [
+						{
+							"instance_name": "my-redis-cache",
+							"credentials": {
+								"host": "localhost",
+								"port": 6379
+							}
+						},
+						{
+							"instance_name": "my-redis-sessions",
+							"credentials": {
+								"host": "localhost",
+								"port": 6380
+							}
+						}
+					]
+				}`
+
+					env := map[string]json.RawMessage{
+						"VCAP_SERVICES": json.RawMessage(vcapJSON),
+					}
+
+					services, err := getServicesFromApplicationEnvironment(env)
+
+					Expect(err).NotTo(HaveOccurred())
+					Expect(services).NotTo(BeNil())
+					Expect(*services).To(HaveLen(3))
+
+					serviceNames := make([]string, len(*services))
+					for i, svc := range *services {
+						serviceNames[i] = svc.Name
+					}
+					Expect(serviceNames).To(ConsistOf("my-postgres-db", "my-redis-cache", "my-redis-sessions"))
+				})
+
+				It("should handle services without credentials", func() {
+					vcapJSON := `{
+					"user-provided": [
+						{
+							"instance_name": "my-service"
+						}
+					]
+				}`
+
+					env := map[string]json.RawMessage{
+						"VCAP_SERVICES": json.RawMessage(vcapJSON),
+					}
+
+					services, err := getServicesFromApplicationEnvironment(env)
+
+					Expect(err).NotTo(HaveOccurred())
+					Expect(services).NotTo(BeNil())
+					Expect(*services).To(HaveLen(1))
+					Expect((*services)[0].Name).To(Equal("my-service"))
+					Expect((*services)[0].Parameters).To(BeNil())
+				})
+			})
+
+			Context("when VCAP_SERVICES is missing or empty", func() {
+				It("should return nil when VCAP_SERVICES is not present", func() {
+					env := map[string]json.RawMessage{}
+
+					services, err := getServicesFromApplicationEnvironment(env)
+
+					Expect(err).NotTo(HaveOccurred())
+					Expect(services).To(BeNil())
+				})
+
+				It("should handle empty VCAP_SERVICES", func() {
+					vcapJSON := `{}`
+
+					env := map[string]json.RawMessage{
+						"VCAP_SERVICES": json.RawMessage(vcapJSON),
+					}
+
+					services, err := getServicesFromApplicationEnvironment(env)
+
+					Expect(err).NotTo(HaveOccurred())
+					Expect(services).NotTo(BeNil())
+					Expect(*services).To(BeEmpty())
+				})
+
+				It("should populate BindingName from VCAP_SERVICES when present", func() {
+					vcapJSON := `{
+					"user-provided": [
+						{
+							"instance_name": "my-service",
+							"binding_name": "custom-binding",
+							"credentials": {}
+						}
+					]
+				}`
+
+					env := map[string]json.RawMessage{
+						"VCAP_SERVICES": json.RawMessage(vcapJSON),
+					}
+
+					services, err := getServicesFromApplicationEnvironment(env)
+
+					Expect(err).NotTo(HaveOccurred())
+					Expect(services).NotTo(BeNil())
+					Expect(*services).To(HaveLen(1))
+					Expect((*services)[0].Name).To(Equal("my-service"))
+					Expect((*services)[0].BindingName).To(Equal("custom-binding"))
+				})
+
+				It("should leave BindingName empty when not in VCAP_SERVICES", func() {
+					vcapJSON := `{
+					"postgres": [
+						{
+							"instance_name": "my-db",
+							"binding_name": null,
+							"credentials": {"uri": "postgres://..."}
+						}
+					]
+				}`
+
+					env := map[string]json.RawMessage{
+						"VCAP_SERVICES": json.RawMessage(vcapJSON),
+					}
+
+					services, err := getServicesFromApplicationEnvironment(env)
+
+					Expect(err).NotTo(HaveOccurred())
+					Expect(services).NotTo(BeNil())
+					Expect(*services).To(HaveLen(1))
+					Expect((*services)[0].Name).To(Equal("my-db"))
+					// When binding_name is null in JSON, it unmarshals to empty string
+					Expect((*services)[0].BindingName).To(BeEmpty())
+				})
+
+				It("should ignore extra fields in VCAP_SERVICES", func() {
+					// VCAP_SERVICES contains many fields we don't need
+					// Go's json.Unmarshal silently ignores unknown fields
+					vcapJSON := `{
+					"user-provided": [
+						{
+							"binding_guid": "f4559e41-9380-4411-b5b7-5c7565ce560b",
+							"binding_name": null,
+							"credentials": {
+								"uri": "postgres://postgres:password@192.168.1.206:5432/db"
+							},
+							"instance_guid": "05d56996-9c55-4779-9bfe-d216441f7297",
+							"instance_name": "postgres01",
+							"label": "user-provided",
+							"name": "postgres01",
+							"syslog_drain_url": null,
+							"tags": ["postgres", "relational"],
+							"volume_mounts": [],
+							"plan": "free",
+							"provider": null
+						}
+					]
+				}`
+
+					env := map[string]json.RawMessage{
+						"VCAP_SERVICES": json.RawMessage(vcapJSON),
+					}
+
+					services, err := getServicesFromApplicationEnvironment(env)
+
+					Expect(err).NotTo(HaveOccurred())
+					Expect(services).NotTo(BeNil())
+					Expect(*services).To(HaveLen(1))
+					Expect((*services)[0].Name).To(Equal("postgres01"))
+					Expect((*services)[0].Parameters).To(HaveKey("uri"))
+					// Extra fields like binding_guid, tags, plan, etc. are silently ignored
+				})
 			})
 		})
 	})
