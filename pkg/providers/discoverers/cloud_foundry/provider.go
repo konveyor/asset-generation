@@ -130,7 +130,7 @@ func (c *CloudFoundryProvider) Discover(RawData any) (*pTypes.DiscoverResult, er
 }
 
 // listAppsFromLocalManifests handles discovery of apps by reading local manifest files.
-// Returns a map keyed by "local" (as org name) for consistency with live discovery.
+// Returns a map keyed by organization name for consistency with live discovery.
 func (c *CloudFoundryProvider) listAppsFromLocalManifests() (map[string][]any, error) {
 	// Default to "local" org name for local discovery
 	orgName := defaultLocalOrg
@@ -757,8 +757,9 @@ func (c *CloudFoundryProvider) getSidecars(appGUID string) (*cfTypes.AppManifest
 // For more information follow this link:
 // https://docs.cloudfoundry.org/devguide/deploy-apps/environment-variable.html#VCAP-SERVICES
 type appVCAPServiceAttributes struct {
-	Name        string          `json:"name"`
-	Credentials json.RawMessage `json:"credentials,omitempty"`
+	InstanceName string          `json:"instance_name"`
+	BindingName  string          `json:"binding_name,omitempty"`
+	Credentials  json.RawMessage `json:"credentials,omitempty"`
 }
 
 // getServicesFromApplicationEnvironment extracts service bindings from the application's VCAP_SERVICES environment variable.
@@ -769,22 +770,24 @@ func getServicesFromApplicationEnvironment(env map[string]json.RawMessage) (*cfT
 	if !ok {
 		return nil, nil
 	}
-	instanceServices := map[string]appVCAPServiceAttributes{}
+	instanceServices := map[string][]appVCAPServiceAttributes{}
 	err := json.Unmarshal(vcap, &instanceServices)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal VCAP_SERVICES: %s", err)
 	}
-	for name, svc := range instanceServices {
-		var creds map[string]any
-		if len(svc.Credentials) > 0 {
-			creds = map[string]any{}
-			err := json.Unmarshal(svc.Credentials, &creds)
-			if err != nil {
-				return nil, err
+	for _, services := range instanceServices {
+		for _, svc := range services {
+			var creds map[string]any
+			if len(svc.Credentials) > 0 {
+				creds = map[string]any{}
+				err := json.Unmarshal(svc.Credentials, &creds)
+				if err != nil {
+					return nil, err
+				}
 			}
+			s := cfTypes.AppManifestService{Name: svc.InstanceName, BindingName: svc.BindingName, Parameters: creds}
+			appServices = append(appServices, s)
 		}
-		s := cfTypes.AppManifestService{Name: name, BindingName: svc.Name, Parameters: creds}
-		appServices = append(appServices, s)
 	}
 	return &appServices, nil
 }
