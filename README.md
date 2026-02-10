@@ -1,3 +1,4 @@
+
 # asset-generation
 `asset-generation` is a Go library that automates the discovery and
 transformation of applications deployed on source platforms (e.g., Cloud
